@@ -1,0 +1,57 @@
+{
+  "type": "hangarexport",
+  "version": 2,
+  "handle": "SYNTHETIC_HANDLE",
+  "pledgesPagesize": 10,
+  "pledgesLastPage": 1,
+  "pledges": [
+    {
+      "pledgeId": "fixture-100",
+      "pledgeName": "Demo package",
+      "pledgeValue": "3500",
+      "pledgeConfigurationValue": "4000",
+      "date": "SYNTHETIC DATE",
+      "contains": "Synthetic package contents",
+      "page": 1,
+      "giftable": false,
+      "meltable": true,
+      "items": [
+        {
+          "title": "Demo Alpha",
+          "kind": "Ship",
+          "liner": "Synthetic",
+          "itemCustomName": ""
+        },
+        {
+          "title": "Demo Beta",
+          "kind": "Ship",
+          "liner": "Synthetic",
+          "itemCustomName": ""
+        }
+      ],
+      "alsoContains": [
+        {
+          "title": "Lifetime Insurance"
+        }
+      ]
+    },
+    {
+      "pledgeId": "fixture-101",
+      "pledgeName": "Upgrade - Demo Alpha to Demo Gamma",
+      "pledgeValue": "",
+      "items": [],
+      "alsoContains": [],
+      "page": 1
+    }
+  ],
+  "buybacks": [
+    {
+      "pledgeId": "",
+      "pledgeName": "Synthetic buyback",
+      "contains": "Synthetic",
+      "buybackHref": "/account/buy-back-pledges/80001",
+      "date": "SYNTHETIC DATE",
+      "page": 1
+    }
+  ]
+}

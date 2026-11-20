@@ -1,0 +1,183 @@
+:root{
+  --glass-card-fill:linear-gradient(144deg,#263d4b91,#17222c 65%);
+  --glass-card-border:#385363;
+  --glass-card-highlight:inset 0 1px #e3f8ff12;
+  --glass-card-selected:#5b9b94;
+  --glass-card-selected-highlight:inset 0 1px #c5fff327;
+}
+aside{display:flex;flex-direction:column;overflow-y:auto;background:radial-gradient(ellipse at 20% 38%,#162b36 0%,transparent 58%),linear-gradient(155deg,#101b24,#0b1118 71%)}
+aside .brand,aside nav,aside footer{flex-shrink:0}
+aside .brand{text-align:center}
+aside .brand img{width:100%;height:auto;aspect-ratio:1;object-fit:contain;padding:0}
+.brand-title{display:block;font-family:"CCU Orbitron",sans-serif;font-size:22px;font-weight:800;line-height:1.55;letter-spacing:.7px;text-transform:uppercase;background:linear-gradient(180deg,#f0ffff 0%,#a5d5d8 16%,#18c7cb 38%,#087d8a 52%,#73e8dd 74%,#e3f7f8 100%);background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-stroke:.35px #b6e4e7;filter:drop-shadow(0 1px 1px #02080e)}
+.brand-name{font-style:italic}.brand-subtitle{font-style:normal}
+.brand .fan-notice {
+  margin: 11px auto 0;
+  padding: 9px 5px 0;
+  border-top: 1px solid #64a8a946;
+  color: #b5c8d3;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+  text-wrap: balance;
+}
+.brand .fan-notice strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #8de2d6;
+  font-size: 13px;
+  font-weight: 650;
+}
+aside footer{position:static;margin-top:auto;padding-top:28px}
+aside nav{gap:7px}
+aside nav button[data-menu]{
+  display:flex;align-items:center;gap:9px;min-height:44px;padding:7px 10px;text-align:left;
+  border:1px solid transparent;
+}
+/* The frame sits inside the control so compact buttons and borderless tabs keep their geometry. */
+:where(button, summary, .help-topics a){position:relative}
+#root :is(button, summary, .help-topics a){
+  --edge-start:#3a606b;
+  --edge-end:#615043;
+  --control-fill:linear-gradient(145deg,#1b2b35,#101922 72%);
+  --control-inset:inset 0 1px #e3f8ff0a;
+  --control-ink:#afc4d3;
+  --glow-start:#55e0c446;
+  --glow-end:#ff9e6540;
+  border-color:transparent;
+  border-radius:7px;
+  background-color:var(--control-base,transparent);
+  background-image:var(--control-fill);
+  color:var(--control-ink);
+  box-shadow:var(--control-inset);
+  transition:box-shadow .16s ease,color .16s ease;
+}
+#root :is(button, summary, .help-topics a)::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  padding:1px;
+  border-radius:inherit;
+  background:linear-gradient(90deg,var(--edge-start),var(--edge-end));
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  pointer-events:none;
+}
+#root :is(button.primary, button.ccu-total, button[data-menu].active, button[aria-pressed="true"], button[aria-selected="true"], button[aria-expanded="true"], details[open]>summary, .help-topics a[aria-current="location"]){
+  --edge-start:#80ddca;
+  --edge-end:#f1a76f;
+  --control-fill:linear-gradient(138deg,#254541,#182930);
+  --control-inset:inset 2px 0 #7cddc9,inset 0 1px #d7fff21a;
+  --control-ink:#b3f1e5;
+}
+#root :is(button.primary, button.ccu-total){
+  --control-fill:linear-gradient(138deg,#23534f,#17313a);
+  --control-ink:#e2fff7;
+}
+#root :is(button, summary, .help-topics a):where(:hover,:focus-visible):not(:disabled){
+  --edge-start:#80e7d3;
+  --edge-end:#ffb37d;
+  color:#e2f0f5;
+  box-shadow:var(--control-inset),-3px 0 13px var(--glow-start),3px 0 13px var(--glow-end);
+}
+#root :is(button, summary, .help-topics a):focus-visible{
+  outline:2px solid #9ce9da;
+  outline-offset:2px;
+}
+#root :is(button, summary, .help-topics a):where(:active):not(:disabled){
+  box-shadow:var(--control-inset),inset 0 0 12px #090f18b3;
+}
+#root .filters button{
+  padding-inline:5px;
+  margin-inline-end:0;
+  text-decoration:none;
+}
+#root button.text-button{
+  padding-inline:6px;
+  margin-inline:6px;
+}
+#root .ccu-evidence>summary{
+  padding-inline:6px;
+}
+#root button.ccu-step-details{
+  --control-fill:linear-gradient(145deg,#08131c1f,#08131c6b);
+  padding-inline:5px;
+}
+#root :is(button.ccu-ownership, .ccu-stock-tile.purchase button:not(.ccu-lock)){
+  --edge-start:#ffd391;
+  --edge-end:#e88750;
+  --control-base:#ffbd69;
+  --control-fill:linear-gradient(145deg,#ffcf80,#ffbd69);
+  --control-ink:#38210b;
+  --glow-start:#ffd18a55;
+  --glow-end:#ff935a55;
+  border-radius:4px;
+  color:var(--control-ink);
+}
+#root :is(button.delete, button.ccu-lock[aria-pressed="true"]){
+  --edge-start:#ff8088;
+  --edge-end:#9e5260;
+  --control-fill:linear-gradient(145deg,#4c2834,#231e27);
+  --control-ink:#ffd0d2;
+  --control-inset:inset 0 1px #ffaca428;
+  --glow-start:#ff80885c;
+  --glow-end:#bc546950;
+  color:var(--control-ink);
+}
+#root button.ccu-lock{
+  border-radius:4px;
+}
+#root button.ccu-lock[aria-pressed="true"]{
+  --control-inset:inset 0 1px #ffaca428,0 0 6px #ff808866;
+}
+#root button.market-image-link{
+  --control-fill:none;
+  --control-inset:none;
+  --edge-start:#3a606b50;
+  --edge-end:#61504340;
+  border-radius:0;
+}
+#root button.market-image-link:disabled::after{
+  background:none;
+}
+aside nav button[data-menu="inventory"]{--symbol-ink:#ffca78}
+aside nav button[data-menu="market"]{--symbol-ink:#70e4cf}
+aside nav button[data-menu="paints"]{--symbol-ink:#f7a0c7}
+aside nav button[data-menu="fleet"]{--symbol-ink:#91baff}
+aside nav button[data-menu="settings"]{--symbol-ink:#c0dc89}
+aside nav button[data-menu="help"]{--symbol-ink:#c6a8ff}
+.sidebar-menu-icon{box-sizing:border-box;display:grid;place-items:center;flex:0 0 27px;height:27px;border-radius:6px;
+  color:var(--symbol-ink);border:1px solid color-mix(in srgb,var(--symbol-ink) 24%,#1d2a34);
+  background:linear-gradient(145deg,color-mix(in srgb,var(--symbol-ink) 20%,#18222d),#18222d)}
+.sidebar-menu-icon svg{width:17px;height:17px}
+aside nav button.active .sidebar-menu-icon{background:linear-gradient(145deg,color-mix(in srgb,var(--symbol-ink) 28%,#18222d),#18222d)}
+.sidebar-support{display:flex;justify-content:center;gap:8px;margin-top:16px}
+.sidebar-support button{
+  display:grid;place-items:center;flex:0 1 84px;min-width:0;min-height:38px;margin:0;padding:4px 7px;
+  border:1px solid transparent;
+  font-size:18px;font-weight:700;line-height:1;white-space:nowrap;
+}
+.sidebar-support img{display:block;max-width:100%;object-fit:contain;opacity:.66}
+.sidebar-support-text{display:none}
+.sidebar-support button:hover img,.sidebar-support button:focus-visible img{opacity:1}
+.sidebar-support-error{font-size:12px;color:#f4bbbc;margin-top:6px}
+@media(max-height:880px){aside nav{margin-top:30px}aside footer{padding-top:18px}.sidebar-support{margin-top:12px}}
+@media(prefers-reduced-motion:reduce){
+  #root :is(button, summary, .help-topics a){transition:none}
+}
+@media(forced-colors:active){
+  .brand-title{background:none;color:CanvasText;-webkit-text-stroke:0;filter:none}
+  #root :is(button, summary, .help-topics a){
+    --control-ink:ButtonText;
+    background:ButtonFace;
+    color:ButtonText;
+    box-shadow:none;
+  }
+  #root :is(button, summary, .help-topics a)::after{background:ButtonText}
+  #root :is(button, summary, .help-topics a):where([aria-pressed="true"],[aria-selected="true"],[aria-current="page"],[aria-current="location"],[aria-expanded="true"],details[open]>summary){color:Highlight}
+  #root :is(button, summary, .help-topics a):where([aria-pressed="true"],[aria-selected="true"],[aria-current="page"],[aria-current="location"],[aria-expanded="true"],details[open]>summary)::after{background:Highlight}
+  #root button:disabled{color:GrayText;opacity:1}
+  #root :is(button, summary, .help-topics a):focus-visible{outline-color:Highlight}
+  .sidebar-support img{display:none}
+  .sidebar-support-text{display:inline}
+}

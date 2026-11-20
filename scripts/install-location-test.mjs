@@ -1,0 +1,12 @@
+import fs from'node:fs';import path from'node:path';import assert from'node:assert/strict';import{randomUUID}from'node:crypto';import{spawnSync}from'node:child_process';
+const area=path.resolve('work/temp/install-location-tests',randomUUID());fs.mkdirSync(area,{recursive:true});
+const local=path.join(area,'Local'),own=path.join(area,'own');fs.mkdirSync(local);fs.mkdirSync(own);fs.writeFileSync(path.join(own,'install-product.txt'),'SarevocsCCUPlaner/1');fs.writeFileSync(path.join(own,'Sarevocs-CCU-Planer.exe'),'SYNTHETIC');
+const foreign=path.join(area,'foreign-link-target');fs.mkdirSync(foreign);fs.writeFileSync(path.join(foreign,'keep.txt'),'SYNTHETIC_UNCHANGED');
+const junction=path.join(area,'junction');fs.symlinkSync(foreign,junction,'junction');
+const linked=path.join(area,'owned-with-junction');fs.cpSync(own,linked,{recursive:true});fs.symlinkSync(foreign,path.join(linked,'resources'),'junction');
+const hardlinked=path.join(area,'owned-with-hardlink');fs.cpSync(own,hardlinked,{recursive:true});fs.linkSync(path.join(foreign,'keep.txt'),path.join(hardlinked,'linked.txt'));
+const constants=path.join(area,'Constants.cs');fs.writeFileSync(constants,'public static class EmbeddedPayload{public const long TotalFileBytes=100;public const string ExpectedSha256=""; public const string Version="TEST";}');
+const exe=path.join(area,'test.exe'),env={...process.env,TEMP:path.join(area,'temp'),TMP:path.join(area,'temp')};fs.mkdirSync(env.TEMP);
+const run=(tool,args)=>{const r=spawnSync(tool,args,{env,windowsHide:true,encoding:'utf8',timeout:30000});assert.equal(r.status,0,r.stdout+'\n'+r.stderr);return r.stdout;};
+run('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe',['/nologo','/noconfig','/langversion:5','/target:winexe','/platform:x64','/main:InstallLocationTestDriver','/out:'+exe,...['SetupBootstrapper.cs','DisplaySetup.cs','InstallLocation.cs','SetupWindow.cs','SelectableSetup.cs'].map(f=>path.resolve('installer',f)),path.resolve('tests/fixtures/InstallLocationTestDriver.cs'),constants,...['System','System.Core','System.Management','System.Security','System.Windows.Forms','System.Drawing'].map(f=>'/reference:'+f+'.dll')]);
+const output=run(exe,[area,junction,linked,hardlinked]);assert.match(output,/PASS/);assert.equal(fs.readFileSync(path.join(foreign,'keep.txt'),'utf8'),'SYNTHETIC_UNCHANGED');fs.writeFileSync(path.join(area,'results.json'),output);console.log('REPORT: '+path.join(area,'results.json'));

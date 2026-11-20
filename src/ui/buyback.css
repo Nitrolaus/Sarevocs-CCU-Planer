@@ -1,0 +1,17 @@
+.buyback-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;padding:13px 18px;border-top:1px solid #2c3c49}
+.buyback-head h2{margin:0 0 2px}
+.buyback-head small,.buyback-table small{color:#a9bfce;font-size:12px}
+.buyback-table{table-layout:fixed;min-width:550px}
+.buyback-table th:first-child{width:40%}
+.buyback-table th:nth-child(2){width:15%}
+.buyback-table th:nth-child(3){width:21%}
+.buyback-table th,.buyback-table td{padding:10px 18px;vertical-align:middle}
+.buyback-table td:first-child{min-width:0}
+.buyback-table small{display:block;margin-top:2px}
+.buyback-table .badge{padding:3px 7px;white-space:normal}
+.buyback-price{white-space:nowrap;font-variant-numeric:tabular-nums}
+.buyback-open{color:#f2d68e}
+.buyback-note{padding:11px 18px;border-top:1px solid #2c3c49;color:#9fb5c4;font-size:12px}
+.buyback-empty{padding:26px 18px 29px;border-top:1px solid #2c3c49}
+.buyback-empty p{margin-top:6px;font-size:13px}
+@media(max-width:1100px){.buyback-head,.buyback-table th,.buyback-table td,.buyback-note,.buyback-empty{padding-left:12px;padding-right:12px}}

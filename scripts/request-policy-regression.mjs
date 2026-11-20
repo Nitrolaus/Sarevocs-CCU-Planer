@@ -1,0 +1,16 @@
+import { build } from 'esbuild';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
+const require = createRequire(import.meta.url);
+const root = path.resolve('work/temp/request-policy', randomUUID()); fs.mkdirSync(root, { recursive: true });
+const harness = path.join(root, 'harness.cjs');
+await build({ entryPoints: ['tests/request-policy-harness.ts'], outfile: harness, bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] });
+const env = { ...process.env, TEMP: path.resolve('work/temp/tooling'), TMP: path.resolve('work/temp/tooling') };
+delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS;
+const child = spawn(require('electron'), [harness, '--test-root=' + root, '--disable-gpu'], { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+child.stdout.pipe(process.stdout); child.stderr.pipe(process.stderr);
+const timer = setTimeout(() => { child.kill(); process.exitCode = 1; }, 35000);
+child.once('exit', code => { clearTimeout(timer); process.exitCode = code ?? 1; });

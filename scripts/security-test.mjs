@@ -1,0 +1,15 @@
+import { build } from 'esbuild';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
+const require = createRequire(import.meta.url); const root = process.cwd();
+const testRoot = path.join(root, 'work/temp/security-tests', randomUUID()); fs.mkdirSync(testRoot, { recursive: true });
+const harness = path.join(testRoot, 'harness.cjs');
+await build({ entryPoints: ['tests/electron-security-harness.ts'], outfile: harness, bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] });
+const env = { ...process.env, TEMP: path.join(root, 'work/temp/tooling'), TMP: path.join(root, 'work/temp/tooling') }; delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS;
+const child = spawn(require('electron'), [harness, '--test-root=' + testRoot, '--disable-gpu'], { cwd: root, env, windowsHide: true, stdio: ['ignore','pipe','pipe'] });
+child.stdout.pipe(process.stdout); child.stderr.pipe(process.stderr);
+const timer = setTimeout(() => { child.kill(); process.exitCode = 1; }, 45000);
+child.once('exit', code => { clearTimeout(timer); process.exitCode = code ?? 1; });

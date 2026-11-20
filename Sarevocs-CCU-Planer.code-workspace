@@ -1,0 +1,8 @@
+{
+  "folders": [{ "path": "." }],
+  "settings": { "files.exclude": { "**/node_modules": true, "**/build": true, "**/work": true }, "files.encoding": "utf8" },
+  "tasks": { "version": "2.0.0", "tasks": [
+    { "label": "Prüfen", "type": "process", "command": "pwsh", "args": ["-NoProfile", "-File", "${workspaceFolder}/Entwickeln.ps1", "-Aktion", "Pruefen"], "problemMatcher": [] },
+    { "label": "Installer bauen", "type": "process", "command": "pwsh", "args": ["-NoProfile", "-File", "${workspaceFolder}/Entwickeln.ps1", "-Aktion", "Installer"], "problemMatcher": [] }
+  ] }
+}

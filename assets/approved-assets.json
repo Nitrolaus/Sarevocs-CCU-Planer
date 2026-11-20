@@ -1,0 +1,25 @@
+{
+  "approval": "User approval 2026-11-16: main logo WITH chrome cross; exact historical Study-v2 tray.",
+  "archive": "Sarevocs-CCU-Planer-Logo-und-Icons.zip",
+  "archiveSha256": "F20B9E638B178B329A1ADE88FB7E3AA9D5F25FA9D06707B10C8991AFD8E20883",
+  "assets": [
+    {
+      "role": "Logo",
+      "source": "PROGRAMM/PNG/CCU_Planer_Master_native.png",
+      "file": "assets/app.png",
+      "sha256": "721A544182441D13370C8925F311BE11F99B2676F8DFE4E215F645E6DB8107CF"
+    },
+    {
+      "role": "Programm",
+      "source": "PROGRAMM/ICO/Program.ico",
+      "file": "assets/app.ico",
+      "sha256": "D902481650138F287DCA9F7031F0EB1D63257751E2ED125B95C35C484C069EB6"
+    },
+    {
+      "role": "Tray",
+      "source": "TRAY/CCU-Tray-Study-v2.ico",
+      "file": "assets/tray.ico",
+      "sha256": "EAC5C4C015DC94CCF9179A47CF39EEA977F7D846082BA19005CF47C8FA9854B4"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+.fleet-intro{align-items:flex-end;gap:16px;padding:4px 0 16px;border:0}
+.fleet-intro h1{margin:0 0 4px}
+.fleet-intro p,.fleet-next p{font-size:13px}
+.fleet-budget{display:grid;gap:3px;text-align:right;flex:none}
+.fleet-budget small,.fleet-prices small{font-size:12px;color:#aac0cf}
+.fleet-budget strong{font-size:18px;font-variant-numeric:tabular-nums}
+.fleet-scenarios{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fleet-scenarios[data-count="1"]{grid-template-columns:minmax(0,360px)}
+.fleet-scenarios[data-count="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.fleet-scenario{display:flex;flex-direction:column;min-width:0;margin:0;padding:0;text-align:left;font-weight:400}
+.fleet-scenario,.fleet-comparison{background:var(--glass-card-fill);border-color:var(--glass-card-border);box-shadow:var(--glass-card-highlight)}
+.fleet-scenario[aria-pressed=true]{border-color:var(--glass-card-selected);box-shadow:var(--glass-card-selected-highlight)}
+.fleet-scenario[aria-pressed=true] .fleet-name{color:#a5ecde}
+.fleet-art{width:100%;height:116px;padding:4px 14px;display:flex;align-items:center;justify-content:center;gap:6px;overflow:hidden;color:#aac6d2;background:#172632;background-image:linear-gradient(#23425255 1px,transparent 1px),linear-gradient(90deg,#23425255 1px,transparent 1px);background-size:24px 24px}
+.fleet-art .market-art{flex:1;height:100%;min-width:0;background:none}
+.fleet-art .market-art>span{display:none}
+.fleet-art .market-ship{zoom:.54}
+.fleet-art[data-ships="3"] .market-ship{zoom:.44}
+.fleet-manufacturer{flex:1;text-align:center;font-size:clamp(12px,1.5vw,20px);font-weight:650;overflow-wrap:anywhere}
+.fleet-info{width:100%;flex:1;display:grid;grid-template-rows:auto 1fr auto;gap:11px;padding:14px 15px 15px}
+.fleet-name{display:block;font-size:clamp(16px,1.55vw,23px);line-height:1.15;overflow-wrap:anywhere}
+.fleet-title-group small{display:block;margin-top:4px;min-height:24px;color:#aac0cf;font-size:12px}
+.fleet-prices{display:grid;gap:8px;align-content:end}
+.fleet-prices>span,.fleet-card-status{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:3px 8px}
+.fleet-prices strong{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:16px}
+.fleet-prices .fleet-cash{font-size:clamp(19px,2vw,28px)}
+.fleet-credit,.fleet-difference>strong{color:#a5e5d6}
+.fleet-card-status{border-top:1px solid #2c3c49;padding-top:8px;color:#aac0cf;font-size:12px}
+.fleet-card-status .fleet-open{color:#ffd291}
+.fleet-comparison{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;align-items:center;padding:13px 15px;margin-top:14px}
+.fleet-comparison h2{font-size:16px;margin:0 0 5px}
+.fleet-comparison p,.fleet-comparison details{font-size:13px;color:#adc1cf;overflow-wrap:anywhere}
+.fleet-resource{display:block}
+.fleet-resource strong{color:#e8f3f7}
+.fleet-comparison details{margin:4px 0}
+.fleet-difference{border-left:1px solid #314b57;padding-left:16px}
+.fleet-next,.fleet-empty{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.fleet-next{margin-top:15px}
+.fleet-empty{padding:15px}
+.fleet-next button,.fleet-empty button{margin:0;flex:none}
+@media(max-width:1050px){.fleet-art{height:92px;padding:4px 9px}.fleet-info{padding:11px 12px}.fleet-scenarios{gap:9px}}
+@media(max-width:860px){.fleet-scenarios,.fleet-scenarios[data-count="4"],.fleet-comparison{grid-template-columns:1fr}.fleet-difference{border-left:0;padding-left:0}.fleet-intro,.fleet-next,.fleet-empty{align-items:flex-start;flex-wrap:wrap}.fleet-budget{text-align:left}}

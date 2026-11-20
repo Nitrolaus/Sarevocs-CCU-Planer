@@ -1,0 +1,11 @@
+import {z} from 'zod';
+const minor=z.number().int().nonnegative().max(100_000_000);
+const id=z.string().regex(/^[1-9]\d{0,9}$/);
+export const paintSkuSchema=z.object({id,productId:id,title:z.string().min(1).max(500),regularMinor:minor,discountedMinor:minor.nullable(),minQty:z.number().int().nonnegative().max(10000),maxQty:z.number().int().nonnegative().max(10000),allowCredit:z.boolean(),available:z.boolean(),vip:z.boolean(),warbond:z.boolean(),hasShips:z.boolean(),isPackage:z.boolean(),contents:z.array(z.object({code:z.string().min(1).max(500),name:z.string().min(1).max(500),kind:z.string().max(80),hasGamePurchase:z.boolean()})).min(1).max(100)}).strict().refine(s=>s.discountedMinor===null||s.discountedMinor<=s.regularMinor);
+export const paintRuleSchema=z.object({id:z.number().int().positive(),from:z.number().int().positive().max(10000),to:z.number().int().positive().max(10000).nullable(),percent:z.number().min(0).max(100),amountOff:minor.nullable(),maximum:minor.nullable(),products:z.array(id).max(1000),skus:z.array(id).max(10000)}).strict().refine(r=>r.to===null||r.to>=r.from);
+export const paintCatalogueSchema=z.object({schemaVersion:z.literal(1),source:z.literal('rsi-public-paints'),fetchedAt:z.iso.datetime({offset:true}),currency:z.literal('USD'),taxBasis:z.literal('net'),skus:z.array(paintSkuSchema).max(3000),rules:z.array(paintRuleSchema).max(100)}).strict().refine(c=>new Set(c.skus.map(s=>s.id)).size===c.skus.length);
+export type PaintSku=z.infer<typeof paintSkuSchema>;
+export type PaintRule=z.infer<typeof paintRuleSchema>;
+export type PaintCatalogue=z.infer<typeof paintCatalogueSchema>;
+export type PaintSnapshot={data:PaintCatalogue|null;pending:boolean;error:string|null};
+export const paintCatalogueStale=(data:PaintCatalogue|null,now=Date.now())=>!data||now-Date.parse(data.fetchedAt)>24*3600000||Date.parse(data.fetchedAt)>now+60000;

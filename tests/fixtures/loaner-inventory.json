@@ -1,0 +1,107 @@
+{
+  "type": "sarevocs-ccu-inventory",
+  "schemaVersion": 1,
+  "appVersion": "0.3.24",
+  "createdAt": "2026-11-16T00:00:00Z",
+  "dataMode": "demo",
+  "account": {
+    "reference": "demo-loaners-only",
+    "identityKind": "manual-reference"
+  },
+  "scope": {
+    "kind": "partial",
+    "exportComplete": false,
+    "expectedPledges": null,
+    "pagesExpected": null,
+    "pagesRead": null
+  },
+  "pledges": [
+    {
+      "pledgeId": "demo-loaner-0",
+      "name": "DEMO · Expanse",
+      "insurance": {
+        "kind": "lti",
+        "evidence": "SYNTHETISCHE TESTDATEN – keine echte Versicherung"
+      },
+      "originalDescription": "SYNTHETISCHE TESTDATEN – kein echtes Konto",
+      "ships": [
+        {
+          "childId": "demo-child-0",
+          "modelName": "Expanse",
+          "modelId": null,
+          "identity": "unresolved",
+          "role": "unverified"
+        }
+      ],
+      "ccus": [],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [
+        "Synthetischer Test"
+      ],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer Test",
+      "meltValue": null,
+      "sourceValues": {
+        "items": "[{\"title\":\"Star Citizen Digital Download\"}]"
+      }
+    },
+    {
+      "pledgeId": "demo-loaner-1",
+      "name": "DEMO · Odyssey",
+      "insurance": {
+        "kind": "lti",
+        "evidence": "SYNTHETISCHE TESTDATEN – keine echte Versicherung"
+      },
+      "originalDescription": "SYNTHETISCHE TESTDATEN – kein echtes Konto",
+      "ships": [
+        {
+          "childId": "demo-child-1",
+          "modelName": "Odyssey",
+          "modelId": null,
+          "identity": "unresolved",
+          "role": "unverified"
+        }
+      ],
+      "ccus": [],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [
+        "Synthetischer Test"
+      ],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer Test",
+      "meltValue": null,
+      "sourceValues": {}
+    },
+    {
+      "pledgeId": "demo-loaner-2",
+      "name": "DEMO · Carrack",
+      "insurance": {
+        "kind": "lti",
+        "evidence": "SYNTHETISCHE TESTDATEN – keine echte Versicherung"
+      },
+      "originalDescription": "SYNTHETISCHE TESTDATEN – kein echtes Konto",
+      "ships": [
+        {
+          "childId": "demo-child-2",
+          "modelName": "Carrack",
+          "modelId": null,
+          "identity": "unresolved",
+          "role": "unverified"
+        }
+      ],
+      "ccus": [],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [
+        "Synthetischer Test"
+      ],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer Test",
+      "meltValue": null,
+      "sourceValues": {}
+    }
+  ],
+  "buybacks": []
+}

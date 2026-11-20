@@ -1,0 +1,253 @@
+import { app, BrowserWindow, safeStorage } from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { BackgroundRestoreError, RsiLogin, RSI_CONNECTION_PROBE } from '../src/importers/rsi';
+import { RSI_PAGE_PROBE } from '../src/importers/rsi-page';
+import { SessionVault, type StoredCookie } from '../src/security/session-vault';
+
+const root = path.resolve(process.argv.find(x => x.startsWith('--test-root='))!.slice(12));
+const data = path.resolve(process.argv.find(x => x.startsWith('--data-dir='))!.slice(11));
+fs.mkdirSync(data, { recursive: true });
+app.setPath('userData', path.join(data, 'runtime')); app.setPath('sessionData', path.join(data, 'session')); app.setPath('crashDumps', path.join(data, 'crashes'));
+app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND'); app.commandLine.appendSwitch('proxy-server', 'http://127.0.0.1:1');
+const native = { created: [] as { show: boolean; win: BrowserWindow }[], actions: [] as { id: number; action: string }[] };
+(globalThis as unknown as { ccuRestoreNative: typeof native }).ccuRestoreNative = native;
+const hangar = 'https://robertsspaceindustries.com/account/pledges', loginUrl = 'https://robertsspaceindustries.com/en/connect';
+const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+const cookie = (value = 'SYNTHETIC_AUTH_ONLY'): StoredCookie => ({ name: 'Rsi-Token', value, domain: 'robertsspaceindustries.com', path: '/', secure: true, httpOnly: true, hostOnly: true, session: false, expirationDate: Date.now() / 1000 + 3600, sameSite: 'lax' });
+const ready = `<ul class="list-items"><li><input class="js-pledge-id" value="synthetic-ccu"><input class="js-pledge-name" value="SYNTHETIC CCU"><input class="js-upgrade-data" value='{&quot;match_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC FROM&quot;}],&quot;target_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC TO&quot;}]}'><div class="items-col">SYNTHETIC ONLY</div></li></ul>`;
+type Scenario = 'ready' | 'redirect' | 'login' | 'consent' | 'challenge' | 'missing-handle' | 'different-handle' | 'rotation-during-probe';
+let scenario: Scenario = 'ready', phase = 'INIT', rotate = false;
+const requests: string[] = [], readFlags: boolean[] = [], saves: StoredCookie[][] = [], values: RsiLogin[] = [], results: string[] = [];
+let loadGate: { entered: boolean; release: () => void; promise: Promise<void> } | undefined;
+let cookieReadGate: ReturnType<typeof gate> | undefined, probeFinished = false;
+function gate() { let release = () => {}; const promise = new Promise<void>(resolve => { release = resolve; }); return { entered: false, release, promise }; }
+async function until(test: () => boolean | Promise<boolean>, code: string) { for (let i = 0; i < 300; i++) { if (await test()) return; await wait(20); } throw new Error(code); }
+function fakeVault(cookies: StoredCookie[] = [cookie()]): SessionVault {
+  return { load: async (_id: string, migration = true) => { readFlags.push(migration); if (loadGate) { loadGate.entered = true; await loadGate.promise; } return cookies; },
+    save: async (_id: string, incoming: StoredCookie[]) => { saves.push(incoming); return true; } } as unknown as SessionVault;
+}
+function value(vault = fakeVault()) { const result = new RsiLogin(vault, undefined, undefined, (_id, identity) => identity.reference === 'SYNTHETIC_OWNER'); values.push(result); return result; }
+function outcome<T>(task: Promise<T>) { return task.then(result => ({ result, error: undefined }), error => ({ result: undefined, error })); }
+function failure(error: unknown, code: string) { assert.ok(error instanceof BackgroundRestoreError); assert.equal(error.code, code); }
+function noPresentation() { assert.equal(native.created.every(x => x.show === false && (x.win.isDestroyed() || !x.win.isVisible())), true); assert.equal(native.actions.some(x => ['show', 'focus', 'restore'].includes(x.action)), false); }
+async function check(name: string, run: () => Promise<void>) {
+  phase = name; scenario = 'ready'; rotate = false; native.created.length = 0; native.actions.length = 0; requests.length = 0; readFlags.length = 0; saves.length = 0;
+  await run(); results.push(name); console.log('PASS: ' + name);
+}
+
+app.whenReady().then(async () => {
+  const parent = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+  const originalLoad = BrowserWindow.prototype.loadURL;
+  BrowserWindow.prototype.loadURL = async function(url) {
+    assert.ok(url === hangar || url === loginUrl); requests.push(url);
+    this.webContents.getURL = () => 'about:blank';
+    let body = url === loginUrl || scenario === 'login' ? '<input type="password">' : scenario === 'consent' ? '<button>Use necessary cookies only</button>' + ready : scenario === 'challenge' ? '<p>SYNTHETIC CHALLENGE</p>' : ready;
+    if (scenario !== 'missing-handle') body = '<span class="c-account-sidebar__profile-info-handle">' + (scenario === 'different-handle' ? 'SYNTHETIC_OTHER' : 'SYNTHETIC_OWNER') + '</span>' + body;
+    const protocol = this.webContents.session.protocol;
+    if (protocol.isProtocolHandled('https')) protocol.unhandle('https');
+    protocol.handle('https', request => request.url === url
+      ? new Response('<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'">' + body,
+        {headers:{'content-type':'text/html; charset=utf-8'}})
+      : new Response(null, {status:404}));
+    await originalLoad.call(this, url);
+    const rotateCookie = () => this.webContents.session.cookies.set({ url: 'https://robertsspaceindustries.com/', name: 'Rsi-Token', value: 'SYNTHETIC_ROTATED_ONLY', secure: true, httpOnly: true });
+    if (rotate) await rotateCookie();
+    if (scenario === 'rotation-during-probe' || phase === 'PURCHASE_EVIDENCE_REQUIRES_STABLE_AUTH') {
+      const execute = this.webContents.executeJavaScript.bind(this.webContents);
+      this.webContents.executeJavaScript = async script => {
+        const result = await execute(script);
+        if (script === RSI_PAGE_PROBE) await rotateCookie();
+        return result;
+      };
+    }
+    this.webContents.getURL = () => url;
+    this.webContents.emit('did-finish-load');
+    if (phase === 'CANCEL_DURING_LAST_COOKIE_AWAIT_NEVER_RETURNS_CANDIDATE') {
+      const get = this.webContents.session.cookies.get.bind(this.webContents.session.cookies);
+      this.webContents.session.cookies.get = async filter => {
+        const held = cookieReadGate;
+        if (held && probeFinished && !held.entered) { held.entered = true; await held.promise; }
+        return get(filter);
+      };
+    }
+    if (phase === 'HIDDEN_SUCCESS_ROTATES_ENCRYPTED_CAPSULE') {
+      const preferences = (this.webContents as unknown as { getLastWebPreferences(): { disableDialogs: boolean } }).getLastWebPreferences();
+      assert.equal(preferences.disableDialogs, true);
+      assert.equal(await this.webContents.executeJavaScript('alert("SYNTHETIC DISABLED DIALOG"); true'), true);
+    }
+    if (phase === 'HARD_TIMER_CLOSES_BACKGROUND_WINDOW') {
+      const execute = this.webContents.executeJavaScript.bind(this.webContents);
+      this.webContents.executeJavaScript = script => execute(script === RSI_CONNECTION_PROBE ? 'new Promise(() => {})' : script);
+    }
+    if (scenario === 'redirect') {
+      let prevented = false;
+      this.webContents.emit('will-redirect', { preventDefault() { prevented = true; } }, 'https://robertsspaceindustries.com/sign-in', false, true);
+      assert.equal(prevented, true);
+    }
+  };
+  let encryption = safeStorage;
+  try {
+    await check('NO_AUTH_CAPSULE_NO_WINDOW', async () => {
+      for (const cookies of [[], [{ ...cookie(), expirationDate: 1 }], [{ ...cookie(), name: 'Consent' }]]) assert.equal(await value(fakeVault(cookies)).resume(randomUUID(), parent), null);
+      assert.deepEqual(readFlags, [false, false, false]); assert.equal(native.created.length, 0); assert.equal(saves.length, 0);
+    });
+    const vaultDirectory = path.join(data, 'synthetic-vault');
+    const migrating = { isAsyncEncryptionAvailable: () => encryption.isAsyncEncryptionAvailable(), encryptStringAsync: (plain: string) => encryption.encryptStringAsync(plain),
+      decryptStringAsync: async (encrypted: Buffer) => ({ ...await encryption.decryptStringAsync(encrypted), shouldReEncrypt: true }) };
+    const vault = new SessionVault(vaultDirectory, migrating, path.join(data, 'synthetic-key'));
+    const savedId = randomUUID(); await vault.save(savedId, [cookie()]);
+    const capsule = path.join(vaultDirectory, savedId + '.session.enc');
+    await check('HIDDEN_SUCCESS_ROTATES_ENCRYPTED_CAPSULE', async () => {
+      rotate = true;
+      const login = value(vault), task = login.resume(savedId, parent);
+      assert.equal(login.resume(savedId, parent), task);
+      const candidate = await task;
+      assert.ok(candidate); assert.equal(candidate.adapter, 'rsi-dom-probe/1'); assert.equal(candidate.document.account.identityKind, 'rsi-handle'); assert.equal(candidate.document.pledges[0]!.ccus.length, 1);
+      assert.equal(candidate.document.pledges[0]!.ccus[0]!.status, 'unverified'); assert.equal((await vault.load(savedId, false))[0]!.value, 'SYNTHETIC_ROTATED_ONLY');
+      assert.equal(fs.readFileSync(capsule).includes(Buffer.from('SYNTHETIC_ROTATED_ONLY')), false);
+      noPresentation(); assert.equal(native.created.length, 1); assert.equal(native.created[0]!.win.isDestroyed(), true); assert.deepEqual(requests, [hangar]);
+    });
+    await check('UNBOUND_HANDLE_OR_UNSTABLE_AUTH_NEVER_SAVES', async () => {
+      for (const next of ['missing-handle', 'different-handle', 'rotation-during-probe'] as const) {
+        scenario = next;
+        const candidate = await value().resume(randomUUID(), parent);
+        assert.ok(candidate);
+        assert.equal(candidate.document.account.identityKind, next === 'missing-handle' ? 'manual-reference' : 'rsi-handle');
+        assert.equal(saves.length, 0);
+      }
+      noPresentation();
+    });
+    for (const stable of [true, false]) {
+      await check(stable ? 'MISSING_HANDLE_ALLOWS_ORDER_CONFIRMATION_WITHOUT_BINDING' : 'PURCHASE_EVIDENCE_REQUIRES_STABLE_AUTH', async () => {
+        scenario = 'missing-handle';
+        let called = 0;
+        const observations: string[] = [];
+        const login = new RsiLogin(fakeVault(), {record:event=>{if(event.observation)observations.push(event.observation);return true;}},
+          undefined, () => false, undefined, async (_session, pledges, owner) => {
+            called++;
+            assert.equal(owner, null);
+            return new Map([[pledges[0]!.pledgeId, {status:'documented',source:'order',minor:6732,currency:'EUR'}]]);
+          });
+        values.push(login);
+        const candidate = await login.resume(randomUUID(), parent);
+        assert.equal(called, 1);
+        assert.equal(candidate?.document.account.identityKind, 'manual-reference');
+        assert.equal(candidate?.document.pledges[0]?.rsiPurchase?.status, stable ? 'documented' : undefined);
+        assert.ok(observations.includes(stable ? 'purchase-matched' : 'purchase-auth-changed'));
+        assert.equal(saves.length, 0);
+        noPresentation();
+      });
+    }
+    await check('REJECTED_REDIRECT_PRESERVES_MIGRATING_CAPSULE', async () => {
+      scenario = 'redirect'; rotate = true;
+      const before = fs.readFileSync(capsule), result = await outcome(value(vault).resume(savedId, parent));
+      failure(result.error, 'auth-required'); assert.deepEqual(fs.readFileSync(capsule), before); noPresentation(); assert.deepEqual(requests, [hangar]);
+    });
+    await check('LOGIN_AND_CONSENT_NEVER_OPEN_AUTH', async () => {
+      for (const next of ['login', 'consent'] as const) { scenario = next; failure((await outcome(value().resume(randomUUID(), parent))).error, 'auth-required'); }
+      noPresentation(); assert.equal(saves.length, 0); assert.equal(requests.every(x => x === hangar), true);
+    });
+    await check('READY_LARGE_HANGAR_READ_HAS_NO_SESSION_CHECK_DEADLINE',async()=>{
+      const login=value(),original=login.probe.bind(login),now=Date.now;let entered=false;
+      login.probe=async id=>{entered=true;Date.now=()=>now()+120000;return original(id);};
+      try{const candidate=await login.resume(randomUUID(),parent);assert.ok(candidate);assert.equal(entered,true);assert.equal(candidate.document.pledges.length,1);}finally{Date.now=now;}
+      noPresentation();
+    });
+    await check('CHALLENGE_HAS_BACKGROUND_DEADLINE', async () => {
+      scenario = 'challenge'; const login = value(), now = Date.now;
+      const task = outcome(login.resume(randomUUID(), parent));
+      await until(() => requests.length === 1 && native.created[0]?.win.webContents.getURL() === hangar, 'CHALLENGE_NOT_LOADED');
+      try { Date.now = () => now() + 61000; failure((await task).error, 'unavailable'); } finally { Date.now = now; }
+      noPresentation(); assert.equal(saves.length, 0);
+    });
+    await check('HARD_TIMER_CLOSES_BACKGROUND_WINDOW', async () => {
+      scenario = 'challenge'; const timeout = globalThis.setTimeout;
+      try {
+        globalThis.setTimeout = ((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => timeout(callback, delay === 60000 ? 300 : delay, ...args)) as typeof setTimeout;
+        failure((await outcome(value().resume(randomUUID(), parent))).error, 'unavailable');
+      } finally { globalThis.setTimeout = timeout; }
+      noPresentation(); assert.equal(native.created[0]!.win.isDestroyed(), true); assert.equal(saves.length, 0);
+    });
+    await check('INTERACTIVE_CANCELS_AND_AWAITS_RESTORE', async () => {
+      const login = value(), id = randomUUID(); loadGate = gate();
+      const restore = outcome(login.resume(id, parent)); await until(() => !!loadGate?.entered, 'RESTORE_GATE_MISSING');
+      const interactive = login.open(id, parent, false); await wait(100); assert.equal(native.created.length, 0);
+      loadGate.release(); await interactive; failure((await restore).error, 'cancelled'); loadGate = undefined;
+      assert.equal(native.created.length, 1); assert.equal(native.created[0]!.show, true); assert.deepEqual(requests, [loginUrl]); await login.close(id);
+    });
+    await check('SHUTDOWN_PREVENTS_LATE_WINDOWS_AND_RESULTS', async () => {
+      const login = value(), id = randomUUID(); loadGate = gate();
+      const restore = outcome(login.resume(id, parent)); await until(() => !!loadGate?.entered, 'SHUTDOWN_GATE_MISSING');
+      let finished = false; const shutdown = login.shutdown().then(ok => { finished = true; return ok; }); await wait(100); assert.equal(finished, false);
+      loadGate.release(); assert.equal(await shutdown, true); loadGate = undefined; failure((await restore).error, 'cancelled');
+      failure((await outcome(login.resume(id, parent))).error, 'cancelled'); assert.equal(native.created.length, 0);
+    });
+    await check('SIGNAL_CANCEL_BEFORE_ATTEMPT_NEVER_OPENS_LATE_WINDOW', async () => {
+      const stopped = new AbortController(); stopped.abort();
+      const beforeReads = readFlags.length;
+      const rejected = await outcome(value().connect(randomUUID(), parent, true, { hideHangar: true, signal: stopped.signal }));
+      assert.match(rejected.error?.message ?? '', /Verbindung beendet/); assert.equal(readFlags.length, beforeReads);
+      const login = value(), id = randomUUID(), controller = new AbortController(); loadGate = gate();
+      const restore = outcome(login.resume(id, parent)); await until(() => !!loadGate?.entered, 'AUTH_CANCEL_RESTORE_GATE_MISSING');
+      let finished = false;
+      const authorizing = outcome(login.connect(id, parent, true, { hideHangar: true, signal: controller.signal })).then(result => { finished = true; return result; });
+      controller.abort(); await wait(100);
+      assert.equal(native.created.length, 0); assert.equal(finished, false, 'Authorization must await cancellation cleanup of the held restore');
+      loadGate.release(); failure((await restore).error, 'cancelled');
+      const result = await authorizing; assert.equal(result.result, undefined); assert.match(result.error?.message ?? '', /Verbindung beendet/);
+      loadGate = undefined; assert.equal(native.created.length, 0); assert.deepEqual(requests, []);
+    });
+    await check('CANCEL_DURING_LAST_COOKIE_AWAIT_NEVER_RETURNS_CANDIDATE', async () => {
+      for (const withSignal of [true, false]) {
+        const login = value(), id = randomUUID(), controller = new AbortController(); cookieReadGate = gate();
+        probeFinished = false;
+        const probe = login.probe.bind(login);
+        login.probe = async id => { const candidate = await probe(id); probeFinished = true; return candidate; };
+        const task = outcome(login.connect(id, parent, true, { hideHangar: true, ...(withSignal ? { signal: controller.signal } : {}) }));
+        await until(() => !!cookieReadGate?.entered, 'LAST_COOKIE_GATE_MISSING');
+        assert.equal(login.status(id).state, 'page-ready', 'The actual structured probe must finish before the held final cookie read');
+        let closing: Promise<void> | undefined;
+        if (withSignal) controller.abort(); else closing = login.close(id);
+        cookieReadGate.release();
+        const result = await task; await closing;
+        assert.equal(result.result, undefined); assert.match(result.error?.message ?? '', /Verbindung beendet/);
+        assert.equal(native.created.at(-1)!.win.isDestroyed(), true);
+        assert.equal(saves.length, 0, 'A cancelled connection must not save an unaccepted session');
+        cookieReadGate = undefined;
+      }
+      noPresentation();
+    });
+    await check('AUTHORIZE_SAVED_HANGAR_STAYS_HIDDEN_AND_REUSE', async () => {
+      const login = value(), id = randomUUID(); await login.connect(id, parent, true, { hideHangar: true });
+      noPresentation(); assert.equal(native.created[0]!.show, false);
+      native.actions.length = 0; await login.connect(id, parent, true, { hideHangar: true });
+      assert.equal(native.created.length, 1); noPresentation(); await login.close(id);
+    });
+    await check('AUTHORIZE_LOGIN_VISIBLE_INTENT_HANGAR_HIDDEN', async () => {
+      const login = value(fakeVault([])), id = randomUUID(); const task = login.connect(id, parent, false, { hideHangar: true });
+      await until(() => native.created.length === 1 && native.created[0]!.win.webContents.getURL() === loginUrl, 'INTERACTIVE_LOGIN_MISSING');
+      const win = native.created[0]!.win; assert.equal(native.created[0]!.show, true);
+      assert.equal(native.actions.some(x => x.action === 'show'), true); assert.equal(native.actions.some(x => x.action === 'focus'), true);
+      win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
+      await task; assert.deepEqual(requests, [loginUrl, hangar]); assert.equal(native.actions.filter(x => x.action === 'hide').length > 0, true);
+      await login.close(id);
+    });
+    await check('AUTHORIZE_REJECTED_SAVED_SESSION_REVEALS_ONLY_LOGIN', async () => {
+      scenario = 'login'; const login = value(), id = randomUUID(); const task = login.connect(id, parent, true, { hideHangar: true });
+      await until(() => native.created.length === 1 && native.created[0]!.win.webContents.getURL() === loginUrl && native.actions.some(x => x.action === 'focus'), 'EXPLICIT_AUTH_LOGIN_NOT_REVEALED');
+      assert.equal(native.created[0]!.show, false); assert.deepEqual(requests, [hangar, loginUrl]);
+      scenario = 'ready'; native.created[0]!.win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
+      const result = await task; assert.equal(result.document.pledges.length, 1); assert.deepEqual(requests, [hangar, loginUrl, hangar]);
+      assert.equal(native.actions.some(x => x.action === 'hide'), true); await login.close(id);
+    });
+    fs.writeFileSync(path.join(root, 'results.json'), JSON.stringify({ status: 'PASS', data: 'synthetic-only', results }, null, 2));
+  } catch (error) {
+    fs.writeFileSync(path.join(root, 'results.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic-only', phase, results, error: error instanceof Error ? error.message : 'BACKGROUND_TEST_FAILED' }, null, 2)); process.exitCode = 1;
+  } finally {
+    loadGate?.release(); cookieReadGate?.release(); await Promise.allSettled(values.map(login => login.shutdown()));
+    BrowserWindow.prototype.loadURL = originalLoad; parent.destroy(); app.exit(Number(process.exitCode ?? 0));
+  }
+}).catch(() => app.exit(1));

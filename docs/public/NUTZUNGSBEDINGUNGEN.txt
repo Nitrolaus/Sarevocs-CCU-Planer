@@ -1,0 +1,41 @@
+Sarevoc´s CCU Planer
+Nutzungsbedingungen der kostenlosen Fan-Testversion
+Stand: 18.11.2026 · Fassung 2
+
+Willkommen
+Schön, dass du den Planer ausprobierst. Du darfst diese Testversion kostenlos für deine eigene Hangar- und CCU-Planung nutzen und den unveränderten Installer kostenlos weitergeben.
+
+Programmname und Urhebervermerk bleiben erhalten. Eine Open-Source-Lizenz für den Quellcode wird durch diese Bedingungen nicht erteilt.
+
+Dein Hangar bleibt in deiner Hand
+Der Planer liest deinen Bestand und zeigt lokale Planungsvorschläge. Kaufen, CCUs anwenden, Verschenken und Einschmelzen sind im Planer gesperrt.
+
+Öffnest du eine RSI-Seite im Standardbrowser, entscheidest du dort selbst über jede Aktion. Deine Zustimmung hier erlaubt keine automatischen Käufe oder Hangaränderungen.
+
+Deine Anmeldung
+Passwort und MFA gibst du direkt bei RSI ein. Der Planer speichert diese Eingaben nicht.
+
+Mit „Angemeldet bleiben“ darf eine wiederverwendbare RSI-Sitzung lokal gespeichert werden. Der Planer kann diese Sitzung zum Lesen verwenden. Wie lange sie gültig bleibt, bestimmt RSI. Du kannst die gespeicherte Sitzung im Planer gezielt löschen.
+
+Deine lokalen Daten
+Bestand, Planungen, Einstellungen und gelesene Preis-/Guthabenstände bleiben im lokalen Windows-Benutzerprofil. Der Planer lädt deinen Hangar nicht beim Entwickler hoch.
+
+Wenn du eine Excel- oder PDF-Datei exportierst, enthält sie die ausgewählten Daten und deinen Profilnamen. Ob und mit wem du sie teilst, bestimmst du selbst.
+
+Sicherheitskonzept
+Gespeicherte Sitzungen werden mit Windows-Schutz verschlüsselt und getrennt vom Inventar aufbewahrt. Die vorgesehenen Ordnerrechte begrenzen den Zugriff. Ist dieser Schutz nicht verfügbar, wird keine neue Sitzung gespeichert.
+
+Damit die Wiederanmeldung funktioniert, kann der Planer die geschützte Sitzung intern entschlüsseln. Dieser Schutz ersetzt keinen sicheren Windows-Zugang und bietet keine vollständige Sicherheit gegen Schadsoftware, die unter deinem Benutzerkonto läuft.
+
+Kauf- und Änderungssperren bleiben aktiv. Der Planer fordert für seine normale Nutzung selbst keine Administratorrechte an. Virenschutz wird weder abgeschaltet noch um Ausnahmen ergänzt.
+
+Vorschläge vor einem Kauf prüfen
+Die Software ist eine Testversion. Quellen, Preise, Rabatte und Verfügbarkeit können sich ändern. Vollständigkeit und eine bestimmte Ersparnis werden nicht zugesichert.
+
+Prüfe vor eigenen Käufen oder Reclaims bei RSI den tatsächlichen Betrag, alle betroffenen Inhalte und den endgültigen Warenkorb. Geschützte oder ungeklärte Pledges sind keine Einschmelzempfehlung.
+
+Unabhängiges Fan-Programm
+Der Planer wird nicht von Cloud Imperium Games oder RSI herausgegeben. Deren Namen, Marken und Inhalte bleiben den jeweiligen Rechteinhabern zugeordnet. Die Nutzungsregeln dieser Dienste gelten weiterhin.
+
+Deine gesetzlichen Rechte
+Deine gesetzlichen Rechte und Ansprüche bleiben unberührt. Diese Bedingungen enthalten keinen pauschalen Haftungsausschluss.

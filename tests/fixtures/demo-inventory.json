@@ -1,0 +1,171 @@
+{
+  "type": "sarevocs-ccu-inventory",
+  "schemaVersion": 1,
+  "appVersion": "0.1.0",
+  "createdAt": "2026-11-14T09:00:00Z",
+  "dataMode": "demo",
+  "account": {
+    "reference": "demo-account-alpha",
+    "identityKind": "manual-reference"
+  },
+  "scope": {
+    "kind": "full-hangar",
+    "exportComplete": true,
+    "expectedPledges": 5,
+    "pagesExpected": 1,
+    "pagesRead": 1
+  },
+  "pledges": [
+    {
+      "pledgeId": "demo-base-alpha",
+      "name": "Demo-Basisschiff Alpha",
+      "insurance": {
+        "kind": "lti",
+        "evidence": "Synthetischer Test: Lifetime Insurance"
+      },
+      "originalDescription": "Synthetischer Einzelpledge",
+      "ships": [
+        {
+          "childId": "ship-1",
+          "modelName": "Demo Alpha",
+          "modelId": null,
+          "identity": "unresolved",
+          "role": "unverified"
+        }
+      ],
+      "ccus": [],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer unbekannter Preis",
+      "meltValue": null,
+      "sourceValues": {}
+    },
+    {
+      "pledgeId": "demo-base-beta",
+      "name": "Demo-Basisschiff Beta",
+      "insurance": {
+        "kind": "lti",
+        "evidence": "Synthetischer Test: Lifetime Insurance"
+      },
+      "originalDescription": "Synthetischer Einzelpledge",
+      "ships": [
+        {
+          "childId": "ship-1",
+          "modelName": "Demo Beta",
+          "modelId": null,
+          "identity": "unresolved",
+          "role": "unverified"
+        }
+      ],
+      "ccus": [],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer unbekannter Preis",
+      "meltValue": null,
+      "sourceValues": {}
+    },
+    {
+      "pledgeId": "demo-ccu-1",
+      "name": "Demo Alpha → Demo Gamma",
+      "insurance": {
+        "kind": "unknown",
+        "reason": "Kein eigener Versicherungsnachweis auf dem Test-CCU"
+      },
+      "originalDescription": "Synthetischer Einzelpledge",
+      "ships": [],
+      "ccus": [
+        {
+          "instanceId": "demo-ccu-1",
+          "from": "Demo Alpha",
+          "to": "Demo Gamma",
+          "status": "unused",
+          "applicability": "unverified",
+          "insurance": {
+            "kind": "unknown",
+            "reason": "Kein eigener Nachweis"
+          }
+        }
+      ],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer unbekannter Preis",
+      "meltValue": null,
+      "sourceValues": {}
+    },
+    {
+      "pledgeId": "demo-ccu-2",
+      "name": "Demo Alpha → Demo Gamma",
+      "insurance": {
+        "kind": "unknown",
+        "reason": "Kein eigener Versicherungsnachweis auf dem Test-CCU"
+      },
+      "originalDescription": "Synthetischer Einzelpledge",
+      "ships": [],
+      "ccus": [
+        {
+          "instanceId": "demo-ccu-2",
+          "from": "Demo Alpha",
+          "to": "Demo Gamma",
+          "status": "unused",
+          "applicability": "unverified",
+          "insurance": {
+            "kind": "unknown",
+            "reason": "Kein eigener Nachweis"
+          }
+        }
+      ],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer unbekannter Preis",
+      "meltValue": null,
+      "sourceValues": {}
+    },
+    {
+      "pledgeId": "demo-ccu-3",
+      "name": "Demo Gamma → Demo Delta",
+      "insurance": {
+        "kind": "unknown",
+        "reason": "Kein eigener Versicherungsnachweis auf dem Test-CCU"
+      },
+      "originalDescription": "Synthetischer Einzelpledge",
+      "ships": [],
+      "ccus": [
+        {
+          "instanceId": "demo-ccu-3",
+          "from": "Demo Gamma",
+          "to": "Demo Delta",
+          "status": "unused",
+          "applicability": "unverified",
+          "insurance": {
+            "kind": "unknown",
+            "reason": "Kein eigener Nachweis"
+          }
+        }
+      ],
+      "protected": true,
+      "baseReleased": false,
+      "restrictions": [],
+      "acquisitionCost": null,
+      "unknownCostReason": "Synthetischer unbekannter Preis",
+      "meltValue": null,
+      "sourceValues": {}
+    }
+  ],
+  "buybacks": [
+    {
+      "entryId": "demo-buyback-1",
+      "name": "Demo-Buyback – keine freie Ressource",
+      "description": "Synthetischer Buyback ohne aktuellen Preis",
+      "currentPrice": null,
+      "availability": "unverified"
+    }
+  ]
+}

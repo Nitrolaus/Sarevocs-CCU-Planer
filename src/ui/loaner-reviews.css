@@ -1,0 +1,4 @@
+.loaner-context{position:fixed;z-index:80;width:312px;max-width:calc(100vw - 16px);padding:12px;background:#17222c;border:1px solid #718b99;border-radius:6px;box-shadow:0 12px 30px #0009}
+.loaner-context label{display:block;font-size:13px;color:#a1efdd}.loaner-context select{margin-top:6px;font-size:13px;padding:10px}
+.loaner-table .self-present{background:#00f0db;color:#102b29}.loaner-table .self-present .subline{color:#173d38}.loaner-table .self-absent{background:#20303e;color:#bfced7}
+.loaner-table tr.user-absent td:first-child{color:#a3b3bf}.loaner-table tr:focus-visible{outline:2px solid #a1efdd;outline-offset:-2px}

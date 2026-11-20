@@ -1,0 +1,42 @@
+name: Fehler melden
+description: Einen Fehler in Sarevoc´s CCU Planer melden
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Testen! Deine Meldung ist öffentlich. Beschreibe den Fehler mit Beispieldaten und lasse Zugangsdaten, Kontonamen, Hangarexporte, Sitzungsdateien und Tokens weg.
+  - type: input
+    id: version
+    attributes:
+      label: Planer-Version
+      placeholder: 0.3.74 Alpha
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: Betroffener Bereich
+      placeholder: Bestand, CCU-Planer, Export oder Installer
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Schritte, um den Fehler nachzustellen
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Was ist passiert?
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Was hättest du erwartet?
+      render: text
+    validations:
+      required: true

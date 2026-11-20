@@ -1,0 +1,15 @@
+import { build } from 'esbuild';
+import fs from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+const folder = path.resolve('work/temp/market-sources', randomUUID()); fs.mkdirSync(folder, { recursive: true });
+const file = path.join(folder, 'probe.cjs');
+await build({ entryPoints: ['tests/market-transport-harness.ts'], outfile: file, bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] });
+const env = { ...process.env, TEMP: path.join(folder, 'tmp'), TMP: path.join(folder, 'tmp') }; fs.mkdirSync(env.TEMP, { recursive: true }); delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS;
+const require = createRequire(import.meta.url);
+const result = spawnSync(require('electron'), [file, '--probe-dir=' + folder, '--disable-gpu', '--disable-background-networking'], { env, windowsHide: true, encoding: 'utf8', timeout: 45000 });
+if (result.stdout) console.log(result.stdout.trim());
+if (result.status !== 0) throw new Error('PUBLIC_SOURCE_PROBE_FAILED; report: ' + folder);
+console.log('REPORT:', path.join(folder, 'results.json'));
