@@ -1,4 +1,8 @@
-.help-head{padding:0 0 14px;border:0}
+.help-head{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 24px;padding:0 0 14px;border:0}
+.help-heading-text{flex:1 1 290px;min-width:0}
+.help-report{display:grid;justify-items:end;max-width:24ch}
+.help-report button{font-size:13px;padding:8px 12px}
+.help-report .help-error{margin:6px 0 0;color:#f4bbbc;font-size:12px}
 .help-head h1{font-size:32px;margin:0 0 5px}
 .help-head p{font-size:14px}
 .help-topics{display:flex;flex-wrap:wrap;gap:7px 15px;margin:0 0 10px;padding:9px 12px}
@@ -43,6 +47,13 @@
 }
 .help-resource-panel{padding:clamp(15px,2.4vw,27px);background:linear-gradient(150deg,#182831,#131c26 65%)}
 .help-resource-panel h2{font-size:23px;margin:0 0 7px}
+.help-resource-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0 16px}
+.help-resource-heading .help-update-button{margin:0 0 7px;padding:7px 11px;font-size:13px}
+.help-update-dialog{width:min(530px,calc(100% - 48px));background:linear-gradient(145deg,#1c3038,#15212b 65%)}
+.help-resource-panel .help-update-dialog h2{margin:8px 0 16px}
+.help-resource-panel .help-update-dialog h3{margin:20px 0 8px;font-size:17px}
+.help-update-notes{padding:14px 16px;background:#101b24;border:1px solid #304955;border-radius:8px;overflow-wrap:anywhere}
+.help-update-notes p+p{margin-top:6px}
 .help-resource-panel h3{font-size:16px;margin:0 0 6px}
 .help-resource-panel p{font-size:13px;color:#c5d3dd;line-height:1.55;max-width:78ch}
 .help-resource-grid{

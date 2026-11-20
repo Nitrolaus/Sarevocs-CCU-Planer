@@ -10,6 +10,7 @@ import {reportKindSchema,reportChainSchema,reportSelectionSchema,reportFiltersSc
 import {fairNoticeIdSchema} from '../market/fair-news';
 import { rsiHelpTopicSchema } from './rsi-help';
 import { helpDocumentSchema, helpResourceSchema } from './help-resources';
+import { releaseTagSchema } from './release-updates';
 import { creditBudgetSchema } from '../planner/credit-budget';
 import { giveawayEditSchema } from '../storage/giveaway-origins';
 export const commandSchema = z.discriminatedUnion('action', [
@@ -17,6 +18,8 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('help.openRsi'), topic: rsiHelpTopicSchema }).strict(),
   z.object({ action: z.literal('help.openResource'), resource: helpResourceSchema }).strict(),
   z.object({ action: z.literal('help.readDocument'), document: helpDocumentSchema }).strict(),
+  z.object({ action: z.literal('help.checkUpdate') }).strict(),
+  z.object({ action: z.literal('help.openUpdate'), tag: releaseTagSchema }).strict(),
   z.object({action:z.literal('report.preview'),accountId:z.uuid(),kind:reportKindSchema,chain:reportChainSchema.optional()}).strict(),
   z.object({action:z.literal('report.selection'),accountId:z.uuid(),kinds:reportSelectionSchema,chain:reportChainSchema.optional(),filters:reportFiltersSchema.optional()}).strict()
     .refine(command=>Object.keys(command.filters??{}).every(key=>command.kinds.some(kind=>kind===key))),

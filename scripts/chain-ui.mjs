@@ -22,8 +22,10 @@ main=main.replace(anchor,anchor+`
   if(command.action==='rsi.refresh'){const view=fixture.views[command.accountId];return {ok:true,data:{status:'connected',revision:view?.revision??null,changed:true,view:copy(view)}};}
   if(command.action==='market.openUpgrades')return fixture.shopFailure?{ok:false,error:'SYNTHETIC_BROWSER_FAILURE'}:{ok:true,data:{opened:true,prefilled:false}};
   if(command.action==='help.openRsi')return fixture.helpFailure?{ok:false,error:'SYNTHETIC_BROWSER_FAILURE'}:{ok:true,data:{opened:true}};
-  if(command.action==='help.openResource')return {ok:true,data:{opened:true}};
+  if(command.action==='help.openResource')return fixture.helpFailure?{ok:false,error:'SYNTHETIC_BROWSER_FAILURE'}:{ok:true,data:{opened:true}};
   if(command.action==='help.readDocument')return {ok:true,data:'Synthetic '+command.document+' text'};
+  if(command.action==='help.checkUpdate')return {ok:true,data:copy(fixture.releaseUpdate??null)};
+  if(command.action==='help.openUpdate')return fixture.helpFailure?{ok:false,error:'SYNTHETIC_BROWSER_FAILURE'}:{ok:true,data:{opened:true}};
   if(command.action==='market.targets'){if(command.ids)fixture.targets[command.accountId]=command.ids;return {ok:true,data:copy(fixture.targets[command.accountId]??[null,null,null])};}
   if(command.action==='planner.creditBudget'){fixture.creditBudgets??={};if(command.budget)fixture.creditBudgets[command.accountId]=copy(command.budget);return {ok:true,data:copy(fixture.creditBudgets[command.accountId]??null)};}
   if(command.action==='pricing.status')return {ok:true,data:copy(fixture.pricing)};
@@ -120,6 +122,7 @@ try{
     const help=page.locator('.help-view');
     await navDe.getByRole('button',{name:/Hilfe & Einstieg/}).click();
     await help.getByRole('heading',{name:'Hilfe & Einstieg',exact:true}).waitFor();
+    assert.equal(await help.locator('.help-update-button, .help-update-dialog').count(),0);
     assert.equal(await help.getByRole('heading',{level:2}).count(),6);
     assert.equal(await help.getByRole('button',{name:/^(Deutsch|English)$/}).count(),0);
     assert.equal(await page.locator('.connection-line').count(),0);
@@ -177,6 +180,7 @@ try{
     }
     assert.deepEqual(await app.evaluate(()=>globalThis.fixture.commands.filter(command=>command.action==='help.openResource'&&!['kofi','paypal'].includes(command.resource))),
       ['teces','kerberos','bauaufsicht','arasil','erkul'].map(resource=>({action:'help.openResource',resource})));
+    await help.getByRole('button',{name:'Fehler melden',exact:true}).click();
     await help.getByRole('button',{name:'Einstieg',exact:true}).click();
     await help.getByRole('link',{name:'Was ist ein CCU?',exact:true}).press('Enter');
     assert.equal(await help.getByRole('link',{name:'Was ist ein CCU?',exact:true}).getAttribute('aria-current'),'location');
@@ -192,6 +196,9 @@ try{
     await help.getByRole('heading',{name:'How a chain fits together',exact:true}).waitFor();
     await help.getByRole('button',{name:'Security & Downloads',exact:true}).click();
     await help.getByRole('heading',{name:'Terms and licenses',exact:true}).waitFor();
+    await help.getByRole('button',{name:'Report a bug',exact:true}).click();
+    assert.deepEqual(await app.evaluate(()=>globalThis.fixture.commands.filter(command=>command.action==='help.openResource'&&command.resource.startsWith('bugReport'))),
+      [{action:'help.openResource',resource:'bugReportDe'},{action:'help.openResource',resource:'bugReportEn'}]);
     await help.getByRole('button',{name:'Getting started',exact:true}).click();
     assert.equal(await page.locator('html').getAttribute('lang'),'en');
     assert.equal(await help.getByRole('heading',{level:2}).count(),6);
@@ -209,6 +216,12 @@ try{
     assert.equal(await navEn.getByRole('button',{name:/Help & Getting Started/}).getAttribute('aria-current'),'page');
     await page.setViewportSize(viewport);
     await app.evaluate(()=>{globalThis.fixture.helpFailure=true;});
+    await help.getByRole('button',{name:'Report a bug',exact:true}).click();
+    await help.getByText('Could not open the GitHub form.',{exact:true}).waitFor();
+    await app.evaluate(()=>{globalThis.fixture.helpFailure=false;});
+    await help.getByRole('button',{name:'Report a bug',exact:true}).click();
+    await help.getByText('Could not open the GitHub form.',{exact:true}).waitFor({state:'hidden'});
+    await app.evaluate(()=>{globalThis.fixture.helpFailure=true;});
     await help.getByRole('button',{name:/RSI store credit rules/}).click();
     await help.getByRole('alert').getByText('Could not open the RSI help page.',{exact:true}).waitFor();
     await app.evaluate(()=>{globalThis.fixture.helpFailure=false;});
@@ -219,6 +232,63 @@ try{
     await page.getByRole('heading',{name:'Bestand',exact:true}).waitFor();
     const commands=await app.evaluate(({},start)=>globalThis.fixture.commands.slice(start),firstCommand);
     assert.equal(commands.some(command=>/^rsi\.(open|connect|authorize|refresh)$/.test(command.action)),false);
+  });
+  await check('HELP_UPDATE_NOTICE_ONLY_IN_SECURITY_TAB_AND_NO_AUTOMATIC_DIALOG_OR_DOWNLOAD',async()=>{
+    const help=page.locator('.help-view');
+    const nav=page.getByRole('navigation',{name:'Hauptbereiche'});
+    await nav.getByRole('button',{name:/Hilfe & Einstieg/}).click();
+    await help.getByRole('button',{name:'Sicherheit & Download',exact:true}).click();
+    const update=help.getByRole('button',{name:'Update verfügbar · 0.3.76 Alpha',exact:true});
+    const notice=help.getByRole('dialog',{name:'Update verfügbar'});
+    assert.equal(await update.count(),0);
+    assert.equal(await notice.count(),0);
+    const firstCommand=await app.evaluate(()=>globalThis.fixture.commands.length);
+    await app.evaluate(()=>{
+      globalThis.fixture.releaseUpdate={tag:'v0.3.76-alpha',version:'0.3.76 Alpha',
+        notes:{de:['Synthetische Neuerung für diesen Test.'],en:['Synthetic change for this test.']}};
+    });
+    await help.getByRole('button',{name:'Einstieg',exact:true}).click();
+    assert.equal(await update.count(),0);
+    await help.getByRole('button',{name:'Sicherheit & Download',exact:true}).click();
+    await update.waitFor();
+    assert.equal(await notice.count(),0);
+    assert.deepEqual(await app.evaluate(({},start)=>globalThis.fixture.commands.slice(start).filter(c=>c.action.startsWith('help.')),firstCommand),
+      [{action:'help.checkUpdate'}]);
+    const viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));
+    await page.setViewportSize({width:1024,height:700});
+    assert.equal(await help.evaluate(el=>el.scrollWidth<=el.clientWidth&&document.documentElement.scrollWidth<=innerWidth),true);
+    await update.click();
+    await notice.getByRole('heading',{name:'Was ist neu?'}).waitFor();
+    await notice.getByText('Synthetische Neuerung für diesen Test.',{exact:true}).waitFor();
+    await page.screenshot({path:path.join(folder,'update-hinweis-testdaten.png')});
+    await notice.getByRole('button',{name:'Schließen',exact:true}).click();
+    await notice.waitFor({state:'hidden'});
+    await update.click();
+    await app.evaluate(()=>{globalThis.fixture.helpFailure=true;});
+    const download=notice.getByRole('button',{name:'Auf GitHub downloaden',exact:true});
+    await download.click();
+    await notice.getByRole('alert').waitFor();
+    await app.evaluate(()=>{globalThis.fixture.helpFailure=false;});
+    await download.click();
+    await notice.waitFor({state:'hidden'});
+    assert.deepEqual(await app.evaluate(({},start)=>globalThis.fixture.commands.slice(start).filter(c=>c.action==='help.openUpdate'),firstCommand),
+      Array(2).fill({action:'help.openUpdate',tag:'v0.3.76-alpha'}));
+    await nav.getByRole('button',{name:/Daten & Einstellungen/}).click();
+    await page.getByRole('combobox',{name:'Sprache',exact:true}).selectOption('en');
+    await page.getByRole('button',{name:'Speichern',exact:true}).click();
+    const navEn=page.getByRole('navigation',{name:'Main sections'});
+    await navEn.getByRole('button',{name:/Help & Getting Started/}).click();
+    await help.getByRole('button',{name:'Security & Downloads',exact:true}).click();
+    await help.getByRole('button',{name:'Update available · 0.3.76 Alpha',exact:true}).click();
+    const noticeEn=help.getByRole('dialog',{name:'Update available'});
+    await noticeEn.getByText('Synthetic change for this test.',{exact:true}).waitFor();
+    await noticeEn.getByRole('button',{name:'Download on GitHub',exact:true}).waitFor();
+    await page.keyboard.press('Escape');
+    await noticeEn.waitFor({state:'hidden'});
+    await navEn.getByRole('button',{name:/Data & settings/i}).click();
+    await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('de');
+    await page.getByRole('button',{name:'Save',exact:true}).click();
+    await page.setViewportSize(viewport);
   });
   await page.getByRole('button',{name:/CCU-Planer/}).click();const chain=page.getByRole('region',{name:'Kettenbauer',exact:true});
   await check('FAIR_NEWS_SHOWS_ALL_TIED_STARTS_AND_CHAIN_SAVINGS_AND_KEEPS_EXPIRED_UNREAD', async()=>{

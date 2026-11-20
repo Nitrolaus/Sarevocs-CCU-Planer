@@ -16,6 +16,7 @@ type HelpCopy = {
   intro: string;
   topics: string;
   error: string;
+  bugReport: { label: string; error: string };
   example: { caption: string; description: string; ships: readonly { name: string; price: string }[] };
   chapters: readonly Chapter[];
 };
@@ -25,6 +26,7 @@ const copy: Record<'de' | 'en', HelpCopy> = {
     intro: 'Star Citizen · Vom ersten Schiff zur CCU-Kette',
     topics: 'Themen',
     error: 'Die RSI-Hilfeseite konnte nicht geöffnet werden.',
+    bugReport: { label: 'Fehler melden', error: 'Das GitHub-Formular konnte nicht geöffnet werden.' },
     example: {
       caption: 'Fiktives Beispiel · USD vor Steuer',
       description: 'Schiff A zu Schiff B zu Schiff C',
@@ -53,6 +55,7 @@ const copy: Record<'de' | 'en', HelpCopy> = {
     intro: 'Star Citizen · From your first ship to a CCU chain',
     topics: 'Topics',
     error: 'Could not open the RSI help page.',
+    bugReport: { label: 'Report a bug', error: 'Could not open the GitHub form.' },
     example: {
       caption: 'Fictional example · USD before tax',
       description: 'Ship A to Ship B to Ship C',
@@ -87,6 +90,7 @@ export function HelpView() {
   const [section, setSection] = useState<HelpSection>('guide');
   const [currentChapter, setCurrentChapter] = useState<Chapter['id'] | null>(null);
   const [failed, setFailed] = useState<RsiHelpTopic | null>(null);
+  const [bugReportState, setBugReportState] = useState<'opening' | 'failed' | null>(null);
   async function open(topic: RsiHelpTopic) {
     setFailed(null);
     try {
@@ -95,8 +99,24 @@ export function HelpView() {
     } catch { setFailed(topic); }
   }
 
+  async function openBugReport() {
+    setBugReportState('opening');
+    try {
+      const result = await window.ccu.request({ action: 'help.openResource', resource: language === 'de' ? 'bugReportDe' : 'bugReportEn' });
+      setBugReportState(result.ok ? null : 'failed');
+    } catch { setBugReportState('failed'); }
+  }
+
   return <section className="help-view" aria-labelledby="help-title">
-    <header className="help-head"><div><h1 id="help-title">{t('Hilfe & Einstieg')}</h1><p>{guide.intro}</p></div></header>
+    <header className="help-head">
+      <div className="help-heading-text"><h1 id="help-title">{t('Hilfe & Einstieg')}</h1><p>{guide.intro}</p></div>
+      <div className="help-report">
+        <button type="button" disabled={bugReportState === 'opening'} onClick={() => void openBugReport()}>
+          {guide.bugReport.label} <span aria-hidden="true">↗</span>
+        </button>
+        {bugReportState === 'failed' && <p className="help-error" role="alert">{guide.bugReport.error}</p>}
+      </div>
+    </header>
     <nav className="help-sections" aria-label={t('Hilfe & Einstieg')}>
       {(Object.keys(labels) as HelpSection[]).map(key => <button key={key} type="button"
         aria-pressed={section === key} onClick={() => setSection(key)}>{labels[key]}</button>)}

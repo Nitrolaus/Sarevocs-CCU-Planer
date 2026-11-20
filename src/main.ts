@@ -28,12 +28,13 @@ import { MarketService } from './market/service';
 import { TableWidthStore } from './main/table-widths';
 import { LoanerService } from './loaners/service';
 import {LoanerReviews} from './loaners/reviews';
-import { publicMarketReader, publicShopPriceReader } from './market/transport';
+import { publicClient, publicMarketReader, publicShopPriceReader } from './market/transport';
 import { PricingService } from './pricing/service';
 import { safeRsiShipUrl } from './market/ship-link';
 import { openRsiUpgrades } from './market/upgrade-link';
 import { openRsiHelp } from './main/rsi-help';
 import { openHelpResource, readHelpDocument } from './main/help-resources';
+import { RELEASES_API_URL, ReleaseUpdates } from './main/release-updates';
 import {PaintService} from './paints/service';
 import {publicPaintReader} from './paints/transport';
 import {readPaintCatalogue} from './paints/source';
@@ -132,6 +133,9 @@ async function start() {
   await vault.prepare().catch(() => {});
   store = await InventoryStore.open(path.join(dataDir, 'inventory.sqlite'), fs.readFileSync(path.join(__dirname, 'sql-wasm.wasm')));
   const publicReader = publicMarketReader();
+  const readReleases = publicClient(1024 * 1024);
+  const releases = new ReleaseUpdates(APP_VERSION, signal => readReleases(RELEASES_API_URL, signal, false));
+  app.once('before-quit', () => releases.close());
   const marketDirectory = path.join(dataDir, 'Marktdaten');
   const installedAt = fairInstallationTime(app.isPackaged ? process.execPath : null, Date.now());
   market = new MarketService(marketDirectory, publicReader, undefined, new FairNewsStore(marketDirectory, installedAt), publicShopPriceReader());
@@ -240,6 +244,12 @@ async function start() {
         case 'help.openRsi': data = await openRsiHelp(cmd.topic, url => shell.openExternal(url)); break;
         case 'help.openResource': data = await openHelpResource(cmd.resource, url => shell.openExternal(url)); break;
         case 'help.readDocument': data = await readHelpDocument(cmd.document, __dirname); break;
+        case 'help.checkUpdate': data = await releases.check(); break;
+        case 'help.openUpdate': {
+          data = await releases.open(cmd.tag, url => shell.openExternal(url));
+          if (!data) throw new UserError('Diese Release-Version ist zurzeit nicht verfügbar.');
+          break;
+        }
         case 'pricing.status': data = pricing.snapshot(); break;
         case 'table.widths': data=tableWidths.get(cmd.table,cmd.widths);break;
         case 'pricing.save': data = pricing.save(cmd.settings); break;

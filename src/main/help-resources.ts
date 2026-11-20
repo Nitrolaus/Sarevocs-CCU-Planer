@@ -12,6 +12,8 @@ const resources = {
   fileHash: 'https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash',
   kofi: 'https://ko-fi.com/sarevoc',
   paypal: 'https://www.paypal.com/ncp/payment/EKNGMDJFVKZHJ',
+  bugReportDe: 'https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml',
+  bugReportEn: 'https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml',
 } as const;
 
 const documents = {

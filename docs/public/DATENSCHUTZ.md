@@ -16,6 +16,8 @@ Beim Hangarabruf gleicht der Planer Kaufpreise lesend mit dem RSI-Kaufprotokoll 
 
 Der öffentliche Katalog, Open-Hangar-Angebote und der EZB-Eurokurs werden ohne Weitergabe der gespeicherten RSI-Sitzung geladen. Quellenangaben und Fremdlizenzen stehen in THIRD_PARTY_NOTICES.md. Der Tagesabruf gilt nur im laufenden Programm; ein beendeter Planer ruft nichts ab.
 
+Im Reiter „Sicherheit & Download“ fragt der Planer die öffentlichen Veröffentlichungen dieses Projekts bei GitHub ab. Die Abfrage verwendet die feste Projektadresse und sendet weder Profil- und Hangardaten noch RSI-Anmeldedaten. Den Download einer neuen Version startest du selbst auf GitHub.
+
 Für konkrete Upgrade-Preise fragt der Planer beim Anzeigen einer Kette die öffentliche RSI-Schnittstelle ab. Dafür sendet er die öffentlichen Katalogkennungen der in dieser Ansicht benötigten Start- und Zielschiffe sowie gegebenenfalls die Angebotskennung. Solange die Ansicht geöffnet ist, kann sich diese Abfrage etwa alle fünf Minuten wiederholen. Die Abfrage verwendet eine getrennte Verbindung ohne RSI-Sitzung. Inventar, Profilnamen und Hangar-Exemplarnummern bleiben lokal.
 
 Die offizielle RSI-Anmeldeseite kann die benötigten Komponenten von reCAPTCHA und Cookiebot laden. Bei „Angemeldet bleiben“ speichert der Planer die für die offizielle RSI-Domain zugelassenen Sitzungscookies einschließlich wiederverwendbarer Anmeldecookies verschlüsselt.

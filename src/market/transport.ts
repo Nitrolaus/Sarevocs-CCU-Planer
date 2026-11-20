@@ -6,7 +6,7 @@ import { SHIP_VALUES_BODY, SHIP_VALUES_URL } from './ship-values';
 import { shopPriceReader } from './shop-prices';
 
 /** Dedicated nonpersistent session: never shares the hangar, vault, cookies, credentials or renderer. */
-function publicClient() {
+export function publicClient(maxJsonBytes = 8 * 1024 * 1024) {
   const isolated = session.fromPartition('public-market-' + randomUUID());
   isolated.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   isolated.setPermissionCheckHandler(() => false);
@@ -35,7 +35,7 @@ function publicClient() {
       response.on('error', () => finish(new Error('PUBLIC_SOURCE_NETWORK')));
       response.on('data', chunk => {
         const buffer = Buffer.from(chunk); bytes += buffer.length;
-        if (bytes > (xml ? 65_536 : 8 * 1024 * 1024)) finish(new Error('PUBLIC_SOURCE_SIZE')); else if (!settled) chunks.push(buffer);
+        if (bytes > (xml ? 65_536 : maxJsonBytes)) finish(new Error('PUBLIC_SOURCE_SIZE')); else if (!settled) chunks.push(buffer);
       });
       response.on('end', () => {
         if (settled) return;
