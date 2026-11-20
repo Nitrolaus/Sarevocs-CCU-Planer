@@ -34,15 +34,27 @@ Hallo, ich bin Sarevoc. Auf GitHub findest du mich als Nitrolaus. Ich habe den P
 
 ### Sicherheitskonzept
 
-Deinen Hangar liest der Planer bei RSI. Einkäufe und Änderungen am Bestand erledigst du selbst auf der offiziellen Seite. Passwort und MFA gibst du direkt bei RSI ein. Wenn du „Angemeldet bleiben“ wählst, speichert der Planer die wiederverwendbaren Sitzungscookies mit Windows-Verschlüsselung und getrennt vom Bestand. Unter „Sitzung & Sicherheit“ kannst du die gespeicherte Sitzung löschen.
+Der Planer ruft deinen Hangarbestand direkt bei RSI ab. Einkäufe und Änderungen am Bestand erledigst du selbst auf der offiziellen Seite. Passwort und MFA gibst du direkt bei RSI ein. Wenn du „Angemeldet bleiben“ wählst, speichert der Planer die wiederverwendbaren Sitzungscookies mit Windows-Verschlüsselung und getrennt vom Bestand. Unter „Sitzung & Sicherheit“ kannst du die gespeicherte Sitzung löschen.
 
-Bestand, Profile und Entwürfe bleiben auf deinem Rechner. Für konkrete Upgrade-Preise sendet der Planer öffentliche Kennungen der angezeigten Schiffspaare an RSI. Diese Abfrage nutzt eine getrennte Verbindung ohne Anmeldecookies. Ein Export wird erst auf deine Auswahl hin erstellt. [Datenschutz und Datenflüsse](docs/public/DATENSCHUTZ.md)
+Dein Bestand, deine Profile und deine Entwürfe bleiben auf deinem Rechner. Der Planer bietet keine Funktion, die diese Daten an mich oder einen Projektserver überträgt. Wenn du eine Datei exportierst, entscheidest du, ob du sie weitergibst. Im öffentlichen Quellcode kannst du nachlesen, welche Daten der Planer verarbeitet und wohin seine Anfragen gehen. [Quellcode](src/) | [Datenschutz und Datenflüsse](docs/public/DATENSCHUTZ.md)
+
+Für konkrete Upgrade-Preise erhält RSI die öffentlichen Katalogkennungen der abgefragten Schiffspaare und, falls nötig, die Angebotskennung. Diese Abfrage nutzt eine getrennte Verbindung ohne Anmeldecookies.
 
 ### Was Alpha und die Internetmarkierung bedeuten
 
 GitHub kennzeichnet diese Version als **Pre-release**, weil sie zum öffentlichen Testen gedacht ist. Funktionen und Bedienung können sich bis zur stabilen Version ändern. [GitHub zu Vorabversionen](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 
-Beim Download kann Windows die Internetherkunft der Datei kennzeichnen. Diese Herkunftsmarkierung heißt **Mark of the Web**. Da der Alpha-Installer noch keine digitale Signatur hat, kann Windows beim Start einen SmartScreen-Hinweis anzeigen. Verwende den Installer aus diesem GitHub-Repo und vergleiche seinen SHA-256-Wert mit der `SHA256.txt` derselben Version. Die Prüfsumme bestätigt die Übereinstimmung der Dateien. [Microsoft zur Internetmarkierung](https://support.microsoft.com/en-us/windows/security/information-about-the-attachment-manager-in-microsoft-windows) | [Microsoft zu SmartScreen](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+Beim Download kann Windows die Internetherkunft der Datei kennzeichnen. Diese Herkunftsmarkierung heißt **Mark of the Web**. Da der Alpha-Installer noch keine digitale Signatur hat, kann Windows beim Start einen SmartScreen-Hinweis anzeigen. [Microsoft zur Internetmarkierung](https://support.microsoft.com/en-us/windows/security/information-about-the-attachment-manager-in-microsoft-windows) | [Microsoft zu SmartScreen](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+
+### Offizieller Download
+
+Ich veröffentliche den offiziellen Installer ausschließlich hier auf GitHub unter **Nitrolaus/Sarevocs-CCU-Planer**. Downloads auf anderen Seiten werden von den jeweiligen Anbietern bereitgestellt. Die `SHA256.txt` zur jeweiligen Version hilft dir zu prüfen, ob deine Datei mit meinem GitHub-Download übereinstimmt. [Offizielle Downloads](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases)
+
+### Ausblick
+
+Ich möchte Schiffsgrafiken ergänzen, sobald sie für die Verwendung im Planer freigegeben sind. Außerdem möchte ich wichtige Termine rund um Star Citizen und die Messen im Planer sichtbar machen.
+
+Wenn du dir eine Funktion wünschst oder etwas umständlich findest, schreib mir gern. Was zum Planer passt und was ich umsetzen kann, nehme ich auf. [Idee oder Feedback teilen](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues)
 
 ### Lizenz
 
@@ -80,15 +92,27 @@ Hi, I’m Sarevoc. You’ll find me on GitHub as Nitrolaus. I built the planner 
 
 ### Security and privacy
 
-The planner reads your hangar from RSI. You make purchases and inventory changes yourself on the official site. Enter your password and MFA code directly on RSI. If you choose to stay signed in, the planner protects reusable session cookies with Windows encryption and keeps them separate from the inventory. You can delete the saved session under **Session & security**.
+The planner retrieves your hangar inventory directly from RSI. You make purchases and inventory changes yourself on the official site. Enter your password and MFA code directly on RSI. If you choose to stay signed in, the planner protects reusable session cookies with Windows encryption and keeps them separate from the inventory. You can delete the saved session under **Session & security**.
 
-Your inventory, profiles, and drafts stay on your computer. For specific upgrade prices, the planner sends public catalogue identifiers for the displayed ship pairs to RSI. These requests use a separate connection without sign-in cookies. An export is created when you choose to save one. [Privacy notes in German](docs/public/DATENSCHUTZ.md)
+Your inventory, profiles, and drafts stay on your computer. The planner has no feature that uploads them to me or to a project server. If you export a file, you decide whether to share it. You can review the public source code to see which data the planner processes and where its requests go. [Source code](src/) | [Privacy notes in German](docs/public/DATENSCHUTZ.md)
+
+For specific upgrade prices, RSI receives the public catalogue IDs for the requested ship pairs and the offer ID when needed. These requests use a separate connection without sign-in cookies.
 
 ### What Alpha and the download marking mean
 
 GitHub labels this version **Pre-release** because it is intended for public testing. Features and workflows may change before the stable release. [GitHub on prereleases](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 
-Windows can mark a downloaded file as coming from the internet. This is called **Mark of the Web**. The alpha installer is unsigned, so Windows may show a SmartScreen warning when you run it. Download the installer from this GitHub repository and compare its SHA-256 checksum with `SHA256.txt` from the same release. A matching checksum confirms that the files match. [Microsoft on download markings](https://support.microsoft.com/en-us/windows/security/information-about-the-attachment-manager-in-microsoft-windows) | [Microsoft on SmartScreen](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+Windows can mark a downloaded file as coming from the internet. This is called **Mark of the Web**. The alpha installer is unsigned, so Windows may show a SmartScreen warning when you run it. [Microsoft on download markings](https://support.microsoft.com/en-us/windows/security/information-about-the-attachment-manager-in-microsoft-windows) | [Microsoft on SmartScreen](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
+
+### Official download
+
+I publish the official installer exclusively here on GitHub under **Nitrolaus/Sarevocs-CCU-Planer**. Downloads on other sites are provided by their respective operators. Compare your file’s SHA-256 checksum with the value in `SHA256.txt` from the same release to check that it matches my GitHub download. [Official downloads](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases)
+
+### What’s planned
+
+I’d like to add ship artwork once it’s approved for use in the planner. I also want to show important dates for Star Citizen and its in-game expos in the app.
+
+If you’d like a feature or find something awkward to use, I’d like to hear about it. I’ll implement suggestions that fit the planner when I can. [Share an idea or feedback](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues)
 
 ### License
 
