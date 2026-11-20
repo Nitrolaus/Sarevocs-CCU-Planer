@@ -58,7 +58,7 @@ Wenn du dir eine Funktion wünschst oder etwas umständlich findest, schreib mir
 
 ### Lizenz
 
-Die [Quellcodelizenz mit Namenspflicht](LICENSE) erlaubt Änderungen und kostenlose Weitergabe. Veröffentlichte Fassungen tragen den Namen **Sarevoc´s CCU Planer** und den Urhebervermerk **Sarevoc**. Bearbeitete Fassungen werden als **Geänderte Fassung** gekennzeichnet.
+Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](LICENSE). Sie erlaubt Änderungen und kostenlose Weitergabe. Veröffentlichte Fassungen tragen den Namen **Sarevoc´s CCU Planer** und den Urhebervermerk **Sarevoc**. Bearbeitete Fassungen werden als **Geänderte Fassung** gekennzeichnet.
 
 [Kettenbau](docs/public/KETTENBAUER.md) | [Kaufberatung](docs/public/BERATER.md) | [Datenherkunft](docs/public/PROFILDATEN.md) | [Loaner](docs/public/LOANER.md) | [Alpha testen](docs/public/TESTEN.md) | [Entwicklung](docs/public/ENTWICKLUNG.md) | [Datenschutz](docs/public/DATENSCHUTZ.md) | [Fremdkomponenten](THIRD_PARTY_NOTICES.md)
 
@@ -116,7 +116,7 @@ If you’d like a feature or find something awkward to use, I’d like to hear a
 
 ### License
 
-The [source code license](LICENSE) allows modification and free redistribution. Distributed versions must retain the name **Sarevoc´s CCU Planer** and the **Sarevoc** copyright notice. Changes must be clearly identified with the label **Modified version**.
+The code is released under a [custom source-available license with a naming requirement](LICENSE). It allows modification and free redistribution. Distributed versions must retain the name **Sarevoc´s CCU Planer** and the **Sarevoc** copyright notice. Modified versions must be clearly marked **Modified version**.
 
 [Alpha testing guide in German](docs/public/TESTEN.md) | [Privacy notes in German](docs/public/DATENSCHUTZ.md) | [Third party notices](THIRD_PARTY_NOTICES.md)
 
