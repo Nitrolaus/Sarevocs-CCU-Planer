@@ -68,7 +68,7 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.74 Alpha** is the first public test release and is available free of charge.
 
-[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.74-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml) (the form labels are in German)
+[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.74-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
 #### Inventory and offers
 
