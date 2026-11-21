@@ -227,11 +227,22 @@ export class RsiLogin {
         resource: connectionResource(details.resourceType), networkError });
     });
     const initialHangar = background || automatic && hasAuthenticationCookie(restored);
-    const win = new BrowserWindow({ parent, width: 1100, height: 850, autoHideMenuBar: true, show: !(background || hideHangar && initialHangar),
+    const win = new BrowserWindow({ parent, width: 1100, height: 850, autoHideMenuBar: true, show: false, backgroundColor: '#111820',
       title: 'RSI-Anmeldung – getrennte Sitzung', icon: this.icon,
       webPreferences: { session: isolated, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true,
         allowRunningInsecureContent: false, webviewTag: false, spellcheck: false, disableDialogs: background } });
     this.windows.set(accountId, win);
+    let firstPaint = false;
+    const showRsiPage = (url: string) => {
+      if (background || state.closing || win.isDestroyed() || this.windows.get(accountId) !== win ||
+          win.isVisible() || win.isMinimized() || !allowedRsiNavigation(url) ||
+          (state.hideHangar && !isRsiLoginPage(url))) return;
+      win.show(); // Electron's show() focuses the newly visible window.
+    };
+    win.once('ready-to-show', () => {
+      firstPaint = true;
+      showRsiPage(win.webContents.getURL());
+    });
     win.on('page-title-updated', event => { event.preventDefault(); win.setTitle('RSI – https://robertsspaceindustries.com · ' + (remember ? 'Windows-geschützte Speicherung' : 'flüchtige Sitzung')); });
     this.statuses.set(accountId, { state: 'login-required', message: 'Bitte ausschließlich im offiziellen RSI-Fenster anmelden. Noch kein Bestand importiert.' });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -269,15 +280,22 @@ export class RsiLogin {
     });
     win.webContents.on('did-finish-load', () => {
       this.frozen.delete(accountId);
-      if (isPledgesPage(win.webContents.getURL())) {
+      const url = win.webContents.getURL();
+      if (isPledgesPage(url)) {
         if (state.hideHangar) win.hide();
         this.statuses.set(accountId, { state: 'login-required', message: 'Hangaradresse geladen. Cookie-Hinweis und Anmeldung abschließen, danach die Hangarseite prüfen.' });
-      } else if (!background && state.hideHangar && isRsiLoginPage(win.webContents.getURL())) { win.show(); win.focus(); }
+      }
+      // ready-to-show describes the initial document, not a later transition
+      // from a hidden Hangar to the sign-in page in the same window.
+      if (firstPaint || (initialHangar && isRsiLoginPage(url))) showRsiPage(url);
     });
     win.webContents.on('did-fail-load', (_e, code, _description, url, main) => {
       if (state.closing || code === -3) return;
       const message = this.record({ event: 'load-failed', target: connectionTarget(url), resource: main ? 'mainFrame' : 'subFrame', code, networkError: networkErrorName(code) });
-      if (main) this.statuses.set(accountId, { state: 'error', message });
+      if (main) {
+        this.statuses.set(accountId, { state: 'error', message });
+        showRsiPage(url);
+      }
     });
     win.on('close', event => {
       if (state.closing) return;

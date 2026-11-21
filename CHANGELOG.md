@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.85 · Alpha
+
+- Das RSI-Anmeldefenster startet verborgen mit dunklem Hintergrund und wird erst nach dem ersten Zeichnen der Seite angezeigt. Ein zusätzlicher Fokuswechsel entfällt.
+
 ## 0.3.84 · Alpha
 
 - Der Planer öffnet die Anmeldung direkt auf der gemeinsamen RSI-Seite für Passwort und E-Mail-Code. Der Wechsel zum Codeformular braucht dadurch keinen zusätzlichen Seitenwechsel.

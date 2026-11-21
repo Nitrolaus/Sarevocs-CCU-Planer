@@ -16,11 +16,18 @@ await build({ entryPoints: ['tests/background-restore-harness.ts'], outfile: har
       const native = require('electron');
       export const session = native.session;
       export class BrowserWindow extends native.BrowserWindow {
-        constructor(options) { super({ ...options, show: false }); globalThis.ccuRestoreNative.created.push({ show: options.show, win: this }); }
-        show() { globalThis.ccuRestoreNative.actions.push({ id: this.id, action: 'show' }); }
+        constructor(options) {
+          super({ ...options, show: false });
+          this.fixtureVisible = options.show !== false;
+          const window = { show: options.show, win: this, painted: false };
+          globalThis.ccuRestoreNative.created.push(window);
+          this.once('ready-to-show', () => { window.painted = true; });
+        }
+        isVisible() { return this.fixtureVisible; }
+        show() { this.fixtureVisible = true; globalThis.ccuRestoreNative.actions.push({ id: this.id, action: 'show' }); }
         focus() { globalThis.ccuRestoreNative.actions.push({ id: this.id, action: 'focus' }); }
         restore() { globalThis.ccuRestoreNative.actions.push({ id: this.id, action: 'restore' }); }
-        hide() { globalThis.ccuRestoreNative.actions.push({ id: this.id, action: 'hide' }); return super.hide(); }
+        hide() { this.fixtureVisible = false; globalThis.ccuRestoreNative.actions.push({ id: this.id, action: 'hide' }); return super.hide(); }
       }`, resolveDir: root }));
   } }] });
 const env = { ...process.env, TEMP: path.resolve('work/temp/tooling'), TMP: path.resolve('work/temp/tooling') };

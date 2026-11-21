@@ -12,7 +12,7 @@ const data = path.resolve(process.argv.find(x => x.startsWith('--data-dir='))!.s
 fs.mkdirSync(data, { recursive: true });
 app.setPath('userData', path.join(data, 'runtime')); app.setPath('sessionData', path.join(data, 'session')); app.setPath('crashDumps', path.join(data, 'crashes'));
 app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND'); app.commandLine.appendSwitch('proxy-server', 'http://127.0.0.1:1');
-const native = { created: [] as { show: boolean; win: BrowserWindow }[], actions: [] as { id: number; action: string }[] };
+const native = { created: [] as { show: boolean; win: BrowserWindow; painted: boolean }[], actions: [] as { id: number; action: string }[] };
 (globalThis as unknown as { ccuRestoreNative: typeof native }).ccuRestoreNative = native;
 const hangar = 'https://robertsspaceindustries.com/account/pledges', loginUrl = 'https://robertsspaceindustries.com/en/sign-in';
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -22,6 +22,8 @@ type Scenario = 'ready' | 'redirect' | 'login' | 'consent' | 'challenge' | 'miss
 let scenario: Scenario = 'ready', phase = 'INIT', rotate = false;
 const requests: string[] = [], readFlags: boolean[] = [], saves: StoredCookie[][] = [], values: RsiLogin[] = [], results: string[] = [];
 let loadGate: { entered: boolean; release: () => void; promise: Promise<void> } | undefined;
+let loginPageGate: ReturnType<typeof gate> | undefined;
+let failLoginPage = false;
 let cookieReadGate: ReturnType<typeof gate> | undefined, probeFinished = false;
 function gate() { let release = () => {}; const promise = new Promise<void>(resolve => { release = resolve; }); return { entered: false, release, promise }; }
 async function until(test: () => boolean | Promise<boolean>, code: string) { for (let i = 0; i < 300; i++) { if (await test()) return; await wait(20); } throw new Error(code); }
@@ -44,6 +46,15 @@ app.whenReady().then(async () => {
   BrowserWindow.prototype.loadURL = async function(url) {
     assert.ok(url === hangar || url === loginUrl); requests.push(url);
     this.webContents.getURL = () => 'about:blank';
+    if (url === loginUrl && loginPageGate) {
+      loginPageGate.entered = true;
+      await loginPageGate.promise;
+      if (this.isDestroyed()) return;
+    }
+    if (url === loginUrl && failLoginPage) {
+      this.webContents.emit('did-fail-load', {}, -105, 'SYNTHETIC', url, true);
+      return;
+    }
     let body = url === loginUrl || scenario === 'login' ? '<input type="password">' : scenario === 'consent' ? '<button>Use necessary cookies only</button>' + ready : scenario === 'challenge' ? '<p>SYNTHETIC CHALLENGE</p>' : ready;
     if (scenario !== 'missing-handle') body = '<span class="c-account-sidebar__profile-info-handle">' + (scenario === 'different-handle' ? 'SYNTHETIC_OTHER' : 'SYNTHETIC_OWNER') + '</span>' + body;
     const protocol = this.webContents.session.protocol;
@@ -176,7 +187,9 @@ app.whenReady().then(async () => {
       const restore = outcome(login.resume(id, parent)); await until(() => !!loadGate?.entered, 'RESTORE_GATE_MISSING');
       const interactive = login.open(id, parent, false); await wait(100); assert.equal(native.created.length, 0);
       loadGate.release(); await interactive; failure((await restore).error, 'cancelled'); loadGate = undefined;
-      assert.equal(native.created.length, 1); assert.equal(native.created[0]!.show, true); assert.deepEqual(requests, [loginUrl]); await login.close(id);
+      assert.equal(native.created.length, 1); assert.equal(native.created[0]!.show, false); assert.deepEqual(requests, [loginUrl]);
+      await until(() => native.created[0]!.win.isVisible(), 'INTERACTIVE_LOGIN_NOT_REVEALED_AFTER_RESTORE');
+      await login.close(id);
     });
     await check('SHUTDOWN_PREVENTS_LATE_WINDOWS_AND_RESULTS', async () => {
       const login = value(), id = randomUUID(); loadGate = gate();
@@ -227,27 +240,57 @@ app.whenReady().then(async () => {
       assert.equal(native.created.length, 1); noPresentation(); await login.close(id);
     });
     await check('AUTHORIZE_LOGIN_VISIBLE_INTENT_HANGAR_HIDDEN', async () => {
-      const login = value(fakeVault([])), id = randomUUID(); const task = login.connect(id, parent, false, { hideHangar: true });
-      await until(() => native.created.length === 1 && native.created[0]!.win.webContents.getURL() === loginUrl, 'INTERACTIVE_LOGIN_MISSING');
-      const win = native.created[0]!.win; assert.equal(native.created[0]!.show, true);
-      assert.equal(native.actions.some(x => x.action === 'show'), true); assert.equal(native.actions.some(x => x.action === 'focus'), true);
-      win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
-      await task; assert.deepEqual(requests, [loginUrl, hangar]); assert.equal(native.actions.filter(x => x.action === 'hide').length > 0, true);
-      await login.close(id);
+      const login = value(fakeVault([])), id = randomUUID();
+      loginPageGate = gate();
+      const task = outcome(login.connect(id, parent, false, { hideHangar: true }));
+      try {
+        await until(() => !!loginPageGate?.entered, 'LOCAL_LOGIN_NOT_STARTED');
+        const first = native.created[0]!;
+        const { win, show } = first;
+        assert.equal(show, false, 'The constructor must not display the empty window');
+        assert.equal(win.webContents.getURL(), 'about:blank');
+        assert.equal(win.getBackgroundColor().toLowerCase(), '#111820');
+        assert.equal(win.isVisible(), false);
+        assert.equal(native.actions.some(x => x.action === 'show' || x.action === 'focus'), false);
+        loginPageGate.release();
+        await until(() => first.painted && win.isVisible() && win.webContents.getURL() === loginUrl, 'INTERACTIVE_LOGIN_MISSING');
+        win.webContents.emit('did-finish-load');
+        assert.deepEqual(native.actions.filter(x => x.action === 'show' || x.action === 'focus').map(x => x.action), ['show']);
+        win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
+        assert.equal((await task).error, undefined);
+        assert.deepEqual(requests, [loginUrl, hangar]);
+        assert.ok(native.actions.some(x => x.action === 'hide'));
+      } finally {
+        loginPageGate.release(); loginPageGate = undefined;
+        await login.close(id); await task;
+      }
     });
     await check('AUTHORIZE_REJECTED_SAVED_SESSION_REVEALS_ONLY_LOGIN', async () => {
       scenario = 'login'; const login = value(), id = randomUUID(); const task = login.connect(id, parent, true, { hideHangar: true });
-      await until(() => native.created.length === 1 && native.created[0]!.win.webContents.getURL() === loginUrl && native.actions.some(x => x.action === 'focus'), 'EXPLICIT_AUTH_LOGIN_NOT_REVEALED');
+      await until(() => native.created.length === 1 && native.created[0]!.win.webContents.getURL() === loginUrl && native.actions.some(x => x.action === 'show'), 'EXPLICIT_AUTH_LOGIN_NOT_REVEALED');
       assert.equal(native.created[0]!.show, false); assert.deepEqual(requests, [hangar, loginUrl]);
+      assert.deepEqual(native.actions.filter(x => x.action === 'show' || x.action === 'focus').map(x => x.action), ['show']);
       scenario = 'ready'; native.created[0]!.win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
       const result = await task; assert.equal(result.document.pledges.length, 1); assert.deepEqual(requests, [hangar, loginUrl, hangar]);
       assert.equal(native.actions.some(x => x.action === 'hide'), true); await login.close(id);
+    });
+    await check('FAILED_FIRST_LOGIN_REMAINS_VISIBLE_TO_MANUAL_CALLER', async () => {
+      const login = value(fakeVault([])), id = randomUUID();
+      failLoginPage = true;
+      try {
+        await login.open(id, parent, false);
+        assert.equal(login.status(id).state, 'error');
+        assert.ok(login.status(id).message.includes('ERR_NAME_NOT_RESOLVED'));
+        assert.equal(native.created[0]!.show, false);
+        assert.equal(native.created[0]!.win.isVisible(), true);
+        assert.deepEqual(native.actions.filter(x => x.action === 'show' || x.action === 'focus').map(x => x.action), ['show']);
+      } finally { failLoginPage = false; await login.close(id); }
     });
     fs.writeFileSync(path.join(root, 'results.json'), JSON.stringify({ status: 'PASS', data: 'synthetic-only', results }, null, 2));
   } catch (error) {
     fs.writeFileSync(path.join(root, 'results.json'), JSON.stringify({ status: 'FAIL', data: 'synthetic-only', phase, results, error: error instanceof Error ? error.message : 'BACKGROUND_TEST_FAILED' }, null, 2)); process.exitCode = 1;
   } finally {
-    loadGate?.release(); cookieReadGate?.release(); await Promise.allSettled(values.map(login => login.shutdown()));
+    loadGate?.release(); cookieReadGate?.release(); loginPageGate?.release(); await Promise.allSettled(values.map(login => login.shutdown()));
     BrowserWindow.prototype.loadURL = originalLoad; parent.destroy(); app.exit(Number(process.exitCode ?? 0));
   }
 }).catch(() => app.exit(1));
