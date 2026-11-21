@@ -19,10 +19,19 @@ public sealed class SetupWindow:Form {
   DataInfo=new Label{Name="dataInfo",Location=new Point(26,236),Size=new Size(568,144),Text="• Der Planer liest deinen Hangar. Käufe, Upgrades, Geschenke und Einschmelzen sind hier gesperrt.\n• Passwort und MFA gibst du direkt bei RSI ein; der Planer speichert diese Eingaben nicht.\n• Auf Wunsch bleibt deine RSI-Sitzung Windows-verschlüsselt auf diesem PC gespeichert, damit der Planer sie zum Lesen wiederverwenden kann.\n• Bestand, Planungen und Einstellungen bleiben lokal in deinem Windows-Benutzerkonto.",ForeColor=Color.FromArgb(197,214,223)};
   CancelAction=Button("cancel","Abbrechen",new Rectangle(330,458,116,38),false);Next=Button("next",update?"Update installieren":"Installieren",new Rectangle(458,458,136,38),true);
   TermsLink=new LinkLabel{Name="termsLink",Text="Nutzungsbedingungen lesen",AutoSize=true,Location=new Point(26,389),LinkColor=Color.FromArgb(132,217,197),ActiveLinkColor=Color.White,VisitedLinkColor=Color.FromArgb(132,217,197)};
-  AcceptTerms=new CheckBox{Name="acceptTerms",Text="Ich habe die Nutzungsbedingungen gelesen und akzeptiere sie.",Location=new Point(26,418),Size=new Size(568,25),Checked=false,ForeColor=ForeColor,BackColor=BackColor,UseVisualStyleBackColor=false,FlatStyle=FlatStyle.Flat};
+  AcceptTerms=new ConsentCheckBox {
+   Name="acceptTerms",Text="Nutzungsbedingungen akzeptieren",AccessibleName="Nutzungsbedingungen akzeptieren",
+   Bounds=new Rectangle(26,416,282,38),
+   Font=new Font("Segoe UI",10F,FontStyle.Bold),ForeColor=Color.FromArgb(132,217,197),BackColor=BackColor,
+   UseVisualStyleBackColor=false,FlatStyle=FlatStyle.Flat
+  };
   TermsLink.LinkClicked+=delegate{using(var dialog=SetupTerms.CreateDialog())dialog.ShowDialog(this);};
   AcceptTerms.CheckedChanged+=delegate{if(!busy&&!finished)Next.Enabled=AcceptTerms.Checked&&!String.IsNullOrWhiteSpace(Folder.Text);};
-  CancelAction.Click+=delegate{Close();};Next.Click+=delegate{if(finished)Close();else if(!busy&&AcceptTerms.Checked&&InstallRequested!=null)InstallRequested();};Folder.TextChanged+=delegate{Next.Enabled=AcceptTerms.Checked&&!String.IsNullOrWhiteSpace(Folder.Text);};Next.Enabled=false;
+  CancelAction.Click+=delegate{Close();};Next.Click+=delegate{if(finished)Close();else if(!busy&&AcceptTerms.Checked&&InstallRequested!=null)InstallRequested();};Folder.TextChanged+=delegate{Next.Enabled=AcceptTerms.Checked&&!String.IsNullOrWhiteSpace(Folder.Text);};
+  Next.EnabledChanged+=delegate{
+   Next.BackColor=Next.Enabled?Color.FromArgb(132,217,197):Color.FromArgb(38,53,63);
+  };
+  Next.Enabled=false;
   browse.Click+=delegate{using(var d=new FolderBrowserDialog()){d.Description="Programmordner für Sarevoc´s CCU Planer";d.SelectedPath=Folder.Text;if(d.ShowDialog(this)==DialogResult.OK)Folder.Text=d.SelectedPath;}};
   Controls.AddRange(new Control[]{Heading,Hint,folderLabel,Folder,browse,bar,Destination,Note,DataHeading,DataInfo,TermsLink,AcceptTerms,CancelAction,Next});AcceptButton=Next;CancelButton=CancelAction;
   Shown+=delegate{int dark=1;try{DwmSetWindowAttribute(Handle,20,ref dark,4);}catch{}Next.Focus();};FormClosing+=delegate(object s,FormClosingEventArgs e){if(busy&&e.CloseReason==CloseReason.UserClosing)e.Cancel=true;};
@@ -32,6 +41,29 @@ public sealed class SetupWindow:Form {
  public void SetBusy(string phase,int percent){busy=true;AcceptTerms.Enabled=false;Heading.Text=update?"Update wird installiert":"Installation läuft";Hint.Text=phase;Folder.Visible=browse.Visible=folderLabel.Visible=false;bar.Visible=Destination.Visible=true;Destination.Text=Folder.Text;bar.Value=percent;Next.Text="Bitte warten …";Next.Enabled=false;CancelAction.Enabled=false;}
  public void SetFinished(bool success,string detail){busy=false;finished=true;Heading.Text=success?(update?"Update abgeschlossen":"Installation abgeschlossen"):"Installation nicht abgeschlossen";Hint.Text=success?"Version "+targetVersion+" ist installiert.":detail;Folder.Visible=browse.Visible=folderLabel.Visible=false;bar.Visible=Destination.Visible=true;Destination.Text=Folder.Text;bar.Value=success?100:0;CancelAction.Visible=false;Next.Text="Schließen";Next.Enabled=true;}
  protected override void Dispose(bool d){if(d)bar.Dispose();base.Dispose(d);}
+ // Keep CheckBox input and accessibility semantics while drawing a larger, DPI-scaled mark.
+ sealed class ConsentCheckBox : CheckBox {
+  protected override void OnPaint(PaintEventArgs e){
+   int size=(int)Math.Round(Height*22.0/38),top=(Height-size)/2;
+   Color accent=Enabled?ForeColor:Color.FromArgb(106,130,142);
+   Color fill=Checked?accent:Color.FromArgb(16,29,38);
+   var box=new Rectangle(0,top,size,size);
+   e.Graphics.Clear(BackColor);
+   using(var brush=new SolidBrush(fill))e.Graphics.FillRectangle(brush,box);
+   using(var border=new Pen(accent))e.Graphics.DrawRectangle(border,box.X,box.Y,box.Width-1,box.Height-1);
+   if(Checked){
+    using(var check=new Pen(Color.FromArgb(15,41,39),Math.Max(2F,size/9F))){
+     e.Graphics.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+     e.Graphics.DrawLines(check,new[]{new PointF(size*.23F,top+size*.51F),
+      new PointF(size*.43F,top+size*.70F),new PointF(size*.78F,top+size*.30F)});
+    }
+   }
+   int textStart=size+Math.Max(6,size/3);
+   var label=new Rectangle(textStart,0,Width-textStart,Height);
+   TextRenderer.DrawText(e.Graphics,Text,Font,label,accent,TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine);
+   if(Focused&&ShowFocusCues)ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(0,0,Width-1,Height-1),accent,BackColor);
+  }
+ }
  sealed class SetupBar:Control {int value=-1,phase;readonly Timer timer=new Timer();public int Value{get{return value;}set{this.value=value;timer.Enabled=value<0;Invalidate();}}public SetupBar(){DoubleBuffered=true;timer.Interval=35;timer.Tick+=delegate{phase=(phase+7)%Math.Max(1,Width+100);Invalidate();};}protected override void OnPaint(PaintEventArgs e){e.Graphics.Clear(Color.FromArgb(16,29,38));using(var b=new SolidBrush(Color.FromArgb(132,217,197))){if(value<0)e.Graphics.FillRectangle(b,phase-100,0,100,Height);else e.Graphics.FillRectangle(b,0,0,Width*Math.Max(0,Math.Min(100,value))/100,Height);}using(var p=new Pen(Color.FromArgb(76,107,124)))e.Graphics.DrawRectangle(p,0,0,Width-1,Height-1);}protected override void Dispose(bool d){if(d)timer.Dispose();base.Dispose(d);}}
 }
 

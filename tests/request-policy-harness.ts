@@ -14,7 +14,8 @@ import { APP_VERSION } from '../src/domain/model';
 import {CREDIT_URL,CREDIT_BODY} from '../src/importers/rsi-credit';
 import {LastSeenStore} from '../src/storage/last-seen';
 import { rsiFetchPageProbe } from '../src/importers/rsi-page';
-import { imageOperation, persistedImageBody, fallbackImageBody } from './fixtures/rsi-captcha-image';
+import { imageOperation, persistedImageBody, fallbackImageBody, confirmationOperation,
+  confirmationQuery, persistedConfirmationBody, fallbackConfirmationBody } from './fixtures/rsi-captcha-image';
 
 const root = path.resolve(process.argv.find(x => x.startsWith('--test-root='))!.slice(12));
 app.setPath('userData', path.join(root, 'runtime')); app.setPath('sessionData', path.join(root, 'memory')); app.setPath('crashDumps', path.join(root, 'crashes'));
@@ -45,7 +46,10 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 100 && (!child.webContents.getURL() || child.webContents.isLoadingMainFrame()); i++) await wait(20);
     const isolated = child.webContents.session;
     const served: Array<{ path: string; method: string }> = [];
-    let redirectImageRequest = false;
+    let redirectGraphqlToCheckout = false;
+    const wrongCode = '000000';
+    const rejectedConfirmationBody = JSON.stringify([{ ...confirmationOperation,
+      variables: { ...confirmationOperation.variables, captcha_code: wrongCode } }]);
     // Fresh ephemeral fixture certificate, never installed in any Windows trust store.
     const certificateScript = `$ErrorActionPreference='Stop'
 $rsa=[Security.Cryptography.RSA]::Create(2048)
@@ -96,15 +100,23 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
           const chunks: Buffer[] = [];
           for await (const chunk of request) chunks.push(chunk);
           const body = Buffer.concat(chunks).toString('utf8');
-          if (body !== persistedImageBody && body !== fallbackImageBody) {
+          const isImage = body === persistedImageBody || body === fallbackImageBody;
+          const acceptsCode = body === persistedConfirmationBody || body === fallbackConfirmationBody;
+          if (!isImage && !acceptsCode && body !== rejectedConfirmationBody) {
             response.writeHead(400); response.end(); return;
           }
-          if (redirectImageRequest) {
+          if (redirectGraphqlToCheckout) {
             response.writeHead(307, { Location: '/api/checkout' }); response.end(); return;
+          }
+          response.setHeader('Content-Type', 'application/json');
+          if (!isImage) {
+            response.end(JSON.stringify(acceptsCode
+              ? [{ data: { account_signin: { status: 'Active' } } }]
+              : [{ errors: [{ message: 'Invalid synthetic code' }] }]));
+            return;
           }
           // A local 96 x 32 PNG with blue and yellow halves.
           const data = 'iVBORw0KGgoAAAANSUhEUgAAAGAAAAAgCAIAAABiouoDAAAAWElEQVR4nO3QMREAIAwEsLrAAnpQiAMMMrBjoD/kLgpSY+0o98wo1T4iSJAgQUHaRwQJEiQoiCBBggQJEiRIkKAQ7SOCBAkSFESQIEGCBAkSJEhQiPaRzwObjykADB3/wAAAAABJRU5ErkJggg==';
-          response.setHeader('Content-Type', 'application/json');
           response.end(JSON.stringify([{ data: { account_captcha: { data, type: 'image/png', encoding: 'base64' } } }]));
           return;
         }
@@ -206,11 +218,55 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     }
     assert.equal(await captchaFrames[0]!.executeJavaScript(tryGraphqlPost(persistedImageBody)), false);
     assert.equal(served.length, beforeRejectedPosts);
-    redirectImageRequest = true;
+    redirectGraphqlToCheckout = true;
     assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedImageBody)), false);
     assert.deepEqual(served.slice(beforeRejectedPosts), [{ path: '/graphql', method: 'POST' }]);
-    redirectImageRequest = false;
+    redirectGraphqlToCheckout = false;
     results.push('Both sign-in image payloads render the local 96 x 32 PNG with verified pixels. Purchase/change mutations, the CAPTCHA iframe, and a 307 redirect to checkout are blocked before dispatch.');
+
+    for (const { code, fallback, accepted } of [
+      { code: wrongCode, fallback: false, accepted: false },
+      { code: confirmationOperation.variables.captcha_code, fallback: false, accepted: true },
+      { code: confirmationOperation.variables.captcha_code, fallback: true, accepted: true },
+    ]) {
+      const signInResult = await child.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+        const form = document.createElement('form');
+        const input = document.createElement('input');
+        const confirm = document.createElement('button');
+        confirm.textContent = 'Confirm';
+        input.value = ${JSON.stringify(code)};
+        form.append(input, confirm);
+        document.body.append(form);
+        form.addEventListener('submit', async event => {
+          event.preventDefault();
+          try {
+            const operation = ${JSON.stringify(confirmationOperation)};
+            operation.variables.captcha_code = input.value;
+            if (${fallback}) operation.query = ${JSON.stringify(confirmationQuery)};
+            const reply = await fetch('/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([operation]) });
+            if (!reply.ok) throw Error('Unexpected local confirmation status');
+            const [result] = await reply.json();
+            resolve(result.data?.account_signin?.status === 'Active' ? 'accepted' :
+              result.errors?.[0]?.message === 'Invalid synthetic code' ? 'rejected' : 'unexpected');
+          } catch (error) { reject(error); } finally { form.remove(); }
+        }, { once: true });
+        confirm.click();
+      })`);
+      assert.equal(signInResult, accepted ? 'accepted' : 'rejected');
+    }
+    const beforeRejectedConfirmations = served.length;
+    assert.equal(await captchaFrames[0]!.executeJavaScript(tryGraphqlPost(persistedConfirmationBody)), false);
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(JSON.stringify([confirmationOperation, imageOperation]))), false);
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(JSON.stringify([{
+      ...confirmationOperation, query: 'mutation signin { checkout }',
+    }]))), false);
+    assert.equal(served.length, beforeRejectedConfirmations);
+    redirectGraphqlToCheckout = true;
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedConfirmationBody)), false);
+    assert.deepEqual(served.slice(beforeRejectedConfirmations), [{ path: '/graphql', method: 'POST' }]);
+    redirectGraphqlToCheckout = false;
+    results.push('Manual image confirmation reaches the local fixture in both RSI wire forms. Its incorrect code stays rejected; altered, mixed and foreign-frame submissions and a checkout redirect stay blocked.');
 
     const blockedPaths = ['/api/cart', '/api/checkout', '/api/reclaim', '/api/apply-upgrade', '/api/gift', '/api/buyback', '/api/payment',
       '/api/cart.js', '/scripts/api/cart.js', '/scripts/cart/reclaim.js', '/%63art', '/%2563art', '/scripts/..%2fapi/%63art.js'];
@@ -261,6 +317,7 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     })`);
     assert.equal(served.length, beforeHangarWidget);
     assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedImageBody)), false);
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedConfirmationBody)), false);
     assert.equal(served.length, beforeHangarWidget);
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in',{method:'POST'}).then(()=>true,()=>false)"), false);
     const page = await child.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: rsiFetchPageProbe(2, origin + '/account/pledges') }]);
@@ -293,6 +350,9 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
 
     const bytes = fs.readFileSync(diagnostics.file, 'utf8');
     assert.equal(bytes.includes(canary), false); assert.equal(bytes.includes(account), false); assert.equal(bytes.includes('https://'), false);
+    for (const value of Object.values(confirmationOperation.variables)) {
+      if (typeof value === 'string') assert.equal(bytes.includes(value), false);
+    }
     const events = JSON.parse(bytes).events;
     assert.ok(events.every((e: { appVersion: string }) => e.appVersion === APP_VERSION));
     assert.ok(events.some((e: { reason: string }) => e.reason === 'protected-operation'));

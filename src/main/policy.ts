@@ -106,18 +106,80 @@ const captchaImageQuery = `mutation captcha($action: String!, $size: String!) {
 const captchaImageBodies = [captchaImageOperation, { ...captchaImageOperation, query: captchaImageQuery }]
   .map(operation => JSON.stringify([operation]));
 
-function isCaptchaImageUpload(uploadData: SessionRequest['uploadData']): boolean {
-  if (uploadData?.length !== 1) return false;
+function rsiUploadBytes(uploadData: SessionRequest['uploadData']): Buffer | undefined {
+  if (uploadData?.length !== 1) return;
   const part = uploadData[0];
   if (!part || typeof part !== 'object' || !('bytes' in part) || !Object.hasOwn(part, 'bytes') ||
-      !Buffer.isBuffer(part.bytes)) return false;
+      !Buffer.isBuffer(part.bytes)) return;
   // Electron exposes the rawData discriminator at runtime. Its UploadData type
   // also documents the bytes-only form. Neither may carry file or blob data.
   const keys = Object.keys(part);
-  if (keys.length !== 1 && !(keys.length === 2 && keys.includes('type') && 'type' in part && part.type === 'rawData')) return false;
-  const bytes = part.bytes;
+  if (keys.length !== 1 && !(keys.length === 2 && keys.includes('type') && 'type' in part && part.type === 'rawData')) return;
+  return part.bytes;
+}
+
+function isCaptchaImageUpload(bytes: Buffer): boolean {
   // Both expected bodies contain ASCII only. Reject other lengths before decoding.
   return captchaImageBodies.some(body => bytes.length === body.length && bytes.toString('utf8') === body);
+}
+
+const captchaSignInId = '676782b8f785e375e53d92061e9943e6445a92034f79f6b487e75f085150416b';
+const captchaSignInQuery = `mutation signin($captcha_code: String, $captchaToken: String, $email: String!, $mark: String, $password: String!, $remember: Boolean) {
+  account_signin(
+    captcha_code: $captcha_code
+    captcha_token: $captchaToken
+    email: $email
+    mark: $mark
+    password: $password
+    remember: $remember
+  ) {
+    ...AuthUserFragment
+    __typename
+  }
+}
+
+fragment AuthUserFragment on RsiAuthenticatedAccount {
+  avatar
+  displayname
+  email
+  hasGameAccess
+  hasGamePackage
+  referrerReferralCode
+  status
+  tmid
+  username
+  syncToken
+  __typename
+}`;
+const captchaSignInVariables = new Set(['email', 'password', 'captcha_code', 'remember', 'mark']);
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isCaptchaSignInUpload(bytes: Buffer): boolean {
+  if (bytes.length > 16 * 1024) return false;
+  const body = bytes.toString('utf8');
+  if (!body.startsWith('[{"operationName":"signin",')) return false;
+  const batch: unknown = JSON.parse(body);
+  if (!Array.isArray(batch) || batch.length !== 1 || !isJsonObject(batch[0])) return false;
+  const operation = batch[0];
+  const { variables, extensions, query } = operation;
+  if (operation.operationName !== 'signin' || Object.keys(operation).length !== (query === undefined ? 3 : 4) ||
+      (query !== undefined && query !== captchaSignInQuery)) return false;
+  if (!isJsonObject(extensions) || Object.keys(extensions).length !== 1 ||
+      !isJsonObject(extensions.persistedQuery)) return false;
+  const persisted = extensions.persistedQuery;
+  if (Object.keys(persisted).length !== 2 || persisted.version !== 1 || persisted.sha256Hash !== captchaSignInId) return false;
+  if (!isJsonObject(variables) || !Object.keys(variables).every(key => captchaSignInVariables.has(key)) ||
+      typeof variables.email !== 'string' || !variables.email ||
+      typeof variables.password !== 'string' || !variables.password ||
+      typeof variables.captcha_code !== 'string' || !variables.captcha_code ||
+      ('remember' in variables && typeof variables.remember !== 'boolean') ||
+      ('mark' in variables && typeof variables.mark !== 'string')) return false;
+  // The RSI client serializes with JSON.stringify. An exact round trip excludes
+  // duplicate keys and noncanonical encodings. Only a boolean leaves this check.
+  return bytes.equals(Buffer.from(JSON.stringify(batch)));
 }
 
 const assetOrigins = new Set([RSI_ORIGIN, 'https://cdn.robertsspaceindustries.com',
@@ -142,8 +204,10 @@ export function evaluateRsiSessionRequest(request: SessionRequest, phase: 'login
     if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.port) return deny('invalid-url-or-path');
     const { pathname, origin } = url, { method, resourceType } = request;
     const read = ['GET', 'HEAD'].includes(method) && !request.uploadData?.length;
-    if (phase === 'login' && method === 'POST' && resourceType === 'xhr' &&
-        request.url === RSI_ORIGIN + '/graphql' && isCaptchaImageUpload(request.uploadData)) return allow;
+    if (phase === 'login' && method === 'POST' && resourceType === 'xhr' && request.url === RSI_ORIGIN + '/graphql') {
+      const bytes = rsiUploadBytes(request.uploadData);
+      if (bytes && (isCaptchaImageUpload(bytes) || isCaptchaSignInUpload(bytes))) return allow;
+    }
     if (phase === 'login' && method === 'POST' && origin === RSI_ORIGIN && rsiLoginPath.test(pathname) && !url.search &&
         ['mainFrame', 'xhr'].includes(resourceType)) return allow;
     if (phase === 'login' || phase === 'captcha') {

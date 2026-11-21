@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.82 · Alpha
+
+- Das offizielle RSI-Anmeldefenster kann den manuell eingegebenen Bildcode mit der Anmeldeanfrage an RSI senden. Käufe und Hangaränderungen bleiben gesperrt.
+- Im Installer steht ein anklickbares Kontrollkästchen für die Zustimmung zu den Nutzungsbedingungen. Ein Häkchen zeigt die Zustimmung an.
+
 ## 0.3.81 · Alpha
 
 - Das offizielle RSI-Anmeldefenster darf sein CAPTCHA-Bild laden, wenn RSI eine Bildabfrage anfordert. Der lokale Test bestätigt die Bildanzeige. Kauf- und Änderungssperren bleiben aktiv.

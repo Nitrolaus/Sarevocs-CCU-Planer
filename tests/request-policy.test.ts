@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { imageOperation, imageQuery, persistedImageBody, fallbackImageBody } from './fixtures/rsi-captcha-image';
+import { imageOperation, imageQuery, persistedImageBody, fallbackImageBody,
+  confirmationOperation, confirmationQuery, persistedConfirmationBody, fallbackConfirmationBody } from './fixtures/rsi-captcha-image';
 import { blockedOperation, allowedRsiNavigation, evaluateOperation, evaluateRsiSessionRequest, OPERATION_BLOCK_DETAILS } from '../src/main/policy';
 
 const asset = 'https://cdn.robertsspaceindustries.com/scripts/cart-widget.js';
@@ -55,6 +56,64 @@ test('The sign-in image exception rejects altered operations and ambiguous uploa
     [{ file: 'fixture' }], [{ blobUUID: 'fixture' }], [{ bytes, file: 'fixture' }], [{ bytes, blobUUID: 'fixture' }],
     [{ type: 'file', bytes }], [{ type: 'rawData', bytes, file: 'fixture' }], [{ type: 'rawData', bytes, blobUUID: 'fixture' }],
     [...upload(bytes), ...upload(bytes)], upload(Buffer.alloc(65536))]) {
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData }, 'login').blocked, true);
+  }
+});
+
+test('The official sign-in confirmation is allowed only from the login document with an image code', () => {
+  const url = 'https://robertsspaceindustries.com/graphql';
+  const variables = { email: 'example@example.invalid', password: 'synthetic \"ä\"', captcha_code: '1234' };
+  const minimumBody = JSON.stringify([{ ...confirmationOperation, variables }]);
+  for (const body of [persistedConfirmationBody, fallbackConfirmationBody, minimumBody]) {
+    const request = { url, method: 'POST', resourceType: 'xhr', uploadData: [{ type: 'rawData', bytes: Buffer.from(body) }] };
+    assert.equal(evaluateRsiSessionRequest(request, 'login').blocked, false);
+    for (const phase of ['captcha', 'read', 'closed'] as const) {
+      assert.equal(evaluateRsiSessionRequest(request, phase).blocked, true);
+    }
+    assert.equal(evaluateRsiSessionRequest({ ...request, method: 'PUT' }, 'login').blocked, true);
+    assert.equal(evaluateRsiSessionRequest({ ...request, resourceType: 'subFrame' }, 'login').blocked, true);
+    for (const other of [url + '?opt=1', url + '#', url + '/', url.replace('https:', 'http:'),
+      url.replace('://', '://cdn.'), url.replace('/graphql', '/api/checkout')]) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, url: other }, 'login').blocked, true);
+    }
+  }
+});
+
+test('The sign-in confirmation cannot carry other operations or ambiguous JSON', () => {
+  const operation = confirmationOperation;
+  const variables = operation.variables;
+  const request = { url: 'https://robertsspaceindustries.com/graphql', method: 'POST', resourceType: 'xhr' };
+  const batch = (change: object) => JSON.stringify([{ ...operation, ...change }]);
+  const rejected = [
+    JSON.stringify(operation), JSON.stringify([operation, imageOperation]),
+    batch({ operationName: 'account_signup' }),
+    batch({ variables: { ...variables, captcha_code: undefined, captchaToken: 'synthetic' } }),
+    ...['email', 'password', 'captcha_code'].flatMap(key => [undefined, null, '', true, {}]
+      .map(value => batch({ variables: { ...variables, [key]: value } }))),
+    batch({ variables: { ...variables, captchaToken: 'synthetic' } }),
+    batch({ variables: { ...variables, mark: { extra: 1 } } }),
+    batch({ variables: { ...variables, remember: 1 } }),
+    batch({ variables: { ...variables, password: 'x'.repeat(16384) } }),
+    batch({ query: confirmationQuery + ' mutation checkout { order }' }),
+    batch({ query: confirmationQuery, extensions: undefined }),
+    batch({ client: {} }),
+    batch({ extensions: { persistedQuery: { version: 1, sha256Hash: 'a'.repeat(64) } } }),
+    batch({ extensions: { persistedQuery: { ...operation.extensions.persistedQuery, extra: true } } }),
+    batch({ extensions: { ...operation.extensions, extra: true } }),
+    persistedConfirmationBody.replace('"email":', '"captcha_code":"other","email":'),
+    persistedConfirmationBody.replace('"version":1', '"version":0,"version":1'),
+    fallbackConfirmationBody.replace('"query":', '"query":"mutation { checkout }","query":'),
+    persistedConfirmationBody.replace('{"operationName":', '{"operationName":"checkout","operationName":'),
+    persistedConfirmationBody + ' ',
+  ];
+  for (const body of rejected) {
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData: [{ bytes: Buffer.from(body) }] }, 'login').blocked, true);
+  }
+  const bytes = Buffer.from(persistedConfirmationBody);
+  const invalidUtf8 = Buffer.from(bytes);
+  invalidUtf8[invalidUtf8.indexOf('local-confirmation')] = 0xff;
+  for (const uploadData of [[{ bytes, file: 'fixture' }], [{ type: 'file', bytes }],
+    [{ type: 'rawData', bytes, blobUUID: 'fixture' }], [{ bytes }, { bytes }], [{ bytes: invalidUtf8 }]]) {
     assert.equal(evaluateRsiSessionRequest({ ...request, uploadData }, 'login').blocked, true);
   }
 });
