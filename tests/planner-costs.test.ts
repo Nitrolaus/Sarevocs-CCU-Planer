@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {additionalCost,paidCcuCost,chainCosts,chainSavings} from '../src/planner/costs';
+import {additionalCost,paidBaseCost,paidCcuCost,chainCosts,chainSavings} from '../src/planner/costs';
 import type {ChainStep,ChainBase} from '../src/planner/chain';import type {PricingSnapshot} from '../src/pricing/model';import type {Pledge} from '../src/domain/model';
 const at=new Date().toISOString(),day=at.slice(0,10);
 const display:PricingSnapshot={settings:{schemaVersion:1,language:'de',currency:'EUR',taxMode:'net',vatBasisPoints:1900},configured:true,settingsError:false,rate:{source:'ECB',sourceDate:day,fetchedAt:at,usdPerEurMicros:1250000},pending:false,rateError:false};
@@ -53,6 +53,42 @@ test('CCU savings compare total cost with the standard price in the selected tax
  assert.equal(chainSavings(null,10000,display),null);
  assert.equal(chainSavings(5500,null,display),null);
  assert.equal(chainSavings(5500,10000,{...display,rate:null}),null);
+});
+
+test('verified RSI order amounts are used once without adding VAT to past purchases',()=>{
+ const gross={...display,settings:{...display.settings,taxMode:'gross' as const}};
+ const observation={kind:'rsi-hangar' as const,observedAt:at};
+ const receipt={status:'documented' as const,source:'order' as const,currency:'EUR' as const,minor:725};
+ const proof={resolution:'structured-unique',sourceCandidates:1,targetCandidates:1};
+ const singleCcu={...pledge.ccus[0]!,instanceId:'p:ccu',status:'unverified' as const};
+ const upgrade={...owned,ccu:{...owned.ccu!,instanceId:singleCcu.instanceId}};
+ const p={...pledge,ccus:[singleCcu],rsiPurchase:receipt,sourceValues:{upgrade:JSON.stringify({from:singleCcu.from,to:singleCcu.to}),upgradeEvidence:JSON.stringify(proof)}};
+ const b={...pledge,pledgeId:'base',name:'Standalone Ships - from',ccus:[],ships:[{childId:base.childId,modelName:'from',modelId:null,identity:'unresolved' as const,role:'unverified' as const}],rsiPurchase:{...receipt,minor:2500}};
+ assert.deepEqual(paidCcuCost(upgrade,[p],gross,observation),{minor:725,approximate:false,usdMinor:null,rsiOrder:true});
+ assert.equal(paidBaseCost(base,[b],gross,observation).minor,2500);
+ const plan={base,steps:[upgrade,gap]};
+ const complete=chainCosts(plan,[b,p],gross,true,undefined,observation);
+ assert.deepEqual(complete.paid,{knownMinor:3225,missing:0,approximate:true});
+ assert.equal(complete.additional.knownMinor,4760);
+ assert.equal(complete.investment,7985);
+ assert.equal(chainSavings(complete.investment,10000,gross),1535);
+ const partial=chainCosts(plan,[{...b,rsiPurchase:undefined},p],gross,true,undefined,observation);
+ assert.deepEqual(partial.paid,{knownMinor:725,missing:1,approximate:true});
+ assert.equal(partial.additional.knownMinor,4760);
+ assert.equal(partial.investment,null);
+ assert.equal(chainSavings(partial.investment,10000,gross),null);
+ assert.equal(paidCcuCost(upgrade,[p],display,observation).minor,null);
+ assert.equal(paidCcuCost(upgrade,[p],gross).minor,null);
+ const imported={kind:'rsi-imports' as const,observations:{[b.pledgeId]:at}};
+ assert.equal(paidCcuCost(upgrade,[p],gross,imported).minor,null);
+ assert.equal(paidBaseCost(base,[b],gross,imported).minor,2500);
+ assert.equal(paidCcuCost(upgrade,[{...p,rsiPurchase:{...receipt,source:'log'}}],gross,observation).minor,null);
+ assert.equal(paidCcuCost(upgrade,[{...p,rsiPurchase:{...receipt,currency:'USD'}}],{...gross,rate:null},observation).minor,null);
+ const recorded={minor:0,currency:'EUR' as const,taxBasis:'gross' as const,evidence:'Synthetic receipt'};
+ assert.equal(paidCcuCost(upgrade,[{...p,acquisitionCost:recorded}],gross,observation).minor,0);
+ assert.equal(paidBaseCost(base,[{...b,name:'Package - from'}],gross,observation).minor,null);
+ assert.equal(paidBaseCost(base,[{...b,sourceValues:{pledgeConfigurationValue:'$25.00 USD'}}],gross,observation).minor,null);
+ assert.equal(paidBaseCost(base,[{...b,ships:[{...b.ships[0]!,modelName:'Upgraded model'}]}],gross,observation).minor,null);
 });
 
 test('unrepresentable totals stay unknown instead of rounding unsafe integer sums',()=>{

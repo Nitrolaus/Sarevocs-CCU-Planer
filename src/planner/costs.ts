@@ -1,10 +1,12 @@
 import type {Pledge} from '../domain/model';
 import type {ChainBase,ChainStep} from './chain';
 import type {PricingSnapshot} from '../pricing/model';
-import {estimateMinor,estimatePlanningMinor,euroRateIsStale,matchesShopAmount} from '../pricing/money';
+import {convertPurchaseValue,parseRsiPledgeValue,RSI_ORDER_PRICE,sameStandaloneShip} from '../pricing/inventory-values';
+import {estimatePlanningMinor,euroRateIsStale,matchesShopAmount} from '../pricing/money';
 import type {PurchasePriceReader} from './shopping-list';
+import {ccuObservationTime,observedStandaloneCcu,type ChainObservation} from './observation';
 
-export type CostPosition={minor:number|null;approximate:boolean;usdMinor:number|null};
+export type CostPosition={minor:number|null;approximate:boolean;usdMinor:number|null;rsiOrder?:true};
 export type CostTotal={knownMinor:number;missing:number;approximate:boolean};
 const unknown=():CostPosition=>({minor:null,approximate:false,usdMinor:null});
 function rate(display:PricingSnapshot){return display.rate&&!euroRateIsStale(display.rate)?display.rate:null;}
@@ -18,30 +20,46 @@ export function additionalCost(step:ChainStep,display:PricingSnapshot,current:bo
   if(!Number.isSafeInteger(usd)||usd<=0||usd>100_000_000)return unknown();
   return {minor:estimatePlanningMinor(usd,display.settings,rate(display),price?.shop),approximate:!matchesShopAmount(display.settings,price?.shop),usdMinor:usd};
 }
-/** Never add today's VAT to an old gross payment or guess its historical tax basis. */
-function recordedCost(value:Pledge['acquisitionCost'],display:PricingSnapshot):CostPosition{
-  if(!value||value.taxBasis!==display.settings.taxMode)return unknown();
-  if(value.currency===display.settings.currency)return {minor:value.minor,approximate:false,usdMinor:value.currency==='USD'?value.minor:null};
-  const fx=rate(display);if(!fx||value.minor>100_000_000)return unknown();
-  const minor=value.currency==='USD'?estimateMinor(value.minor,{...display.settings,taxMode:'net'},fx):
-    Number((BigInt(value.minor)*BigInt(fx.usdPerEurMicros)+500_000n)/1_000_000n);
-  return {minor,approximate:true,usdMinor:value.currency==='USD'?value.minor:null};
+function recordedCost(pledge:Pledge,display:PricingSnapshot,observation?:ChainObservation):CostPosition{
+  const recorded=pledge.acquisitionCost;
+  const receipt=pledge.rsiPurchase;
+  const observedAt=ccuObservationTime(pledge,observation);
+  let payment: NonNullable<Pledge['acquisitionCost']>;
+  if(recorded){
+    if(recorded.taxBasis!==display.settings.taxMode)return unknown();
+    payment=recorded;
+  }else if(display.settings.taxMode==='gross'&&receipt?.status==='documented'&&receipt.source==='order'&&
+      typeof observedAt==='string'&&Number.isFinite(Date.parse(observedAt))){
+    // Use the booked line amount as paid. Today's VAT applies only to future estimates.
+    payment={minor:receipt.minor,currency:receipt.currency,taxBasis:'unknown',evidence:RSI_ORDER_PRICE};
+  }else return unknown();
+  const converted=convertPurchaseValue(payment,display);
+  if(converted.minor===null)return unknown();
+  return {...converted,usdMinor:payment.currency==='USD'?payment.minor:null,...(!recorded?{rsiOrder:true as const}:{})};
 }
-export function paidCcuCost(step:ChainStep,pledges:readonly Pledge[],display:PricingSnapshot):CostPosition{
+export function paidBaseCost(base:ChainBase|null,pledges:readonly Pledge[],display:PricingSnapshot,observation?:ChainObservation):CostPosition{
+  const pledge=base?pledges.find(p=>p.pledgeId===base.pledgeId):undefined;
+  if(pledge?.ships.length!==1||pledge.ccus.length||pledge.ships[0]!.childId!==base?.childId)return unknown();
+  // An RSI order for the original pledge does not include any applied CCUs.
+  const configuration=pledge.sourceValues.pledgeConfigurationValue;
+  if(!pledge.acquisitionCost&&(!sameStandaloneShip(pledge)||(configuration&&parseRsiPledgeValue(configuration)?.minor!==0)))return unknown();
+  return recordedCost(pledge,display,observation);
+}
+export function paidCcuCost(step:ChainStep,pledges:readonly Pledge[],display:PricingSnapshot,observation?:ChainObservation):CostPosition{
   if(step.kind!=='owned'||!step.ccu)return unknown();
   const p=pledges.find(p=>p.pledgeId===step.ccu!.pledgeId);
   if(!p||p.ccus.length!==1||p.ships.length||p.ccus[0]!.instanceId!==step.ccu.instanceId)return unknown();
-  return recordedCost(p.acquisitionCost,display);
+  if(!p.acquisitionCost&&!observedStandaloneCcu(p,observation))return unknown();
+  return recordedCost(p,display,observation);
 }
 function sum(values:readonly CostPosition[]):CostTotal{return values.reduce<CostTotal>((s,v)=>{
   const valid=v.minor!==null&&Number.isSafeInteger(v.minor)&&v.minor>=0&&Number.isSafeInteger(s.knownMinor+v.minor);
-  return {knownMinor:s.knownMinor+(valid?v.minor!:0),missing:s.missing+Number(!valid),approximate:s.approximate||v.approximate};
+  return {knownMinor:s.knownMinor+(valid?v.minor!:0),missing:s.missing+Number(!valid),approximate:s.approximate||v.approximate||v.rsiOrder===true};
 },{knownMinor:0,missing:0,approximate:false});}
-export function chainCosts(plan:{base:ChainBase|null;steps:readonly ChainStep[]},pledges:readonly Pledge[],display:PricingSnapshot,current:boolean,priceFor?:PurchasePriceReader){
+export function chainCosts(plan:{base:ChainBase|null;steps:readonly ChainStep[]},pledges:readonly Pledge[],display:PricingSnapshot,current:boolean,priceFor?:PurchasePriceReader,observation?:ChainObservation){
   const additional=sum(plan.steps.filter(s=>s.kind!=='conflict').map(s=>additionalCost(s,display,current,priceFor)));
-  const base=plan.base&&pledges.find(p=>p.pledgeId===plan.base!.pledgeId);
-  const baseCost=base&&base.ships.length===1&&!base.ccus.length?recordedCost(base.acquisitionCost,display):unknown();
-  const paid=sum([baseCost,...plan.steps.filter(s=>s.kind==='owned'||s.kind==='missing').map(s=>paidCcuCost(s,pledges,display))]);
+  const baseCost=paidBaseCost(plan.base,pledges,display,observation);
+  const paid=sum([baseCost,...plan.steps.filter(s=>s.kind==='owned'||s.kind==='missing').map(s=>paidCcuCost(s,pledges,display,observation))]);
   const invalid=!plan.base||plan.steps.some(s=>s.kind==='conflict'||s.kind==='missing');
   const investment=paid.knownMinor+additional.knownMinor;
   return {additional,paid,invalid,investment:!invalid&&!paid.missing&&!additional.missing&&Number.isSafeInteger(investment)?investment:null};

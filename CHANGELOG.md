@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.87 · Alpha
+
+- Eindeutig zugeordnete RSI-Bestellbeträge zählen in der Bruttoansicht zu den Gesamtkosten der CCU-Kette. Der Planer übernimmt sie in ihrer ursprünglichen Höhe. Fehlen Belege, bleiben Gesamtkosten und Ersparnis offen.
+
 ## 0.3.86 · Alpha
 
 - Der Planer lässt die offizielle E-Mail-Bestätigung offen und wechselt bei erkannter Anmeldung zum Hangar. Ein notwendiger Cookie-Hinweis bleibt bedienbar.
