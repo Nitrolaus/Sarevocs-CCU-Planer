@@ -56,6 +56,11 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       const pathname = new URL(request.url!, 'https://local.invalid').pathname;
       served.push({ path: pathname, method: request.method! });
       response.setHeader('Access-Control-Allow-Origin', '*');
+      if (request.url === '/cookie-consent/script.js?async=1') {
+        response.setHeader('Content-Type', 'text/javascript');
+        response.end('globalThis.syntheticConsentLoaded = true;');
+        return;
+      }
       if (pathname === '/en/sign-in' && request.method === 'GET') {
         response.setHeader('Content-Type', 'text/html; charset=utf-8');
         response.end('<!doctype html><script defer src="https://www.recaptcha.net/recaptcha/enterprise.js"></script>' +
@@ -80,7 +85,8 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       }
       if (['/en/connect', '/en/sign-in', '/en/sign-in/send-confirmation-code', '/account/pledges', '/en/account/pledges'].includes(pathname)) {
         response.setHeader('Content-Type', 'text/html; charset=utf-8');
-        response.end(pathname.endsWith('/pledges') ? auth : '<div id="marker">Local synthetic fixture</div>');
+        response.end(pathname.endsWith('/pledges') ? auth :
+          '<script src="/cookie-consent/script.js?async=1"></script><div id="marker">Local synthetic fixture</div>');
         return;
       }
       if(pathname==='/graphql'){
@@ -122,6 +128,8 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     results.push('Real Chromium GET/HEAD for static RSI-named files reaches only the local TLS fixture, despite action word in filename.');
 
     await original.call(child, origin + '/en/connect');
+    assert.equal(await child.webContents.executeJavaScript('globalThis.syntheticConsentLoaded'), true);
+    results.push('The first RSI login document loads and executes its exact consent script through the production request guard.');
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in', {method:'POST',body:'synthetic'}).then(r=>r.ok)"), true);
     assert.ok(served.some(request => request.path === '/en/sign-in' && request.method === 'POST'));
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in/send-confirmation-code', {method:'POST',body:'synthetic'}).then(r=>r.ok)"), true);

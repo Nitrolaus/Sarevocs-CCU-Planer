@@ -131,9 +131,11 @@ export function evaluateRsiSessionRequest(request: SessionRequest, phase: 'login
           Number(url.searchParams.get('page')) <= 5000)) return allow;
       return deny('unsupported-query-key');
     }
-    if (resourceType === 'script' && !url.search &&
-        ((origin === RSI_ORIGIN && pathname === '/cookie-consent/script.js') ||
-         (origin === 'https://consent.cookiebot.com' && pathname === '/uc.js'))) return allow;
+    if (resourceType === 'script') {
+      if (origin === RSI_ORIGIN && pathname === '/cookie-consent/script.js' &&
+          (!url.search || (phase === 'login' && url.search === '?async=1'))) return allow;
+      if (origin === 'https://consent.cookiebot.com' && pathname === '/uc.js' && !url.search) return allow;
+    }
     if (!assetOrigins.has(origin)) return deny('untrusted-asset-origin');
     const path = canonicalPath(pathname);
     if (!path) return deny('invalid-url-or-path');

@@ -71,6 +71,7 @@ public sealed class DisplaySetup
         ComboBox language = AddCombo(table, "language", new string[] { "Deutsch", "English" });
         currencyLabel = AddLabel(table); ComboBox currency = AddCombo(table, "currency", new string[] { "Euro (EUR)", "US-Dollar (USD)" });
         modeLabel = AddLabel(table); ComboBox mode = AddCombo(table, "taxMode", new string[] { "Vor Steuer (netto)", "Mit eingestellter Mehrwertsteuer" });
+        mode.SelectedIndex = 1;
         vatLabel = AddLabel(table); NumericUpDown vat = new DarkNumber(); vat.Name = "vat"; vat.Minimum = 0; vat.Maximum = 100; vat.DecimalPlaces = 2; vat.Value = 19; vat.Dock = DockStyle.Top; vat.Margin = new Padding(0, 5, 0, 15); table.Controls.Add(vat);
         Label note = new Label(); note.AutoSize = true; note.MaximumSize = new Size(410, 0); note.Margin = new Padding(0, 5, 0, 17); table.Controls.Add(note);
         FlowLayoutPanel actions = new FlowLayoutPanel(); actions.AutoSize = true; actions.Dock = DockStyle.Top; actions.FlowDirection = FlowDirection.RightToLeft;

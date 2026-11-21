@@ -18,6 +18,29 @@ test('RSI session grants authentication submissions only in their matching phase
   for (const phase of ['read', 'login', 'closed'] as const) assert.equal(evaluateRsiSessionRequest(captcha, phase).blocked, true);
 });
 
+test('Only the RSI login document can read the exact observed consent-script query', () => {
+  const script = 'https://robertsspaceindustries.com/cookie-consent/script.js';
+  const cookiebot = 'https://consent.cookiebot.com/uc.js';
+  const url = script + '?async=1';
+  for (const method of ['GET', 'HEAD']) {
+    const request = { ...read, url, method };
+    assert.equal(evaluateRsiSessionRequest(request, 'login').blocked, false);
+    for (const phase of ['read', 'captcha', 'closed'] as const) assert.equal(evaluateRsiSessionRequest(request, phase).blocked, true);
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData: [{}] }, 'login').blocked, true);
+  }
+  for (const phase of ['read', 'captcha', 'login'] as const) {
+    for (const url of [script, cookiebot]) assert.equal(evaluateRsiSessionRequest({ ...read, url }, phase).blocked, false);
+  }
+  for (const other of [cookiebot + '?async=1', script + '?async', script + '?async=', script + '?async=0',
+    script + '?async=%31', script + '?async=1&async=1', script + '?async=1&extra=1', url + '#x',
+    url.replace('https:', 'http:'), url.replace('https://', 'https://user@'), url.replace('.com/', '.com:8443/'),
+    url.replace('://', '://cdn.'), url.replace('script.js', 'other.js')]) {
+    assert.equal(evaluateRsiSessionRequest({ ...read, url: other }, 'login').blocked, true, other);
+  }
+  for (const method of ['OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']) assert.equal(evaluateRsiSessionRequest({ ...read, url, method }, 'login').blocked, true, method);
+  for (const resourceType of ['xhr', 'mainFrame', 'subFrame', 'stylesheet', 'other']) assert.equal(evaluateRsiSessionRequest({ ...read, url, resourceType }, 'login').blocked, true, resourceType);
+});
+
 test('RSI session permits bounded hangar and static reads and rejects unlisted traffic in every phase', () => {
   const hangar = { url: 'https://robertsspaceindustries.com/de/account/pledges?page=2&pagesize=10', method: 'GET', resourceType: 'xhr' };
   for (const phase of ['login', 'captcha', 'read'] as const) {

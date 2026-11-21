@@ -25,9 +25,13 @@ public static class DisplaySetupTestDriver
             using(Form form=DisplaySetup.CreateForm()){
                 form.Opacity=0;form.ShowInTaskbar=false;
                 form.Shown+=delegate {
+                    ComboBox priceMode = (ComboBox)form.Controls.Find("taxMode",true)[0];
+                    Check(priceMode.SelectedIndex==1 && priceMode.Text=="inkl. 19 % MwSt.","DEFAULT_GERMAN_GROSS_PRICE");
+                    priceMode.SelectedIndex=0;
                     ((ComboBox)form.Controls.Find("language",true)[0]).SelectedIndex=1;
+                    Check(priceMode.SelectedIndex==0 && priceMode.Text=="Before tax (net)","MANUAL_SELECTION_PERSISTS");
                     ((ComboBox)form.Controls.Find("currency",true)[0]).SelectedIndex=1;
-                    ((ComboBox)form.Controls.Find("taxMode",true)[0]).SelectedIndex=1;
+                    priceMode.SelectedIndex=1;
                     ((NumericUpDown)form.Controls.Find("vat",true)[0]).Value=7.5M;
                     form.PerformLayout();
                     Geometry(form,root,1F);

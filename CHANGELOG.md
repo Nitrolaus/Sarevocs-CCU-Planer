@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.79 · Alpha
+
+- Der Planer lässt das Cookie-Einstellungsskript der RSI-Anmeldeseite mit dem vorgesehenen Parameter `async=1` zu. Käufe und Änderungen am RSI-Bestand bleiben gesperrt.
+- „Benutzer anlegen“ steht neben dem Anmeldestatus. Die Store Credits stehen im Bestandskopf neben „Exportieren …“.
+- Beim deutschen Erstsetup ist „inkl. 19 % MwSt.“ vorausgewählt. Das Setup übernimmt vorhandene Preiseinstellungen beim Update.
+
 ## 0.3.78 · Alpha
 
 - Das offizielle CAPTCHA kann seine eingebetteten Fenster wieder auf der RSI-Anmeldeseite laden. Käufe und Änderungen am RSI-Bestand bleiben gesperrt.

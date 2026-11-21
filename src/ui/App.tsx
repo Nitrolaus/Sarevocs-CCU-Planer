@@ -316,11 +316,13 @@ function App() {
       <div className="profile-control"><select aria-label={t("Lokales Kontoprofil")} value={accountId} disabled={busy} onChange={e => void selectAccount(e.target.value)}>
         {!state?.accounts.length && <option value="">{t("Noch kein Kontoprofil")}</option>}
         {state?.accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.mode === 'demo' ? ' · Demo' : ''}</option>)}</select></div>
-      <div className={'connection-status ' + (connectionBusy ? 'pending' : backgroundStatus)} role="status"><span className="status-dot" aria-hidden="true" /><span>{t(connectionText)}</span></div>
-      {account?.mode==='real'&&<StoreCreditBadge credit={storeCredit} language={display.settings.language}/>}
+      <div className="connection-profile-status">
+        <div className={'connection-status ' + (connectionBusy ? 'pending' : backgroundStatus)} role="status"><span className="status-dot" aria-hidden="true" /><span>{t(connectionText)}</span></div>
+        <button type="button" className="secondary add-profile" disabled={busy||!state} onClick={() => addProfile()}>{t('Benutzer anlegen')}</button>
+      </div>
       <div className="connection-actions"><button className="primary" disabled={busy || (page === 'market' && connectionBusy) || (page === 'inventory' && (filter === 'Loaner & Beiboote' ? loanerSnapshot.pending : !account || account.mode !== 'real' || connectionBusy))}
         onClick={() => page === 'paints' ? void call({action:'paints.refresh'}).catch(()=>setError('Paint-Preise konnten nicht gelesen werden.')) : page === 'inventory' && filter === 'Loaner & Beiboote' ? void call<LoanerSnapshot>({ action: 'loaners.refresh' }).then(setLoanerSnapshot).catch(() => setLoanerSnapshot(s => ({ ...s, error: true }))) : page === 'market' ? void updatePlanner() : page !== 'inventory' ? void call({ action: 'market.refresh' }).catch(() => setError('Marktdaten konnten nicht aktualisiert werden.')) : void updateBackground(!viewingBuybacks && backgroundStatus === 'auth-required')}>{t(page === 'inventory' && !viewingBuybacks && filter !== 'Loaner & Beiboote' && backgroundStatus === 'auth-required' && !connectionBusy ? 'Anmelden' : 'Aktualisieren')}</button>
-        <button className="secondary add-profile" aria-label={t("Kontoprofil anlegen")} disabled={busy||!state} onClick={() => addProfile()}>+</button></div>
+      </div>
     </section>}
       {page === 'help' && <HelpView />}
       {(page === 'market' || page === 'fleet') && <MarketView accountId={accountId || null} display={display} inventory={plannerInventory} storeCredit={storeCredit}
@@ -330,9 +332,15 @@ function App() {
       {page==='paints'&&<PaintAdvisor rows={present} display={display}/>}
       {page === 'settings' && <SettingsView display={display} onSave={saveDisplay} dataDir={state?.dataDir ?? ''} />}
       {page === 'inventory' && <>
-      <header><div><div className="eyebrow">{t("DEIN HANGAR. DEINE ENTSCHEIDUNG.")}</div><h1>{t("Bestand")}</h1><p>{t("Schiffe, Fahrzeuge und CCUs pro Konto – mit nachvollziehbarer Herkunft.")}</p></div><button className="export-open" disabled={!accountId} onClick={()=>setExportKind(
-        filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':filter==='Buy Back'?'buyback':filter==='Loaner & Beiboote'?'loaners':'ships'
-      )}>{t('Exportieren …')}</button></header>
+      <header>
+        <div><div className="eyebrow">{t("DEIN HANGAR. DEINE ENTSCHEIDUNG.")}</div><h1>{t("Bestand")}</h1><p>{t("Schiffe, Fahrzeuge und CCUs pro Konto – mit nachvollziehbarer Herkunft.")}</p></div>
+        <div className="inventory-header-actions">
+          {account?.mode==='real'&&<StoreCreditBadge credit={storeCredit} language={display.settings.language}/>}
+          <button className="export-open" disabled={!accountId} onClick={()=>setExportKind(
+            filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':filter==='Buy Back'?'buyback':filter==='Loaner & Beiboote'?'loaners':'ships'
+          )}>{t('Exportieren …')}</button>
+        </div>
+      </header>
       <div className={'notice ' + (account?.mode === 'demo' ? 'demo' : '')}>
         <b>{observed ? 'Zuletzt gelesener Bestand' : account?.mode === 'demo' ? 'DEMO · synthetischer Bestand' : account ? 'Lokaler Kontobestand' : 'Noch kein Bestand importiert'}</b>
         <span>{observed ? `${observed.document.account.identityKind === 'manual-reference' ? 'Zuordnung ungeprüft · ' : ''}noch nicht übernommen`
