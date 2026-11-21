@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {additionalCost,paidCcuCost,chainCosts} from '../src/planner/costs';
+import {additionalCost,paidCcuCost,chainCosts,chainSavings} from '../src/planner/costs';
 import type {ChainStep,ChainBase} from '../src/planner/chain';import type {PricingSnapshot} from '../src/pricing/model';import type {Pledge} from '../src/domain/model';
 const at=new Date().toISOString(),day=at.slice(0,10);
 const display:PricingSnapshot={settings:{schemaVersion:1,language:'de',currency:'EUR',taxMode:'net',vatBasisPoints:1900},configured:true,settingsError:false,rate:{source:'ECB',sourceDate:day,fetchedAt:at,usdPerEurMicros:1250000},pending:false,rateError:false};
@@ -44,6 +44,15 @@ test('complete investment includes recorded base and CCU cost once plus the gap 
  const p={...pledge,acquisitionCost:receipt},b={...pledge,pledgeId:'base',ccus:[],ships:[{childId:'base',modelName:'from',modelId:null,identity:'unresolved' as const,role:'unverified' as const}],acquisitionCost:{...receipt,minor:1000}};
  const costs=chainCosts({base,steps:[owned,gap]},[p,b],display,true);
  assert.equal(costs.paid.knownMinor,1500);assert.equal(costs.paid.missing,0);assert.equal(costs.additional.knownMinor,4000);assert.equal(costs.investment,5500);assert.equal(costs.invalid,false);
+});
+
+test('CCU savings compare total cost with the standard price in the selected tax basis and currency',()=>{
+ assert.equal(chainSavings(5500,10000,display),2500);
+ assert.equal(chainSavings(9000,10000,display),-1000);
+ assert.equal(chainSavings(7000,10000,{...display,settings:{...display.settings,taxMode:'gross'}}),2520);
+ assert.equal(chainSavings(null,10000,display),null);
+ assert.equal(chainSavings(5500,null,display),null);
+ assert.equal(chainSavings(5500,10000,{...display,rate:null}),null);
 });
 
 test('unrepresentable totals stay unknown instead of rounding unsafe integer sums',()=>{

@@ -24,6 +24,7 @@ const requests: string[] = [], readFlags: boolean[] = [], saves: StoredCookie[][
 let loadGate: { entered: boolean; release: () => void; promise: Promise<void> } | undefined;
 let loginPageGate: ReturnType<typeof gate> | undefined;
 let failLoginPage = false;
+let signInInterruptsHangar = false;
 let cookieReadGate: ReturnType<typeof gate> | undefined, probeFinished = false;
 function gate() { let release = () => {}; const promise = new Promise<void>(resolve => { release = resolve; }); return { entered: false, release, promise }; }
 async function until(test: () => boolean | Promise<boolean>, code: string) { for (let i = 0; i < 300; i++) { if (await test()) return; await wait(20); } throw new Error(code); }
@@ -45,6 +46,14 @@ app.whenReady().then(async () => {
   const originalLoad = BrowserWindow.prototype.loadURL;
   BrowserWindow.prototype.loadURL = async function(url) {
     assert.ok(url === hangar || url === loginUrl); requests.push(url);
+    if (url === hangar && signInInterruptsHangar) {
+      signInInterruptsHangar = false;
+      this.webContents.emit('did-start-navigation', { url: loginUrl, isMainFrame: true }, loginUrl, false, true);
+      this.webContents.getURL = () => loginUrl;
+      this.webContents.emit('did-navigate', {}, loginUrl);
+      this.webContents.emit('did-finish-load');
+      throw Object.assign(new Error('Synthetic navigation aborted'), { code: 'ERR_ABORTED' });
+    }
     this.webContents.getURL = () => 'about:blank';
     if (url === loginUrl && loginPageGate) {
       loginPageGate.entered = true;
@@ -257,6 +266,21 @@ app.whenReady().then(async () => {
         win.webContents.emit('did-finish-load');
         assert.deepEqual(native.actions.filter(x => x.action === 'show' || x.action === 'focus').map(x => x.action), ['show']);
         win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
+        await wait(1700);
+        assert.deepEqual(requests, [loginUrl], 'A public RSI route must not start a Hangar request before authentication');
+        assert.equal(win.isVisible(), true);
+
+        const confirmationUrl = loginUrl + '/send-confirmation-code';
+        let cancelled = false;
+        win.webContents.emit('will-redirect', { preventDefault: () => { cancelled = true; } }, 'https://robertsspaceindustries.com/synthetic-return', false, true);
+        assert.equal(cancelled, true);
+        win.webContents.getURL = () => confirmationUrl;
+        win.webContents.emit('did-navigate-in-page', {}, confirmationUrl, true);
+        const { name, value: token } = cookie();
+        await win.webContents.session.cookies.set({ url: loginUrl, name, value: token, secure: true, httpOnly: true, path: '/' });
+        await wait(900);
+        assert.deepEqual(requests, [loginUrl], 'An auth cookie must not interrupt the official confirmation page');
+        win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
         assert.equal((await task).error, undefined);
         assert.deepEqual(requests, [loginUrl, hangar]);
         assert.ok(native.actions.some(x => x.action === 'hide'));
@@ -264,6 +288,42 @@ app.whenReady().then(async () => {
         loginPageGate.release(); loginPageGate = undefined;
         await login.close(id); await task;
       }
+    });
+    await check('RSI_CAN_RETAKE_SIGN_IN_AFTER_ABORTED_HANGAR_LOAD', async () => {
+      const login = value(fakeVault([])), id = randomUUID();
+      const task = outcome(login.connect(id, parent, false, { hideHangar: true }));
+      try {
+        await until(() => native.created[0]?.win.webContents.getURL() === loginUrl, 'LOGIN_FIXTURE_MISSING');
+        const { win } = native.created[0]!;
+        const setAuth = async (value: string) => win.webContents.session.cookies.set({
+          url: loginUrl, name: cookie().name, value, secure: true, httpOnly: true, path: '/',
+        });
+        await setAuth('SYNTHETIC_BEFORE_CONFIRMATION');
+        signInInterruptsHangar = true;
+        win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
+        await until(() => requests.length === 2 && win.isVisible(), 'RSI_SIGN_IN_DID_NOT_RETAKE_WINDOW');
+        win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
+        await wait(950);
+        assert.deepEqual(requests, [loginUrl, hangar], 'A stale cookie must not restart the failed Hangar handoff');
+        await setAuth('SYNTHETIC_AFTER_CONFIRMATION');
+        await until(() => requests.length === 3, 'VALID_NEW_HANDOFF_MISSING');
+        assert.equal((await task).result?.document.pledges.length, 1);
+        assert.equal(win.isVisible(), false);
+      } finally { await login.close(id); await task; }
+    });
+    await check('INTERACTIVE_CONSENT_REVEALS_ONLY_WHEN_ACTION_NEEDED', async () => {
+      scenario = 'consent';
+      const login = value(), id = randomUUID();
+      const task = outcome(login.connect(id, parent, true, { hideHangar: true }));
+      try {
+        await until(() => native.created[0]?.win.isVisible() === true, 'CONSENT_WINDOW_NOT_REVEALED');
+        const { win } = native.created[0]!;
+        assert.deepEqual(requests, [hangar]);
+        scenario = 'ready';
+        await win.loadURL(hangar);
+        assert.equal((await task).result?.document.pledges.length, 1);
+        assert.equal(win.isVisible(), false);
+      } finally { await login.close(id); await task; }
     });
     await check('AUTHORIZE_REJECTED_SAVED_SESSION_REVEALS_ONLY_LOGIN', async () => {
       scenario = 'login'; const login = value(), id = randomUUID(); const task = login.connect(id, parent, true, { hideHangar: true });

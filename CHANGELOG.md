@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.86 · Alpha
+
+- Der Planer lässt die offizielle E-Mail-Bestätigung offen und wechselt bei erkannter Anmeldung zum Hangar. Ein notwendiger Cookie-Hinweis bleibt bedienbar.
+- Neben „Noch zu zahlen“ zeigt eine zweite Karte die Ersparnis gegenüber dem Standard-Schiffswert und die Gesamtkosten der CCU-Kette.
+
 ## 0.3.85 · Alpha
 
 - Das RSI-Anmeldefenster startet verborgen mit dunklem Hintergrund und wird erst nach dem ersten Zeichnen der Seite angezeigt. Ein zusätzlicher Fokuswechsel entfällt.

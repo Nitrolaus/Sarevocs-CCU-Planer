@@ -3,7 +3,7 @@ import type {ExportContext} from '../export/model';
 import type {PlannerInventory} from './ChainBuilder';
 import {prepareChains,type ChainStep} from '../planner/chain';
 import {chainVariants,manualChain} from '../planner/manual';
-import {additionalCost,chainCosts,paidCcuCost,type CostTotal} from '../planner/costs';
+import {additionalCost,chainCosts,chainSavings,paidCcuCost,type CostTotal} from '../planner/costs';
 import {purchasePriceReader} from '../planner/shopping-list';
 import {anchorFromStep,type DraftAnchor,type PlannerDraft} from '../planner/draft';
 import {previewPlacement,type Placement} from '../planner/placement';
@@ -18,7 +18,7 @@ import {PlanningAdvisors,type AdvisorContext} from './PlanningAdvisors';
 import type { FairOfferRequest } from './FairNewsPanel';
 import {availableForTarget,blockingPlanResources,type ResourceClaim} from '../planner/reservations';
 import {offersAreStale,type CatalogueShip,type MarketSnapshot} from '../market/model';
-import {shipValuesStale} from '../market/ship-values';
+import {nominalValue,shipValuesStale} from '../market/ship-values';
 import {searchShips} from '../market/search';
 import type {PricingSnapshot} from '../pricing/model';import {estimateMinor,estimatePlanningMinor,formatMinor,euroRateIsStale} from '../pricing/money';
 import {planningRateLabel} from './planning-rate-label';
@@ -148,6 +148,10 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   const total=(value:CostTotal,paid=false)=>value.missing?(value.knownMinor?money(value.knownMinor,value.approximate)+' + '+value.missing+' '+t(value.missing===1?'Preis offen':'Preise offen'):t(paid?'noch nicht erfasst':'Preis offen')+' ('+value.missing+')'):money(value.knownMinor,value.approximate);
   const additional=!reservationsReady?t('Planungsdaten prüfen'):hasLockedAnchors?t('Gesperrtes CCU'):resourceConflicts.length?t('Ressourcenkonflikt'):costs?(costs.invalid?t('Anschluss prüfen'):total(costs.additional)):t('noch offen');
   const pricedTotal=costs&&!costs.invalid&&reservationsReady&&!hasLockedAnchors&&!resourceConflicts.length?costs.additional:null;
+  const investment=pricedTotal?costs?.investment??null:null;
+  const investmentEstimate=!!costs&&(costs.paid.approximate||costs.additional.approximate);
+  const standardUsd=target?nominalValue(target,market?.offers?.items??[],current,currentValues):null;
+  const savings=chainSavings(investment,standardUsd,display);
   const partialTotal=!!pricedTotal?.missing;
   const amountLabel=partialTotal&&pricedTotal.knownMinor?t('Bekannte Teilsumme'):t('Summe');
   const amountText=partialTotal?(pricedTotal.knownMinor?money(pricedTotal.knownMinor,pricedTotal.approximate):t('offen')):additional;
@@ -200,12 +204,19 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     <td>{conflicted?t('Ressourcenkonflikt'):money(c.investment,c.paid.approximate||c.additional.approximate)}</td><td>{t(c.paid.missing?'Kaufpreise unvollständig':c.additional.approximate?'Altpreise belegt':'Kaufpreise belegt')}{(c.additional.approximate||c.additional.missing>0)&&<small>{t('Zukauf ungeprüft')}</small>}{c.paid.approximate&&<small>{t('Währungsumrechnung als Richtwert')}</small>}</td></tr>;}
   return <section className={'panel market-chain ccu-builder ccu-workbench'+(dragVisual?' is-dragging':'')} aria-label={t('Kettenbauer')}>
     <div className="ccu-builder-head"><h2>{t('CCU-Kette')}{target?' → '+target.name:''}</h2>
+      <div className="ccu-price-cards">
+        <div className="ccu-total ccu-savings" title={t('Vergleich mit dem aktuellen Standard-Schiffswert. Kosten der Basis, gekaufter CCUs und geplanter Zukäufe zählen zusammen.')}>
+          <span>{t(savings!==null&&savings<0?'Mehrkosten der CCU-Kette':'Gespart durch CCU-Kette')}</span>
+          <strong aria-live="polite" aria-atomic="true">{money(savings===null?null:Math.abs(savings),true)}</strong>
+          <small>{t('Schiff kostet dich')} {money(investment,investmentEstimate)}</small>
+        </div>
       <button className="ccu-total" type="button" ref={costToggle} aria-expanded={detail==='cost'} aria-controls={costDetailId}
         onClick={()=>setDetail(detail==='cost'?null:'cost')}>
         <span>{t('Noch zu zahlen')}</span>
         <strong aria-live="polite" aria-atomic="true">{pricedTotal?amountLabel+' ':''}{amountText}</strong>
         {partialTotal&&<small>{pricedTotal.missing} {t(pricedTotal.missing===1?'Preis offen':'Preise offen')}</small>}
       </button>
+      </div>
     </div>
     <div id={costDetailId} hidden={detail!=='cost'} className={detail==='cost'?'ccu-detail ccu-total-detail':undefined}>
       {detail==='cost'&&<><div><strong>{t('Zusätzliche Ausgaben')}: {additional}</strong>

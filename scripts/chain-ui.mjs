@@ -374,7 +374,7 @@ try{
     assert.equal(await page.locator('.market-update small').innerText(),'beim Start und täglich um 17:05 Uhr (Berlin)');
     await chain.locator('.ccu-step.owned').first().waitFor();assert.equal(await chain.locator('.ccu-step.owned').count(),2);assert.equal(await chain.locator('.ccu-step.purchase').count(),2);
     assert.equal(await chain.getByRole('button',{name:'CCU-Details: LTI Starter → Freelancer DUR',exact:true}).count(),1);assert.equal(await chain.getByRole('button',{name:'CCU-Details: C2 Hercules Starlifter → Liberator',exact:true}).count(),1);assert.doesNotMatch(await chain.locator('.ccu-rail').innerText(),/Original Hornet/);
-    assert.match(await chain.locator('.ccu-total').innerText(),/≈.*21,64/);assert.equal(await chain.locator('.ccu-step').count(),4);
+    assert.match(await chain.locator('button.ccu-total').innerText(),/≈.*21,64/);assert.equal(await chain.locator('.ccu-step').count(),4);
   });
   await check('AUTOMATIC_SHOP_OR_ECB_MATCHES_CHAIN_AND_FLEET_WITHOUT_CREDITS', async()=>{
     const nav=page.getByRole('navigation',{name:'Hauptbereiche'});
@@ -420,7 +420,7 @@ try{
   });
   await check('OWNED_DETAILS_AND_OPEN_COSTS_DO_NOT_RECHARGE_PAID_CCUS',async()=>{
     await chain.locator('.ccu-step.owned').last().click();assert.match(await chain.locator('.ccu-detail').innerText(),/owned-b/);assert.match(await chain.locator('.ccu-detail').innerText(),/Anwendbarkeit/);
-    await chain.getByRole('button',{name:'CCU-Details schließen'}).click();await chain.locator('.ccu-total').click();assert.match(await chain.locator('.ccu-detail').innerText(),/Zielschiffpreise sind keine CCU-Preise/);assert.match(await chain.locator('.ccu-detail').innerText(),/inkl\. 19 % MwSt\./);await chain.getByRole('button',{name:'CCU-Details schließen'}).click();
+    await chain.getByRole('button',{name:'CCU-Details schließen'}).click();await chain.locator('button.ccu-total').click();assert.match(await chain.locator('.ccu-detail').innerText(),/Zielschiffpreise sind keine CCU-Preise/);assert.match(await chain.locator('.ccu-detail').innerText(),/inkl\. 19 % MwSt\./);await chain.getByRole('button',{name:'CCU-Details schließen'}).click();
   });
   await check('ORANGE_BUTTON_OPENS_ONLY_UPGRADE_ACTION_WHILE_DETAILS_AND_BROWSER_FAILURE_REMAIN_SEPARATE',async()=>{
     const before=await app.evaluate(()=>globalThis.fixture.commands.filter(c=>c.action==='market.openUpgrades').length);
@@ -535,7 +535,7 @@ try{
     const before=await app.evaluate(()=>JSON.stringify(globalThis.fixture.views));
     const extra=ccu('all-owned-start',ships[0].name,ships[1].name),middle=ccu('all-owned-middle',ships[2].name,ships[3].name);
     await app.evaluate(({},{extra,middle})=>{const f=globalThis.fixture,v=f.views[f.state.selectedAccountId];v.document.pledges.push(extra,middle);v.revision='44444444-4444-4444-8444-444444444444';v.observedAt=new Date().toISOString();},{extra,middle});
-    await page.waitForFunction(()=>/0,00/.test(document.querySelector('.ccu-total').textContent));assert.equal(await chain.locator('.ccu-step.purchase').count(),0);
+    await page.waitForFunction(()=>/0,00/.test(document.querySelector('button.ccu-total').textContent));assert.equal(await chain.locator('.ccu-step.purchase').count(),0);
     assert.match(await page.locator('.market-target-body>.badge').first().innerText(),/4 Bestand · 0 Lücken/);
     assert.ok(before.includes('"protected":true'));const held=await app.evaluate(()=>globalThis.fixture.views[globalThis.fixture.state.selectedAccountId].document.pledges);assert.ok(held.every(p=>p.protected&&!p.baseReleased));
     const commands=await app.evaluate(()=>globalThis.fixture.commands);assert.equal(commands.some(c=>/^rsi\.(connect|open|authorize)$|^import\.commit$/.test(c.action)),false);assert.equal(await app.evaluate(()=>globalThis.blockedRequests),0);

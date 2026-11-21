@@ -5,11 +5,15 @@
 .ccu-builder button.ccu-ownership{border:0;border-radius:3px;padding:2px 5px;font:600 11px/1.4 Segoe UI,sans-serif;background:var(--ccu-buy);color:#38210b;white-space:normal}.ccu-builder button.ccu-step-details{display:flex;flex:1;flex-direction:column;justify-content:space-between;gap:7px;width:100%;padding:0;border:0;background:none;text-align:left;white-space:normal}.ccu-step-details:focus-visible{outline:2px solid #edf2f5;outline-offset:2px}
 @media(pointer:coarse){.ccu-builder button.ccu-ownership{min-height:44px;min-width:44px}}
 .ccu-builder .ccu-builder-head{align-items:center;gap:10px 18px}
-.ccu-builder button.ccu-total{
+.ccu-builder button.ccu-total,.ccu-builder .ccu-savings{
   display:grid;gap:2px;max-width:100%;padding:8px 15px;text-align:left;
   color:#bdf4e9;background:#103639;border:1px solid #51cbb5;border-radius:7px;
   box-shadow:0 0 15px #0a9c8c2c;white-space:normal;overflow-wrap:anywhere
 }
+.ccu-price-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:min(426px,100%);gap:10px;margin-left:auto}
+.ccu-price-cards>*{box-sizing:border-box;min-width:0}
+.ccu-builder .ccu-savings{font-size:12px}
+.ccu-builder .ccu-savings small{color:#bdf4e9}
 .ccu-total strong{font-size:clamp(20px,2vw,27px);line-height:1.18;font-variant-numeric:tabular-nums;color:#ecfffa}
 .ccu-total small{color:#ffca85;font-size:12px}
 .ccu-builder button.ccu-total:hover,.ccu-builder button.ccu-total[aria-expanded=true]{border-color:#9af4e3;background:#154448}

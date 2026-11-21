@@ -25,7 +25,7 @@ export class BackgroundRestoreError extends UserError {
 type RsiIdentity = ImportCandidate['document']['account'];
 type RsiSession = { session: Electron.Session; remember: boolean; closing: boolean;
   verified?: { identity: RsiIdentity; cookies: StoredCookie[] }; closeTask: Promise<void> | null; failure: string | null;
-  automatic: boolean; returnPending: boolean; hangarTransitioned: boolean;
+  automatic: boolean; returnPending: object | null; hangarTransitioned: boolean;
   background: boolean; hideHangar: boolean; loginDocument: boolean;
   restoreFailure: BackgroundRestoreCode | null; buybackListUrl?: string };
 type ConnectionAttempt = { cancelled: boolean; done: Promise<void>; finish: () => void; timedOut?: boolean };
@@ -50,7 +50,7 @@ export class RsiLogin {
   }
   private queueHangarReturn(state: RsiSession) {
     if (state.returnPending) return;
-    state.returnPending = true;
+    state.returnPending = {};
     this.record({ event: 'login-return-pending', target: 'rsi-other', resource: 'mainFrame' });
   }
   async settings(accountId: string) {
@@ -168,7 +168,7 @@ export class RsiLogin {
       if (!existing?.closing && existing?.remember === remember) {
         existing.hideHangar = hideHangar;
         if (automatic) {
-          existing.automatic = true; existing.returnPending = false; existing.hangarTransitioned = false;
+          existing.automatic = true; existing.returnPending = null; existing.hangarTransitioned = false;
           if (isRsiLoginPage(old.webContents.getURL())) this.frozen.delete(accountId);
           this.statuses.set(accountId, { state: 'login-required', message: 'Offenes RSI-Fenster wird geprüft.' });
         }
@@ -194,7 +194,7 @@ export class RsiLogin {
       ensureActive();
     } catch (error) { await isolated.clearStorageData(); await isolated.clearCache(); throw error; }
     const state: RsiSession = { session: isolated, remember: background ? false : remember, closing: false, closeTask: null, failure: null,
-      automatic, returnPending: false, hangarTransitioned: false, background, hideHangar,
+      automatic, returnPending: null, hangarTransitioned: false, background, hideHangar,
       loginDocument: false, restoreFailure: null };
     this.sessions.set(accountId, state);
     isolated.setPermissionCheckHandler(() => false);
@@ -248,6 +248,14 @@ export class RsiLogin {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('did-navigate', (_event, url) => {
       state.loginDocument = !background && isRsiLoginPage(url);
+      state.returnPending = null;
+      if (state.loginDocument) state.hangarTransitioned = false;
+    });
+    win.webContents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && allowedRsiNavigation(details.url)) state.returnPending = null;
+    });
+    win.webContents.on('did-navigate-in-page', (_event, _url, main) => {
+      if (main) state.returnPending = null;
     });
     const guard = (event: Electron.Event, url: string, _inPlace?: boolean, main = true) => {
       if (!main && state.loginDocument && rsiCaptchaFrame(url)) return;
@@ -348,12 +356,32 @@ export class RsiLogin {
         active();
         if (state.closing || activeWindow.isDestroyed() || this.windows.get(accountId) !== activeWindow) throw new UserError('Verbindung beendet.');
       };
-      const openHangar = async () => {
+      let lastHangarAuth: StoredCookie[] = [];
+      const openHangar = async (url: string, pending: RsiSession['returnPending']) => {
+        const cookies = await this.cookies(state.session);
         current();
-        state.returnPending = false; state.hangarTransitioned = true;
+        const contents = activeWindow.webContents;
+        if (state.returnPending !== pending || contents.getURL() !== url || contents.isLoadingMainFrame() ||
+            ['restricted', 'error'].includes(this.status(accountId).state) || !hasAuthenticationCookie(cookies)) return;
+        const auth = cookies.filter(c => isAuthenticationCookieName(c.name));
+        // If RSI sent the user back to sign-in, a stale cookie must not cause the same redirect again.
+        if (!auth.some(cookie => !lastHangarAuth.some(previous => previous.name === cookie.name &&
+            previous.domain === cookie.domain && previous.path === cookie.path && previous.value === cookie.value))) return;
+        lastHangarAuth = auth;
+        state.returnPending = null; state.hangarTransitioned = true;
         this.record({ event: 'hangar-transition', target: 'hangar', resource: 'mainFrame' });
         if (state.hideHangar) activeWindow.hide();
-        await activeWindow.loadURL(RSI_HANGAR_URL);
+        let signInStarted = false;
+        const observeSignIn = (details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>) => {
+          if (details.isMainFrame && isRsiLoginPage(details.url)) signInStarted = true;
+        };
+        contents.on('did-start-navigation', observeSignIn);
+        try { await activeWindow.loadURL(RSI_HANGAR_URL); }
+        catch (error) {
+          current();
+          // An official sign-in navigation can supersede our load. Other errors still surface.
+          if (!signInStarted || (error as NodeJS.ErrnoException)?.code !== 'ERR_ABORTED') throw error;
+        } finally { contents.removeListener('did-start-navigation', observeSignIn); }
       };
       let loginPageOpened = false;
       let previousObservation: unknown;
@@ -362,13 +390,12 @@ export class RsiLogin {
         current();
         const status = this.status(accountId);
         if (['restricted', 'error'].includes(status.state)) throw new UserError(status.message);
-        if (state.returnPending) {
-          if (hasAuthenticationCookie(await this.cookies(state.session))) { await openHangar(); continue; }
-          await new Promise(resolve => setTimeout(resolve, 750)); continue;
-        }
         const url = win.webContents.getURL();
+        const pending = state.returnPending;
         if (!win.webContents.isLoadingMainFrame() && url && url !== 'about:blank') {
-          if (!allowedRsiNavigation(url)) {
+          if (pending) {
+            await openHangar(url, pending);
+          } else if (!allowedRsiNavigation(url)) {
             if (!state.hangarTransitioned && rsiReturnCandidate(url)) this.queueHangarReturn(state);
             else throw new UserError(this.record({ event: 'navigation-blocked', target: connectionTarget(url), resource: 'mainFrame', reason: 'navigation-policy' }));
           } else if (isPledgesPage(url)) {
@@ -380,7 +407,9 @@ export class RsiLogin {
               previousObservation = fixed;
             }
             if (observation === 'upgrade-fields') throw new UserError('CCU-Daten im Hangar sind nicht eindeutig lesbar. Kein Bestand übernommen.');
+            if (observation === 'consent' && state.hideHangar && !win.isVisible() && !win.isMinimized()) win.show();
             if (observation === 'ready') {
+              if (state.hideHangar && win.isVisible()) win.hide();
               const candidate = await this.probe(accountId);
               current();
               if (remember) {
@@ -400,7 +429,8 @@ export class RsiLogin {
               await win.loadURL(RSI_LOGIN_URL);
             }
           } else if (!isRsiLoginPage(url) && !state.hangarTransitioned) {
-            await openHangar();
+            // An allowed public/account route can be reached before RSI finishes authentication.
+            await openHangar(url, null);
           }
         }
         // Passive DOM observation, never an authentication submission or repeated HTTP request.

@@ -46,3 +46,9 @@ export function chainCosts(plan:{base:ChainBase|null;steps:readonly ChainStep[]}
   const investment=paid.knownMinor+additional.knownMinor;
   return {additional,paid,invalid,investment:!invalid&&!paid.missing&&!additional.missing&&Number.isSafeInteger(investment)?investment:null};
 }
+
+export function chainSavings(investment:number|null,standardUsd:number|null,display:PricingSnapshot):number|null {
+  if(investment===null)return null;
+  const standardPrice=estimatePlanningMinor(standardUsd,display.settings,rate(display));
+  return standardPrice===null?null:standardPrice-investment;
+}
