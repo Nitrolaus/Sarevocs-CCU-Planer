@@ -1,9 +1,63 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { imageOperation, imageQuery, persistedImageBody, fallbackImageBody } from './fixtures/rsi-captcha-image';
 import { blockedOperation, allowedRsiNavigation, evaluateOperation, evaluateRsiSessionRequest, OPERATION_BLOCK_DETAILS } from '../src/main/policy';
 
 const asset = 'https://cdn.robertsspaceindustries.com/scripts/cart-widget.js';
 const read = { method: 'GET', resourceType: 'script' };
+
+test('Only the two wire forms of the sign-in image challenge can reach the exact GraphQL endpoint', () => {
+  const url = 'https://robertsspaceindustries.com/graphql';
+  for (const body of [persistedImageBody, fallbackImageBody]) {
+    const request = { url, method: 'POST', resourceType: 'xhr', uploadData: [{ bytes: Buffer.from(body) }] };
+    assert.equal(evaluateRsiSessionRequest(request, 'login').blocked, false);
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData: [{ type: 'rawData', bytes: Buffer.from(body) }] }, 'login').blocked, false);
+    for (const phase of ['captcha', 'read', 'closed'] as const) assert.equal(evaluateRsiSessionRequest(request, phase).blocked, true);
+    for (const method of ['GET', 'HEAD', 'PUT', 'OPTIONS', 'PATCH', 'DELETE']) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, method }, 'login').blocked, true);
+    }
+    for (const resourceType of ['mainFrame', 'subFrame', 'other', 'image', 'script']) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, resourceType }, 'login').blocked, true);
+    }
+    for (const other of [url + '?', url + '?a=1', url + '#', url + '#other', url + '/', url.replace('https:', 'http:'),
+      url.replace('://', '://cdn.'), url.replace('://', '://user@'), url.replace('.com/', '.com:443/'),
+      url.replace('/graphql', '/foo/../graphql'), url.replace('/graphql', '/%67raphql')]) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, url: other }, 'login').blocked, true);
+    }
+  }
+});
+
+test('The sign-in image exception rejects altered operations and ambiguous uploads', () => {
+  const request = { url: 'https://robertsspaceindustries.com/graphql', method: 'POST', resourceType: 'xhr' };
+  const upload = (bytes: Buffer) => [{ bytes }];
+  const batch = (operation: unknown) => JSON.stringify([operation]);
+  const invalidBodies = [
+    JSON.stringify(imageOperation), JSON.stringify([imageOperation, imageOperation]),
+    batch({ ...imageOperation, query: 'mutation { checkout }' }),
+    batch({ ...imageOperation, query: imageQuery.replace('encoding', 'otherField') }),
+    batch({ operationName: 'captcha', variables: imageOperation.variables, query: imageQuery }),
+    batch({ ...imageOperation, operationName: 'other' }),
+    ...['signup', 'checkout'].map(action => batch({ ...imageOperation, variables: { size: 'm', action } })),
+    batch({ ...imageOperation, variables: { size: 'l', action: 'signin' } }),
+    batch({ ...imageOperation, variables: { ...imageOperation.variables, password: 'synthetic' } }),
+    batch({ ...imageOperation, extensions: { ...imageOperation.extensions, extra: true } }),
+    batch({ ...imageOperation, extensions: { persistedQuery: { ...imageOperation.extensions.persistedQuery, version: 2 } } }),
+    persistedImageBody.replace(imageOperation.extensions.persistedQuery.sha256Hash, '0'.repeat(64)),
+    persistedImageBody.replace('"action":"signin"', '"action":"checkout","action":"signin"'),
+    fallbackImageBody.replace('"query":', '"query":"mutation { gift }","query":'),
+    persistedImageBody + ' ', '[]', 'invalid',
+  ];
+  for (const body of invalidBodies) {
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData: upload(Buffer.from(body)) }, 'login').blocked, true);
+  }
+  const bytes = Buffer.from(persistedImageBody);
+  for (const uploadData of [undefined, [], [null], [bytes], [{ bytes: persistedImageBody }], [{ bytes: new Uint8Array(bytes) }],
+    [{ file: 'fixture' }], [{ blobUUID: 'fixture' }], [{ bytes, file: 'fixture' }], [{ bytes, blobUUID: 'fixture' }],
+    [{ type: 'file', bytes }], [{ type: 'rawData', bytes, file: 'fixture' }], [{ type: 'rawData', bytes, blobUUID: 'fixture' }],
+    [...upload(bytes), ...upload(bytes)], upload(Buffer.alloc(65536))]) {
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData }, 'login').blocked, true);
+  }
+});
 
 test('RSI session grants authentication submissions only in their matching phase', () => {
   const submit = (url: string) => ({ url, method: 'POST', resourceType: 'xhr' });

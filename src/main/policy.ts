@@ -88,6 +88,38 @@ export function blockedOperation(value: string, request?: RequestContext): boole
 }
 
 type SessionRequest = RequestContext & { url: string; uploadData?: readonly unknown[] };
+// The public RSI login client posts one Apollo batch entry. On a persisted-query
+// retry it appends the printed document, keeping the same manifest ID and variables.
+const captchaImageOperation = {
+  operationName: 'captcha',
+  variables: { size: 'm', action: 'signin' },
+  extensions: { persistedQuery: { version: 1, sha256Hash: 'b2aea1c9a3c838fdfcfa5bd0af92fe551f2337dbf2592f61ecac78f26f958e51' } },
+};
+const captchaImageQuery = `mutation captcha($action: String!, $size: String!) {
+  account_captcha(action: $action, size: $size) {
+    data
+    type
+    encoding
+    __typename
+  }
+}`;
+const captchaImageBodies = [captchaImageOperation, { ...captchaImageOperation, query: captchaImageQuery }]
+  .map(operation => JSON.stringify([operation]));
+
+function isCaptchaImageUpload(uploadData: SessionRequest['uploadData']): boolean {
+  if (uploadData?.length !== 1) return false;
+  const part = uploadData[0];
+  if (!part || typeof part !== 'object' || !('bytes' in part) || !Object.hasOwn(part, 'bytes') ||
+      !Buffer.isBuffer(part.bytes)) return false;
+  // Electron exposes the rawData discriminator at runtime. Its UploadData type
+  // also documents the bytes-only form. Neither may carry file or blob data.
+  const keys = Object.keys(part);
+  if (keys.length !== 1 && !(keys.length === 2 && keys.includes('type') && 'type' in part && part.type === 'rawData')) return false;
+  const bytes = part.bytes;
+  // Both expected bodies contain ASCII only. Reject other lengths before decoding.
+  return captchaImageBodies.some(body => bytes.length === body.length && bytes.toString('utf8') === body);
+}
+
 const assetOrigins = new Set([RSI_ORIGIN, 'https://cdn.robertsspaceindustries.com',
   'https://media.robertsspaceindustries.com', 'https://static.robertsspaceindustries.com']);
 const englishLoginNavigation = /^\/nav\/en\/(?:manifest|main\.[a-z0-9]{13}-[0-9]{10})\.json$/;
@@ -110,6 +142,8 @@ export function evaluateRsiSessionRequest(request: SessionRequest, phase: 'login
     if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.port) return deny('invalid-url-or-path');
     const { pathname, origin } = url, { method, resourceType } = request;
     const read = ['GET', 'HEAD'].includes(method) && !request.uploadData?.length;
+    if (phase === 'login' && method === 'POST' && resourceType === 'xhr' &&
+        request.url === RSI_ORIGIN + '/graphql' && isCaptchaImageUpload(request.uploadData)) return allow;
     if (phase === 'login' && method === 'POST' && origin === RSI_ORIGIN && rsiLoginPath.test(pathname) && !url.search &&
         ['mainFrame', 'xhr'].includes(resourceType)) return allow;
     if (phase === 'login' || phase === 'captcha') {

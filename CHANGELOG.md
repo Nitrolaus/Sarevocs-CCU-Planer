@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.81 · Alpha
+
+- Das offizielle RSI-Anmeldefenster darf sein CAPTCHA-Bild laden, wenn RSI eine Bildabfrage anfordert. Der lokale Test bestätigt die Bildanzeige. Kauf- und Änderungssperren bleiben aktiv.
+
 ## 0.3.80 · Alpha
 
 - Die RSI-Anmeldeseite kann ihr öffentliches Navigationsmanifest und den Hauptmenü-Datensatz laden. Im Test verschwand dadurch die Meldung „Oops“ vor der Passworteingabe. Kauf- und Änderungssperren bleiben aktiv.

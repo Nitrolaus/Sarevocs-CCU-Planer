@@ -14,6 +14,7 @@ import { APP_VERSION } from '../src/domain/model';
 import {CREDIT_URL,CREDIT_BODY} from '../src/importers/rsi-credit';
 import {LastSeenStore} from '../src/storage/last-seen';
 import { rsiFetchPageProbe } from '../src/importers/rsi-page';
+import { imageOperation, persistedImageBody, fallbackImageBody } from './fixtures/rsi-captcha-image';
 
 const root = path.resolve(process.argv.find(x => x.startsWith('--test-root='))!.slice(12));
 app.setPath('userData', path.join(root, 'runtime')); app.setPath('sessionData', path.join(root, 'memory')); app.setPath('crashDumps', path.join(root, 'crashes'));
@@ -44,6 +45,7 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 100 && (!child.webContents.getURL() || child.webContents.isLoadingMainFrame()); i++) await wait(20);
     const isolated = child.webContents.session;
     const served: Array<{ path: string; method: string }> = [];
+    let redirectImageRequest = false;
     // Fresh ephemeral fixture certificate, never installed in any Windows trust store.
     const certificateScript = `$ErrorActionPreference='Stop'
 $rsa=[Security.Cryptography.RSA]::Create(2048)
@@ -52,7 +54,7 @@ $cert=$req.CreateSelfSigned([DateTimeOffset]::Now.AddMinutes(-5),[DateTimeOffset
 try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Pfx));Cert=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))}|ConvertTo-Json -Compress } finally { $cert.Dispose();$rsa.Dispose() }`;
     const fixtureCertificate = JSON.parse(execFileSync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(certificateScript, 'utf16le').toString('base64')], { windowsHide: true, encoding: 'utf8', timeout: 10000 }));
     const fingerprint = new X509Certificate(Buffer.from(fixtureCertificate.Cert, 'base64')).fingerprint256;
-    const tlsFixture = https.createServer({ pfx: Buffer.from(fixtureCertificate.Pfx, 'base64') }, (request, response) => {
+    const tlsFixture = https.createServer({ pfx: Buffer.from(fixtureCertificate.Pfx, 'base64') }, async (request, response) => {
       const pathname = new URL(request.url!, 'https://local.invalid').pathname;
       served.push({ path: pathname, method: request.method! });
       response.setHeader('Access-Control-Allow-Origin', '*');
@@ -90,6 +92,22 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
         return;
       }
       if(pathname==='/graphql'){
+        if (request.method === 'POST' && !request.headers['x-rsi-token']) {
+          const chunks: Buffer[] = [];
+          for await (const chunk of request) chunks.push(chunk);
+          const body = Buffer.concat(chunks).toString('utf8');
+          if (body !== persistedImageBody && body !== fallbackImageBody) {
+            response.writeHead(400); response.end(); return;
+          }
+          if (redirectImageRequest) {
+            response.writeHead(307, { Location: '/api/checkout' }); response.end(); return;
+          }
+          // A local 96 x 32 PNG with blue and yellow halves.
+          const data = 'iVBORw0KGgoAAAANSUhEUgAAAGAAAAAgCAIAAABiouoDAAAAWElEQVR4nO3QMREAIAwEsLrAAnpQiAMMMrBjoD/kLgpSY+0o98wo1T4iSJAgQUHaRwQJEiQoiCBBggQJEiRIkKAQ7SOCBAkSFESQIEGCBAkSJEhQiPaRzwObjykADB3/wAAAAABJRU5ErkJggg==';
+          response.setHeader('Content-Type', 'application/json');
+          response.end(JSON.stringify([{ data: { account_captcha: { data, type: 'image/png', encoding: 'base64' } } }]));
+          return;
+        }
         if (request.method === 'POST') {
           assert.equal(request.headers['x-rsi-token'] === canary, true);
           assert.equal(request.headers['x-csrf-token'] === canary, true);
@@ -158,6 +176,42 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     assert.equal(served.length, beforeDeniedWidgetRequest);
     results.push('The RSI login page can open both exact CAPTCHA frames and load their scripts. An unlisted CAPTCHA URL remains blocked.');
 
+    for (const body of [persistedImageBody, fallbackImageBody]) {
+      const pixels = await child.webContents.executeJavaScript(`(async () => {
+        const reply = await fetch('/graphql', { method: 'POST', headers: { 'content-type': 'application/json' }, body: ${JSON.stringify(body)} });
+        const [{ data: { account_captcha } }] = await reply.json();
+        const image = document.createElement('img');
+        const loaded = new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = () => reject(Error('Local test image failed to load'));
+        });
+        image.src = 'data:' + account_captcha.type + ';' + account_captcha.encoding + ',' + account_captcha.data;
+        document.body.prepend(image);
+        await loaded;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+        return [image.naturalWidth, image.naturalHeight, Math.round(image.getBoundingClientRect().width),
+          ...ctx.getImageData(5, 5, 1, 1).data, ...ctx.getImageData(90, 5, 1, 1).data];
+      })()`);
+      assert.deepEqual(pixels, [96, 32, 96, 23, 82, 160, 255, 252, 175, 40, 255]);
+    }
+    const tryGraphqlPost = (body: string) => `fetch(${JSON.stringify(origin + '/graphql')}, {
+      method: 'POST', mode: 'no-cors', body: ${JSON.stringify(body)}
+    }).then(() => true, () => false)`;
+    const beforeRejectedPosts = served.length;
+    for (const name of ['checkout', 'gift', 'reclaim', 'applyUpgrade', 'buyback']) {
+      const body = JSON.stringify([{ ...imageOperation, query: 'mutation captcha { ' + name + ' }' }]);
+      assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(body)), false);
+    }
+    assert.equal(await captchaFrames[0]!.executeJavaScript(tryGraphqlPost(persistedImageBody)), false);
+    assert.equal(served.length, beforeRejectedPosts);
+    redirectImageRequest = true;
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedImageBody)), false);
+    assert.deepEqual(served.slice(beforeRejectedPosts), [{ path: '/graphql', method: 'POST' }]);
+    redirectImageRequest = false;
+    results.push('Both sign-in image payloads render the local 96 x 32 PNG with verified pixels. Purchase/change mutations, the CAPTCHA iframe, and a 307 redirect to checkout are blocked before dispatch.');
+
     const blockedPaths = ['/api/cart', '/api/checkout', '/api/reclaim', '/api/apply-upgrade', '/api/gift', '/api/buyback', '/api/payment',
       '/api/cart.js', '/scripts/api/cart.js', '/scripts/cart/reclaim.js', '/%63art', '/%2563art', '/scripts/..%2fapi/%63art.js'];
     const before = served.length;
@@ -206,6 +260,8 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       document.body.append(frame);
     })`);
     assert.equal(served.length, beforeHangarWidget);
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedImageBody)), false);
+    assert.equal(served.length, beforeHangarWidget);
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in',{method:'POST'}).then(()=>true,()=>false)"), false);
     const page = await child.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: rsiFetchPageProbe(2, origin + '/account/pledges') }]);
     assert.equal(page.ok, true);
@@ -223,12 +279,13 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
 
     await isolated.cookies.set({url:'https://robertsspaceindustries.com',name:'Rsi-Token',value:canary,secure:true,httpOnly:true,path:'/'});
     await child.webContents.executeJavaScript(`(()=>{const meta=document.createElement('meta');meta.name='csrf-token';meta.content=${JSON.stringify(canary)};document.head.append(meta);})()`);
+    const creditPosts=()=>served.filter(r=>r.path==='/graphql'&&r.method==='POST').length, beforeLedger=creditPosts();
     const creditCandidate=await login.probe(account);assert.equal(creditCandidate.document.storeCredit?.minor,12500);assert.equal(creditCandidate.document.storeCredit?.currency,'USD');
     const creditCache=new LastSeenStore(path.join(root,'credit-cache')),creditAccount={id:account,name:'Synthetic',mode:'real' as const,reference:null,identityKind:null,identityStatus:'unbound' as const,lastComplete:null};
     creditCache.save(creditAccount,creditCandidate);assert.equal(creditCache.load(creditAccount)?.document.storeCredit?.minor,12500);
     assert.equal(creditCache.load({...creditAccount,id:randomUUID()}),null);
     const withoutCredit=structuredClone(creditCandidate);delete withoutCredit.document.storeCredit;creditCache.save(creditAccount,withoutCredit);assert.equal(creditCache.load(creditAccount)?.document.storeCredit,undefined);
-    const creditPosts=()=>served.filter(r=>r.path==='/graphql'&&r.method==='POST').length,posted=creditPosts();assert.equal(posted,1);
+    const posted=creditPosts();assert.equal(posted,beforeLedger+1);
     for(const body of [CREDIT_BODY,'mutation { syntheticPurchase }',CREDIT_BODY+' ',JSON.stringify([{query:'query { customer { otherLedger } }'}])]){
       const passed=await child.webContents.executeJavaScript(`fetch(${JSON.stringify(CREDIT_URL)},{method:'POST',headers:{'content-type':'application/json'},body:${JSON.stringify(body)}}).then(()=>true).catch(()=>false)`);assert.equal(passed,false);
     }
