@@ -1,6 +1,6 @@
 import { BrowserWindow, session } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { allowedRsiNavigation, evaluateRsiSessionRequest, insecureRsiTransport, isPledgesPage, isRsiLoginPage, rsiCaptchaFrame, rsiReturnCandidate, RSI_HANGAR_URL, RSI_ORIGIN } from '../main/policy';
+import { allowedRsiNavigation, evaluateRsiSessionRequest, insecureRsiTransport, isPledgesPage, isRsiLoginPage, rsiCaptchaFrame, rsiReturnCandidate, RSI_HANGAR_URL, RSI_LOGIN_URL, RSI_ORIGIN } from '../main/policy';
 import { UserError, type ImportCandidate } from '../domain/model';
 import {readHangarPages} from './hangar-read';
 import { SessionVault, type StoredCookie } from '../security/session-vault';
@@ -286,7 +286,8 @@ export class RsiLogin {
     win.on('closed', () => {
       this.windows.delete(accountId); this.frozen.delete(accountId);
     });
-    void win.loadURL(initialHangar ? RSI_HANGAR_URL : RSI_ORIGIN + '/en/connect').catch(() => {});
+    // Enter on the URL shared by password and MFA to avoid a route reload between them.
+    void win.loadURL(initialHangar ? RSI_HANGAR_URL : RSI_LOGIN_URL).catch(() => {});
     return this.status(accountId);
   }
   async connect(accountId: string, parent: BrowserWindow, remember: boolean, options: { hideHangar?: boolean; signal?: AbortSignal } = {}): Promise<ImportCandidate> {
@@ -378,7 +379,7 @@ export class RsiLogin {
                 throw new UserError('RSI gibt den Hangar noch nicht frei. Bitte später erneut versuchen.');
               }
               loginPageOpened = true;
-              await win.loadURL(RSI_ORIGIN + '/en/connect');
+              await win.loadURL(RSI_LOGIN_URL);
             }
           } else if (!isRsiLoginPage(url) && !state.hangarTransitioned) {
             await openHangar();

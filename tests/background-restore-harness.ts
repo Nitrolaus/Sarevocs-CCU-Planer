@@ -14,7 +14,7 @@ app.setPath('userData', path.join(data, 'runtime')); app.setPath('sessionData', 
 app.commandLine.appendSwitch('host-resolver-rules', 'MAP * ~NOTFOUND'); app.commandLine.appendSwitch('proxy-server', 'http://127.0.0.1:1');
 const native = { created: [] as { show: boolean; win: BrowserWindow }[], actions: [] as { id: number; action: string }[] };
 (globalThis as unknown as { ccuRestoreNative: typeof native }).ccuRestoreNative = native;
-const hangar = 'https://robertsspaceindustries.com/account/pledges', loginUrl = 'https://robertsspaceindustries.com/en/connect';
+const hangar = 'https://robertsspaceindustries.com/account/pledges', loginUrl = 'https://robertsspaceindustries.com/en/sign-in';
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 const cookie = (value = 'SYNTHETIC_AUTH_ONLY'): StoredCookie => ({ name: 'Rsi-Token', value, domain: 'robertsspaceindustries.com', path: '/', secure: true, httpOnly: true, hostOnly: true, session: false, expirationDate: Date.now() / 1000 + 3600, sameSite: 'lax' });
 const ready = `<ul class="list-items"><li><input class="js-pledge-id" value="synthetic-ccu"><input class="js-pledge-name" value="SYNTHETIC CCU"><input class="js-upgrade-data" value='{&quot;match_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC FROM&quot;}],&quot;target_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC TO&quot;}]}'><div class="items-col">SYNTHETIC ONLY</div></li></ul>`;

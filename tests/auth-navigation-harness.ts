@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
     stage = 'completed-return'; remote.webContents.getURL = () => origin + '/synthetic-return';
     const final = await Promise.race([connection, wait(6000).then(() => { throw new Error('SYNTHETIC_TIMEOUT'); })]);
     assert.equal(final.error, null); assert.equal(final.candidate?.document.pledges.length, 1);
-    assert.deepEqual(loads, [origin + '/en/connect', origin + '/account/pledges']);
+    assert.deepEqual(loads, [origin + '/en/sign-in', origin + '/account/pledges']);
     assert.equal(remote.isDestroyed(), false); assert.equal(authDomReads, 0);
     results.push('Only after leaving authentication does the existing single fixed-hangar handoff produce a partial preview while retaining the RSI window.');
 

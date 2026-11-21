@@ -30,7 +30,8 @@ const auth = '<div class="c-account-sidebar__profile-info-handle">SYNTHETIC_HAND
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const original = BrowserWindow.prototype.loadURL;
-  BrowserWindow.prototype.loadURL = async function() { await this.loadFile(fixture); };
+  let initialLoginUrl = '';
+  BrowserWindow.prototype.loadURL = async function(url) { initialLoginUrl = url; await this.loadFile(fixture); };
   const parent = new BrowserWindow({ show: false, webPreferences: { sandbox: true, nodeIntegration: false } });
   const vault = { load: async () => [], save: async () => false } as unknown as SessionVault;
   let configureLedgerTransport: (partition: Electron.Session) => Promise<void>;
@@ -48,6 +49,8 @@ app.whenReady().then(async () => {
     const isolated = child.webContents.session;
     const served: Array<{ path: string; method: string }> = [];
     let redirectGraphqlToCheckout = false;
+    let testLoginRoute = false;
+    let emailChallenges = 0;
     const wrongCode = '000000';
     const rejectedConfirmationBody = JSON.stringify([{ ...confirmationOperation,
       variables: { ...confirmationOperation.variables, captcha_code: wrongCode } }]);
@@ -66,6 +69,11 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       const pathname = new URL(request.url!, 'https://local.invalid').pathname;
       served.push({ path: pathname, method: request.method! });
       response.setHeader('Access-Control-Allow-Origin', '*');
+      if (testLoginRoute && ['/en/connect', '/en/sign-in'].includes(pathname) && request.method === 'GET') {
+        response.setHeader('Content-Type', 'text/html; charset=utf-8');
+        response.end('<!doctype html><form data-cy-id="sign-in-form"><input type="password"></form>');
+        return;
+      }
       if (request.url === '/cookie-consent/script.js?async=1') {
         response.setHeader('Content-Type', 'text/javascript');
         response.end('globalThis.syntheticConsentLoaded = true;');
@@ -120,6 +128,11 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
             response.writeHead(307, { Location: '/api/checkout' }); response.end(); return;
           }
           response.setHeader('Content-Type', 'application/json');
+          if (testLoginRoute && acceptsCode) {
+            emailChallenges++;
+            response.end(JSON.stringify([{ errors: [{ message: 'MultiStepRequired' }] }]));
+            return;
+          }
           if (isEmailCode) {
             response.end(JSON.stringify(acceptsEmailCode
               ? [{ data: { account_multistep: { status: 'Active' } } }]
@@ -173,6 +186,48 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     }
     assert.equal(served.length, 2);
     results.push('Real Chromium GET/HEAD for static RSI-named files reaches only the local TLS fixture, despite action word in filename.');
+
+    // RSI keeps its email-code screen in React state. Only a changed pathname asks
+    // for route information. If that lookup is blocked, the router reloads the
+    // target document and the login route initializes the password screen again.
+    testLoginRoute = true;
+    const routeInfoPayload = JSON.stringify([{
+      operationName: 'getRouteInfo', variables: { route: '/en/sign-in', lang: 'en' },
+      extensions: { persistedQuery: {
+        version: 1, sha256Hash: '3d69fb2c48ed0866eccf11d1192c2b2473be243f584d15fc34e83206be259e3d',
+      } },
+    }]);
+    async function firstCodeAfterCaptcha(entry: string) {
+      const before = served.length;
+      const challengesBefore = emailChallenges;
+      await original.call(child, entry);
+      const reload = await child.webContents.executeJavaScript(`(async () => {
+        const reply = await fetch('/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: ${JSON.stringify(persistedConfirmationBody)} });
+        const [auth] = await reply.json();
+        if (auth.errors?.[0]?.message !== 'MultiStepRequired') throw Error('Local code challenge missing');
+        const dialog = document.createElement('form');
+        dialog.dataset.cyId = 'two-factor-authentication';
+        document.body.replaceChildren(dialog);
+        const oldPath = location.pathname;
+        history.pushState(null, '', '/en/sign-in');
+        if (location.pathname === oldPath) return false;
+        return fetch('/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: ${JSON.stringify(routeInfoPayload)} }).then(response => !response.ok, () => true);
+      })()`);
+      if (reload) await original.call(child, origin + '/en/sign-in');
+      const hasCodeForm = await child.webContents.executeJavaScript(
+        'Boolean(document.querySelector("[data-cy-id=two-factor-authentication]"))');
+      assert.equal(emailChallenges - challengesBefore, 1);
+      assert.equal(served.slice(before).filter(request => request.path === '/graphql').length, 1,
+        'The router GraphQL call must stay blocked');
+      return { reload, hasCodeForm };
+    }
+    assert.deepEqual(await firstCodeAfterCaptcha(origin + '/en/connect'), { reload: true, hasCodeForm: false });
+    assert.deepEqual(await firstCodeAfterCaptcha(initialLoginUrl), { reload: false, hasCodeForm: true },
+      'The application entry must retain the first email-code form after CAPTCHA');
+    testLoginRoute = false;
+    results.push('The legacy entry loses the first email-code form after the blocked router lookup. The application entry keeps it without reloading or permitting the lookup.');
 
     await original.call(child, origin + '/en/connect');
     assert.equal(await child.webContents.executeJavaScript('globalThis.syntheticConsentLoaded'), true);

@@ -62,7 +62,7 @@ app.whenReady().then(async () => {
     assert.equal(spaResult.error?.message, undefined, 'Post-login URL must hand off to the fixed hangar instead of the old generic navigation error');
     assert.equal(spaResult.candidate?.document.pledges.length, 1);
     assert.equal(unapprovedReads, 0); assert.equal(w.isDestroyed(), false);
-    assert.deepEqual(requests, ['https://robertsspaceindustries.com/en/connect', 'https://robertsspaceindustries.com/account/pledges']);
+    assert.deepEqual(requests, ['https://robertsspaceindustries.com/en/sign-in', 'https://robertsspaceindustries.com/account/pledges']);
     await login.close(account); assert.equal(w.isDestroyed(), true);
     results.push('Synthetic SPA return with auth cookie reaches exactly the fixed hangar and produces a partial preview with the window retained until explicit close; unapproved URL not loaded or read.');
 

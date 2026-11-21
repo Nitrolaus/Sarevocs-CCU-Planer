@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
   const pagesBySession = new WeakMap<Electron.Session, { url: string; html: string }>();
   let fixtureBody = '', fixtureUrl = hangar, fetchPages: Record<string, PagePlan> = {}, navigations = 0;
   BrowserWindow.prototype.loadURL = async function(url) {
-    expect(url === origin + '/en/connect' || url === hangar, 'UNEXPECTED_TOP_LEVEL_NAVIGATION');
+    expect(url === origin + '/en/sign-in' || url === hangar, 'UNEXPECTED_TOP_LEVEL_NAVIGATION');
     navigations++;
     const stub = `(() => {
       const origin = ${JSON.stringify(origin)}, pages = ${JSON.stringify(fetchPages)};

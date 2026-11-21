@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
   const account = randomUUID();
   try {
     await login.open(account, parent, false);
-    assert.equal(openingUrl, 'https://robertsspaceindustries.com/en/connect');
+    assert.equal(openingUrl, 'https://robertsspaceindustries.com/en/sign-in');
     const child = BrowserWindow.getAllWindows().find(w => w !== parent)!;
     await new Promise<void>(resolve => child.webContents.once('did-finish-load', () => resolve()));
     async function click(id: string) {
@@ -96,7 +96,7 @@ app.whenReady().then(async () => {
     const automaticCandidate = await automatic;
     assert.equal(automaticCandidate.document.pledges.length, 1);
     assert.equal(automaticCandidate.completeness, 'partial'); assert.equal(remote.isDestroyed(), false);
-    assert.deepEqual(requests, ['https://robertsspaceindustries.com/en/connect', 'https://robertsspaceindustries.com/account/pledges']);
+    assert.deepEqual(requests, ['https://robertsspaceindustries.com/en/sign-in', 'https://robertsspaceindustries.com/account/pledges']);
     await login.close(account); assert.equal(remote.isDestroyed(), true);
     results.push('Automatisch: nach Login-Rueckkehr einmal Hangar laden, Cookie-Auswahl abwarten und Teilvorschau liefern; RSI-Fenster bleibt bis zum ausdruecklichen Schliessen offen.');
     results.push('Wartende Anmeldung sendet keine wiederholten Requests; zweiter paralleler Start abgewiesen.');

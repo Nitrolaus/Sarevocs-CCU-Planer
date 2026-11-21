@@ -40,7 +40,7 @@ try {
     main.show = function() { globalThis.ccuActions.show++; return show(); };
     globalThis.ccuActions = { focus: 0, show: 0 };
     BrowserWindow.prototype.loadURL = async function(url) {
-      if (url !== 'https://robertsspaceindustries.com/en/connect') throw new Error('Unexpected synthetic navigation');
+      if (url !== 'https://robertsspaceindustries.com/en/sign-in') throw new Error('Unexpected synthetic navigation');
       this.webContents.getURL = () => 'about:blank';
       globalThis.ccuLoadEntered = true;
       await new Promise(resolve => { globalThis.ccuReleaseHangar = resolve; });

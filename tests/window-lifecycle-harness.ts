@@ -75,7 +75,7 @@ app.whenReady().then(async () => {
 
   // Install before the first RsiLogin operation. No remote URL ever reaches Chromium.
   BrowserWindow.prototype.loadURL = async function(url) {
-    expect(url === origin + '/en/connect' || url === hangar, 'UNEXPECTED_NAVIGATION_REQUEST');
+    expect(url === origin + '/en/sign-in' || url === hangar, 'UNEXPECTED_NAVIGATION_REQUEST');
     requests.push(url);
     this.webContents.getURL = () => url;
     const fixture = path.join(root, 'fixture-' + (++navigationCount) + '.html');
@@ -120,7 +120,7 @@ app.whenReady().then(async () => {
       let settled: Outcome | undefined;
       const task = outcome(value.connect(id, parent, false)).then(result => { settled = result; return result; });
       const win = await remote();
-      expect(requests.length === 1 && requests[0] === origin + '/en/connect', 'WAIT_PHASE_NOT_REACHED');
+      expect(requests.length === 1 && requests[0] === origin + '/en/sign-in', 'WAIT_PHASE_NOT_REACHED');
       const now = Date.now;
       try {
         // Advance only the main-process wall clock, after connect entered its passive login wait.
@@ -192,7 +192,7 @@ app.whenReady().then(async () => {
       let prevented = false;
       win.webContents.emit('will-redirect', { preventDefault() { prevented = true; } }, origin + '/synthetic-return', false, true);
       expect(prevented, 'SYNTHETIC_RETURN_NOT_GUARDED');
-      win.webContents.emit('did-fail-load', {}, -105, 'SYNTHETIC_FAILURE', origin + '/en/connect', true);
+      win.webContents.emit('did-fail-load', {}, -105, 'SYNTHETIC_FAILURE', origin + '/en/sign-in', true);
       const failure = await bounded(failed, 'ERROR_OBSERVER_DID_NOT_SETTLE');
       expect(message(failure.error).includes('ERR_NAME_NOT_RESOLVED'), 'ERROR_OBSERVER_WRONG_FAILURE');
       expect(!win.isDestroyed() && value.status(id).state === 'error', 'ERROR_CLOSED_WINDOW_OR_LOST_STATUS');

@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.84 · Alpha
+
+- Der Planer öffnet die Anmeldung direkt auf der gemeinsamen RSI-Seite für Passwort und E-Mail-Code. Der Wechsel zum Codeformular braucht dadurch keinen zusätzlichen Seitenwechsel.
+
 ## 0.3.83 · Alpha
 
 - Der offizielle RSI-Dialog kann nach „Authenticate“ den eingegebenen E-Mail-Code, den Gerätenamen und die gewählte Vertrauensdauer an RSI senden.

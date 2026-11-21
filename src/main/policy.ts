@@ -1,5 +1,6 @@
 export const RSI_ORIGIN = 'https://robertsspaceindustries.com';
 export const RSI_HANGAR_URL = RSI_ORIGIN + '/account/pledges';
+export const RSI_LOGIN_URL = RSI_ORIGIN + '/en/sign-in';
 // Current RSI sign-in and TWO_FA share sign-in; confirmation-code is a separate exact step.
 // Recovery, registration, account settings and arbitrary authentication subroutes stay excluded.
 const rsiLoginPath = /^\/(?:[a-z]{2}(?:-[A-Za-z]{2})?\/)?(?:connect|sign-in(?:\/send-confirmation-code)?)\/?$/;
