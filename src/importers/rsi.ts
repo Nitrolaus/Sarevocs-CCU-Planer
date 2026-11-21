@@ -206,7 +206,9 @@ export class RsiLogin {
       const loginPage = state.loginDocument && !!frame?.top && isRsiLoginPage(frame.top.url);
       const officialAuth = details.initiatorOrigin === RSI_ORIGIN && frame?.parent === null;
       const captchaOrigin = details.initiatorOrigin === 'https://www.recaptcha.net' && !!frame && rsiCaptchaFrame(frame.url);
-      const phase = state.closing ? 'closed' : loginPage && officialAuth ? 'login' : loginPage && captchaOrigin ? 'captcha' : 'read';
+      // Chromium reports the new subframe as the requester, but RSI as the initiator of its first navigation.
+      const openingCaptchaFrame = details.initiatorOrigin === RSI_ORIGIN && details.resourceType === 'subFrame' && rsiCaptchaFrame(details.url);
+      const phase = state.closing ? 'closed' : loginPage && (officialAuth || openingCaptchaFrame) ? 'login' : loginPage && captchaOrigin ? 'captcha' : 'read';
       const insecure = insecureRsiTransport(details.url), operation = evaluateRsiSessionRequest(details, phase);
       const listingRead = !state.closing && isBuybackListRead(details, state.buybackListUrl);
       const cancel = insecure || operation.blocked && !listingRead;

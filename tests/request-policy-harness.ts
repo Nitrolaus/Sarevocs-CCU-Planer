@@ -56,6 +56,28 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       const pathname = new URL(request.url!, 'https://local.invalid').pathname;
       served.push({ path: pathname, method: request.method! });
       response.setHeader('Access-Control-Allow-Origin', '*');
+      if (pathname === '/en/sign-in' && request.method === 'GET') {
+        response.setHeader('Content-Type', 'text/html; charset=utf-8');
+        response.end('<!doctype html><script defer src="https://www.recaptcha.net/recaptcha/enterprise.js"></script>' +
+          '<iframe src="https://www.recaptcha.net/recaptcha/enterprise/anchor"></iframe>' +
+          '<iframe src="https://www.recaptcha.net/recaptcha/enterprise/bframe"></iframe>');
+        return;
+      }
+      if (pathname === '/recaptcha/enterprise.js') {
+        response.setHeader('Content-Type', 'text/javascript');
+        response.end('globalThis.syntheticCaptchaLoaded = true;');
+        return;
+      }
+      if (['/recaptcha/enterprise/anchor', '/recaptcha/enterprise/bframe'].includes(pathname)) {
+        response.setHeader('Content-Type', 'text/html; charset=utf-8');
+        response.end('<script src="https://www.gstatic.com/recaptcha/releases/synthetic/widget.js"></script>');
+        return;
+      }
+      if (pathname === '/recaptcha/releases/synthetic/widget.js') {
+        response.setHeader('Content-Type', 'text/javascript');
+        response.end('globalThis.syntheticCaptchaFrameLoaded = true;');
+        return;
+      }
       if (['/en/connect', '/en/sign-in', '/en/sign-in/send-confirmation-code', '/account/pledges', '/en/account/pledges'].includes(pathname)) {
         response.setHeader('Content-Type', 'text/html; charset=utf-8');
         response.end(pathname.endsWith('/pledges') ? auth : '<div id="marker">Local synthetic fixture</div>');
@@ -116,6 +138,18 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     assert.equal(await child.webContents.executeJavaScript('getComputedStyle(document.getElementById("marker")).color'), 'rgb(1, 2, 3)');
     results.push('Actual sandboxed renderer loads and executes the static script and applies the stylesheet; no guard replacement in test.');
 
+    await original.call(child, origin + '/en/sign-in');
+    assert.equal(await child.webContents.executeJavaScript('globalThis.syntheticCaptchaLoaded'), true);
+    const captchaFrames = child.webContents.mainFrame.frames;
+    assert.deepEqual(captchaFrames.map(frame => frame.url), [
+      'https://www.recaptcha.net/recaptcha/enterprise/anchor', 'https://www.recaptcha.net/recaptcha/enterprise/bframe',
+    ]);
+    for (const frame of captchaFrames) assert.equal(await frame.executeJavaScript('globalThis.syntheticCaptchaFrameLoaded'), true);
+    const beforeDeniedWidgetRequest = served.length;
+    assert.equal(await child.webContents.executeJavaScript(`fetch('https://www.recaptcha.net/recaptcha/unlisted').then(() => true, () => false)`), false);
+    assert.equal(served.length, beforeDeniedWidgetRequest);
+    results.push('The RSI login page can open both exact CAPTCHA frames and load their scripts. An unlisted CAPTCHA URL remains blocked.');
+
     const blockedPaths = ['/api/cart', '/api/checkout', '/api/reclaim', '/api/apply-upgrade', '/api/gift', '/api/buyback', '/api/payment',
       '/api/cart.js', '/scripts/api/cart.js', '/scripts/cart/reclaim.js', '/%63art', '/%2563art', '/scripts/..%2fapi/%63art.js'];
     const before = served.length;
@@ -141,6 +175,8 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       ['/scripts/cart.js', 'POST', 'non-read-method'],
     ];
     for (const [pathname, method, detail] of detailCases) {
+      // Isolate each assertion from the diagnostic rate limit and preceding network failures.
+      await wait(1100);
       const count = () => JSON.parse(fs.readFileSync(diagnostics.file, 'utf8')).events.filter((e: { blockDetail: string }) => e.blockDetail === detail).length;
       const prior = count();
       await assert.rejects(() => isolated.fetch('https://cdn.robertsspaceindustries.com' + pathname, { method }), /ERR_BLOCKED_BY_CLIENT/);
@@ -154,6 +190,14 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     results.push('Allowed static URL redirecting to a protected action is checked again and blocked before action dispatch.');
 
     await original.call(child, origin + '/account/pledges');
+    const beforeHangarWidget = served.length;
+    await child.webContents.executeJavaScript(`new Promise(resolve => {
+      const frame = document.createElement('iframe');
+      frame.src = 'https://www.recaptcha.net/recaptcha/enterprise/anchor';
+      frame.onload = resolve;
+      document.body.append(frame);
+    })`);
+    assert.equal(served.length, beforeHangarWidget);
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in',{method:'POST'}).then(()=>true,()=>false)"), false);
     const page = await child.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: rsiFetchPageProbe(2, origin + '/account/pledges') }]);
     assert.equal(page.ok, true);

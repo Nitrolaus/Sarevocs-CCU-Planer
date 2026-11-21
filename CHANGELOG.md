@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.78 · Alpha
+
+- Das offizielle CAPTCHA kann seine eingebetteten Fenster wieder auf der RSI-Anmeldeseite laden. Käufe und Änderungen am RSI-Bestand bleiben gesperrt.
+
 ## 0.3.68 · Alpha-Kandidat
 
 - Die Bestandstabelle zeigt „Kaufpreis beim Erwerb“ und „Aktueller Kaufpreis“ mit je einem Betrag. Für beide RSI-Preise gilt derselbe Umrechnungskurs. Preisquellen stehen im Tooltip.
