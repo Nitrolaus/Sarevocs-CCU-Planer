@@ -41,6 +41,39 @@ test('Only the RSI login document can read the exact observed consent-script que
   for (const resourceType of ['xhr', 'mainFrame', 'subFrame', 'stylesheet', 'other']) assert.equal(evaluateRsiSessionRequest({ ...read, url, resourceType }, 'login').blocked, true, resourceType);
 });
 
+test('Only the login document may read the English navigation manifest and versioned main menu', () => {
+  const origin = 'https://static.robertsspaceindustries.com';
+  const directory = origin + '/nav/en/';
+  const main = 'main.12imzqx676lkw-1772208661.json';
+  const xhr = { method: 'GET', resourceType: 'xhr' };
+  for (const name of ['manifest.json', main, 'main.abc123def456g-1790000000.json']) {
+    const url = directory + name;
+    for (const method of ['GET', 'HEAD']) {
+      const request = { ...xhr, method, url };
+      assert.equal(evaluateRsiSessionRequest(request, 'login').blocked, false, url);
+      for (const phase of ['read', 'captcha', 'closed'] as const) {
+        assert.equal(evaluateRsiSessionRequest(request, phase).blocked, true, phase);
+      }
+      assert.equal(evaluateRsiSessionRequest({ ...request, uploadData: [{}] }, 'login').blocked, true);
+    }
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
+      assert.equal(evaluateRsiSessionRequest({ ...xhr, method, url }, 'login').blocked, true, method);
+    }
+    for (const resourceType of ['script', 'mainFrame', 'subFrame', 'other', 'image']) {
+      assert.equal(evaluateRsiSessionRequest({ ...xhr, resourceType, url }, 'login').blocked, true, resourceType);
+    }
+    for (const other of [url + '?v=1', url + '?', url + '#x', url + '#', url.replace('https:', 'http:'),
+      url.replace('static.', 'cdn.'), url.replace('.com/', '.com:8443/'), url.replace('://', '://user@'),
+      url.replace('/en/', '/de/'), url.replace('/en/', '/other/../en/'), url.replace('/en/', '/en%2f')]) {
+      assert.equal(evaluateRsiSessionRequest({ ...xhr, url: other }, 'login').blocked, true, other);
+    }
+  }
+  for (const name of ['shop.12imzqx676lkw-1772208661.json', 'main.json', 'main.short-1772208661.json',
+    'main.12imzqx676lkw-177220866.json', main + '.js', 'store/' + main]) {
+    assert.equal(evaluateRsiSessionRequest({ ...xhr, url: directory + name }, 'login').blocked, true, name);
+  }
+});
+
 test('RSI session permits bounded hangar and static reads and rejects unlisted traffic in every phase', () => {
   const hangar = { url: 'https://robertsspaceindustries.com/de/account/pledges?page=2&pagesize=10', method: 'GET', resourceType: 'xhr' };
   for (const phase of ['login', 'captcha', 'read'] as const) {

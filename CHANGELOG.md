@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.80 · Alpha
+
+- Die RSI-Anmeldeseite kann ihr öffentliches Navigationsmanifest und den Hauptmenü-Datensatz laden. Im Test verschwand dadurch die Meldung „Oops“ vor der Passworteingabe. Kauf- und Änderungssperren bleiben aktiv.
+
 ## 0.3.79 · Alpha
 
 - Der Planer lässt das Cookie-Einstellungsskript der RSI-Anmeldeseite mit dem vorgesehenen Parameter `async=1` zu. Käufe und Änderungen am RSI-Bestand bleiben gesperrt.

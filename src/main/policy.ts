@@ -90,6 +90,7 @@ export function blockedOperation(value: string, request?: RequestContext): boole
 type SessionRequest = RequestContext & { url: string; uploadData?: readonly unknown[] };
 const assetOrigins = new Set([RSI_ORIGIN, 'https://cdn.robertsspaceindustries.com',
   'https://media.robertsspaceindustries.com', 'https://static.robertsspaceindustries.com']);
+const englishLoginNavigation = /^\/nav\/en\/(?:manifest|main\.[a-z0-9]{13}-[0-9]{10})\.json$/;
 const recaptcha = 'https://www.recaptcha.net';
 const captchaFrame = /^\/recaptcha\/enterprise\/(?:anchor|bframe)$/;
 export function rsiCaptchaFrame(value: string): boolean {
@@ -136,6 +137,9 @@ export function evaluateRsiSessionRequest(request: SessionRequest, phase: 'login
           (!url.search || (phase === 'login' && url.search === '?async=1'))) return allow;
       if (origin === 'https://consent.cookiebot.com' && pathname === '/uc.js' && !url.search) return allow;
     }
+    // The English sign-in header reads this manifest and its versioned main menu.
+    if (phase === 'login' && resourceType === 'xhr' && origin === 'https://static.robertsspaceindustries.com' &&
+        request.url === origin + pathname && englishLoginNavigation.test(pathname)) return allow;
     if (!assetOrigins.has(origin)) return deny('untrusted-asset-origin');
     const path = canonicalPath(pathname);
     if (!path) return deny('invalid-url-or-path');
