@@ -124,6 +124,20 @@ function isCaptchaImageUpload(bytes: Buffer): boolean {
 }
 
 const captchaSignInId = '676782b8f785e375e53d92061e9943e6445a92034f79f6b487e75f085150416b';
+const emailCodeId = 'b445974966ca5ea454682c55ff4e8eeb88c7dc6200eba3059333a8b8cd6718cd';
+const authUserFragment = `fragment AuthUserFragment on RsiAuthenticatedAccount {
+  avatar
+  displayname
+  email
+  hasGameAccess
+  hasGamePackage
+  referrerReferralCode
+  status
+  tmid
+  username
+  syncToken
+  __typename
+}`;
 const captchaSignInQuery = `mutation signin($captcha_code: String, $captchaToken: String, $email: String!, $mark: String, $password: String!, $remember: Boolean) {
   account_signin(
     captcha_code: $captcha_code
@@ -138,45 +152,62 @@ const captchaSignInQuery = `mutation signin($captcha_code: String, $captchaToken
   }
 }
 
-fragment AuthUserFragment on RsiAuthenticatedAccount {
-  avatar
-  displayname
-  email
-  hasGameAccess
-  hasGamePackage
-  referrerReferralCode
-  status
-  tmid
-  username
-  syncToken
-  __typename
-}`;
+${authUserFragment}`;
+const emailCodeQuery = `mutation multistep($code: String!, $deviceType: String!, $deviceName: String!, $duration: String!) {
+  account_multistep(
+    code: $code
+    device_type: $deviceType
+    device_name: $deviceName
+    duration: $duration
+  ) {
+    ...AuthUserFragment
+    __typename
+  }
+}
+
+${authUserFragment}`;
 const captchaSignInVariables = new Set(['email', 'password', 'captcha_code', 'remember', 'mark']);
+const trustDurations = new Set(['session', 'day', 'week', 'month', 'year']);
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isCaptchaSignInUpload(bytes: Buffer): boolean {
+function isCaptchaSignInVariables(variables: Record<string, unknown>): boolean {
+  return Object.keys(variables).every(key => captchaSignInVariables.has(key)) &&
+    typeof variables.email === 'string' && !!variables.email &&
+    typeof variables.password === 'string' && !!variables.password &&
+    typeof variables.captcha_code === 'string' && !!variables.captcha_code &&
+    (!('remember' in variables) || typeof variables.remember === 'boolean') &&
+    (!('mark' in variables) || typeof variables.mark === 'string');
+}
+
+function isEmailCodeVariables(variables: Record<string, unknown>): boolean {
+  const { code, deviceName, deviceType, duration } = variables;
+  return Object.keys(variables).length === 4 && deviceType === 'computer' &&
+    typeof code === 'string' && code.length >= 6 && code.length <= 8 &&
+    typeof deviceName === 'string' && deviceName.length >= 2 && deviceName.length <= 64 &&
+    typeof duration === 'string' && trustDurations.has(duration);
+}
+
+function isManualAuthUpload(bytes: Buffer): boolean {
   if (bytes.length > 16 * 1024) return false;
   const body = bytes.toString('utf8');
-  if (!body.startsWith('[{"operationName":"signin",')) return false;
+  const signIn = body.startsWith('[{"operationName":"signin",');
+  if (!signIn && !body.startsWith('[{"operationName":"multistep",')) return false;
   const batch: unknown = JSON.parse(body);
   if (!Array.isArray(batch) || batch.length !== 1 || !isJsonObject(batch[0])) return false;
   const operation = batch[0];
   const { variables, extensions, query } = operation;
-  if (operation.operationName !== 'signin' || Object.keys(operation).length !== (query === undefined ? 3 : 4) ||
-      (query !== undefined && query !== captchaSignInQuery)) return false;
+  if (operation.operationName !== (signIn ? 'signin' : 'multistep') ||
+      Object.keys(operation).length !== (query === undefined ? 3 : 4) ||
+      (query !== undefined && query !== (signIn ? captchaSignInQuery : emailCodeQuery))) return false;
   if (!isJsonObject(extensions) || Object.keys(extensions).length !== 1 ||
       !isJsonObject(extensions.persistedQuery)) return false;
   const persisted = extensions.persistedQuery;
-  if (Object.keys(persisted).length !== 2 || persisted.version !== 1 || persisted.sha256Hash !== captchaSignInId) return false;
-  if (!isJsonObject(variables) || !Object.keys(variables).every(key => captchaSignInVariables.has(key)) ||
-      typeof variables.email !== 'string' || !variables.email ||
-      typeof variables.password !== 'string' || !variables.password ||
-      typeof variables.captcha_code !== 'string' || !variables.captcha_code ||
-      ('remember' in variables && typeof variables.remember !== 'boolean') ||
-      ('mark' in variables && typeof variables.mark !== 'string')) return false;
+  if (Object.keys(persisted).length !== 2 || persisted.version !== 1 ||
+      persisted.sha256Hash !== (signIn ? captchaSignInId : emailCodeId)) return false;
+  if (!isJsonObject(variables) || !(signIn ? isCaptchaSignInVariables(variables) : isEmailCodeVariables(variables))) return false;
   // The RSI client serializes with JSON.stringify. An exact round trip excludes
   // duplicate keys and noncanonical encodings. Only a boolean leaves this check.
   return bytes.equals(Buffer.from(JSON.stringify(batch)));
@@ -185,6 +216,10 @@ function isCaptchaSignInUpload(bytes: Buffer): boolean {
 const assetOrigins = new Set([RSI_ORIGIN, 'https://cdn.robertsspaceindustries.com',
   'https://media.robertsspaceindustries.com', 'https://static.robertsspaceindustries.com']);
 const englishLoginNavigation = /^\/nav\/en\/(?:manifest|main\.[a-z0-9]{13}-[0-9]{10})\.json$/;
+const rsiPasswordIcons = new Set([
+  'https://cdn.robertsspaceindustries.com/orion-v3/icons/visibility-ecc8b45b.svg',
+  'https://cdn.robertsspaceindustries.com/orion-v3/icons/visibilityOff-d487fc6e.svg',
+]);
 const recaptcha = 'https://www.recaptcha.net';
 const captchaFrame = /^\/recaptcha\/enterprise\/(?:anchor|bframe)$/;
 export function rsiCaptchaFrame(value: string): boolean {
@@ -206,8 +241,9 @@ export function evaluateRsiSessionRequest(request: SessionRequest, phase: 'login
     const read = ['GET', 'HEAD'].includes(method) && !request.uploadData?.length;
     if (phase === 'login' && method === 'POST' && resourceType === 'xhr' && request.url === RSI_ORIGIN + '/graphql') {
       const bytes = rsiUploadBytes(request.uploadData);
-      if (bytes && (isCaptchaImageUpload(bytes) || isCaptchaSignInUpload(bytes))) return allow;
+      if (bytes && (isCaptchaImageUpload(bytes) || isManualAuthUpload(bytes))) return allow;
     }
+    if (phase === 'login' && read && resourceType === 'image' && rsiPasswordIcons.has(request.url)) return allow;
     if (phase === 'login' && method === 'POST' && origin === RSI_ORIGIN && rsiLoginPath.test(pathname) && !url.search &&
         ['mainFrame', 'xhr'].includes(resourceType)) return allow;
     if (phase === 'login' || phase === 'captcha') {

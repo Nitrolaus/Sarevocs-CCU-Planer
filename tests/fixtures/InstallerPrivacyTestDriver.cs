@@ -51,7 +51,27 @@ public static class InstallerPrivacyTestDriver {
   }
   checks.Add("Local data, password/MFA boundary and decryptable Windows-protected session described honestly");
   checks.Add("Read-only purchase, apply, gift and reclaim restrictions visible throughout installation");
-  using(var fresh=new SetupWindow("",null,version)){Check(fresh.Folder.Text==""&&!fresh.Next.Enabled,"FRESH_PATH_NOT_EMPTY");checks.Add("Fresh install keeps empty path and requires user folder selection");}
+  string parent=Path.Combine(area,"Meine Programme"),suggested=Path.Combine(parent,"CCU_Planer");
+  using(var fresh=new SetupWindow("",null,version)){
+   Check(fresh.Folder.Text==""&&!fresh.Next.Enabled,"FRESH_PATH_NOT_EMPTY");
+   fresh.ApplyBrowsedFolder(parent);
+   Check(fresh.Folder.Text==suggested&&!Directory.Exists(suggested)&&!fresh.Next.Enabled,"FRESH_FOLDER_NOT_SUGGESTED");
+   fresh.ApplyBrowsedFolder(suggested);
+   Check(fresh.Folder.Text==suggested,"FRESH_FOLDER_DOUBLED");
+   string existingName=Path.Combine(parent,"ccu_planer")+Path.DirectorySeparatorChar;
+   fresh.ApplyBrowsedFolder(existingName);
+   Check(fresh.Folder.Text==existingName,"FRESH_FOLDER_CASE_OR_SEPARATOR");
+   string edited=Path.Combine(parent,"Eigener Programmordner");
+   fresh.Folder.Text=edited;
+   Check(fresh.Folder.Text==edited&&!Directory.Exists(edited),"FRESH_FOLDER_EDIT_NOT_PRESERVED");
+   checks.Add("Fresh install suggests CCU_Planer only after browsing, with an editable path and no doubled suffix");
+  }
+  using(var installed=new SetupWindow(suggested,"0.3.82",version)){
+   Check(installed.Folder.Text==suggested,"UPDATE_LOST_INSTALLED_FOLDER");
+   installed.ApplyBrowsedFolder(parent);
+   Check(installed.Folder.Text==parent,"UPDATE_APPENDED_FRESH_SUFFIX");
+   checks.Add("Updates preserve the registered path and respect explicitly selected alternatives");
+  }
   File.WriteAllLines(Path.Combine(area,"geometry.txt"),geometry);Console.WriteLine("{\"status\":\"PASS\",\"groups\":"+checks.Count+",\"checks\":[\""+String.Join("\",\"",checks)+"\"],\"realInstallation\":false,\"realUserDataRead\":false,\"newRsiLogin\":false}");return 0;
  }catch(Exception e){Console.WriteLine(e.ToString());return 1;}}
 }

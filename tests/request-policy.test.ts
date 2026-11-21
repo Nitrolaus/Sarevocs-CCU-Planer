@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { imageOperation, imageQuery, persistedImageBody, fallbackImageBody,
   confirmationOperation, confirmationQuery, persistedConfirmationBody, fallbackConfirmationBody } from './fixtures/rsi-captcha-image';
+import { emailCodeOperation, emailCodeQuery, persistedEmailCodeBody, fallbackEmailCodeBody, passwordEyeUrls } from './fixtures/rsi-email-code';
 import { blockedOperation, allowedRsiNavigation, evaluateOperation, evaluateRsiSessionRequest, OPERATION_BLOCK_DETAILS } from '../src/main/policy';
 
 const asset = 'https://cdn.robertsspaceindustries.com/scripts/cart-widget.js';
@@ -115,6 +116,75 @@ test('The sign-in confirmation cannot carry other operations or ambiguous JSON',
   for (const uploadData of [[{ bytes, file: 'fixture' }], [{ type: 'file', bytes }],
     [{ type: 'rawData', bytes, blobUUID: 'fixture' }], [{ bytes }, { bytes }], [{ bytes: invalidUtf8 }]]) {
     assert.equal(evaluateRsiSessionRequest({ ...request, uploadData }, 'login').blocked, true);
+  }
+});
+
+test('The official E-mail code operation is restricted to its exact authentication context', () => {
+  const url = 'https://robertsspaceindustries.com/graphql';
+  const bodyFor = (duration: string) => JSON.stringify([{ ...emailCodeOperation,
+    variables: { ...emailCodeOperation.variables, duration } }]);
+  for (const body of [persistedEmailCodeBody, fallbackEmailCodeBody, ...['day', 'week', 'month', 'year'].map(bodyFor)]) {
+    const request = { url, method: 'POST', resourceType: 'xhr', uploadData: [{ type: 'rawData', bytes: Buffer.from(body) }] };
+    assert.equal(evaluateRsiSessionRequest(request, 'login').blocked, false);
+    for (const phase of ['captcha', 'read', 'closed'] as const) {
+      assert.equal(evaluateRsiSessionRequest(request, phase).blocked, true);
+    }
+    for (const other of [url + '/', url + '?', url + '#', url.replace('https:', 'http:'),
+      url.replace('://', '://cdn.'), url.replace('/graphql', '/api/checkout')]) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, url: other }, 'login').blocked, true);
+    }
+    for (const method of ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE']) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, method }, 'login').blocked, true);
+    }
+    for (const resourceType of ['mainFrame', 'subFrame', 'script', 'other']) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, resourceType }, 'login').blocked, true);
+    }
+  }
+});
+
+test('E-mail code submission rejects mixed operations, altered documents and out-of-form values', () => {
+  const request = { url: 'https://robertsspaceindustries.com/graphql', method: 'POST', resourceType: 'xhr' };
+  const op = emailCodeOperation;
+  const batch = (change: object) => JSON.stringify([{ ...op, ...change }]);
+  const variables = (change: object) => batch({ variables: { ...op.variables, ...change } });
+  const bodies = [
+    JSON.stringify(op), JSON.stringify([op, confirmationOperation]), JSON.stringify([op, op]),
+    batch({ operationName: 'account_recovery' }), batch({ query: emailCodeQuery.replace('account_multistep', 'account_recovery') }),
+    batch({ query: emailCodeQuery + ' mutation checkout { order }' }), batch({ query: emailCodeQuery, extensions: undefined }),
+    batch({ extensions: confirmationOperation.extensions }), batch({ trace: true }),
+    variables({ code: undefined }), variables({ code: 'short' }), variables({ code: 'x'.repeat(9) }), variables({ code: 111111 }),
+    variables({ deviceName: 'x' }), variables({ deviceName: 'x'.repeat(65) }), variables({ deviceType: 'phone' }),
+    variables({ duration: 'permanent' }), variables({ duration: { value: 'session' } }), variables({ password: 'synthetic' }),
+    variables({ deviceName: undefined, other: 'synthetic' }),
+    persistedEmailCodeBody.replace('"duration":', '"duration":"year","duration":'),
+    fallbackEmailCodeBody.replace('"query":', '"query":"mutation { checkout }","query":'),
+    persistedEmailCodeBody + ' ',
+  ];
+  for (const body of bodies) {
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData: [{ bytes: Buffer.from(body) }] }, 'login').blocked, true);
+  }
+  const bytes = Buffer.from(persistedEmailCodeBody);
+  for (const uploadData of [[{ bytes, file: 'fixture' }], [{ type: 'blob', bytes }],
+    [{ type: 'rawData', bytes, blobUUID: 'fixture' }], [{ bytes }, { bytes }]]) {
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData }, 'login').blocked, true);
+  }
+});
+
+test('Only the two exact official password eye assets can load as bodyless images during login', () => {
+  for (const url of passwordEyeUrls) {
+    const request = { url, method: 'GET', resourceType: 'image' };
+    assert.equal(evaluateRsiSessionRequest(request, 'login').blocked, false);
+    assert.equal(evaluateRsiSessionRequest({ ...request, method: 'HEAD' }, 'login').blocked, false);
+    for (const phase of ['captcha', 'read', 'closed'] as const) {
+      assert.equal(evaluateRsiSessionRequest(request, phase).blocked, true);
+    }
+    for (const other of [url + '?v=1', url + '#', url.replace('cdn.', 'static.'),
+      url.replace('https:', 'http:'), url.replace(/-[a-z0-9]+\.svg$/, '-123.svg')]) {
+      assert.equal(evaluateRsiSessionRequest({ ...request, url: other }, 'login').blocked, true);
+    }
+    assert.equal(evaluateRsiSessionRequest({ ...request, method: 'POST' }, 'login').blocked, true);
+    assert.equal(evaluateRsiSessionRequest({ ...request, resourceType: 'script' }, 'login').blocked, true);
+    assert.equal(evaluateRsiSessionRequest({ ...request, uploadData: [{ bytes: Buffer.from('synthetic') }] }, 'login').blocked, true);
   }
 });
 

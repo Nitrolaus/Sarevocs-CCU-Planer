@@ -16,6 +16,7 @@ import {LastSeenStore} from '../src/storage/last-seen';
 import { rsiFetchPageProbe } from '../src/importers/rsi-page';
 import { imageOperation, persistedImageBody, fallbackImageBody, confirmationOperation,
   confirmationQuery, persistedConfirmationBody, fallbackConfirmationBody } from './fixtures/rsi-captcha-image';
+import { emailCodeOperation, emailCodeQuery, persistedEmailCodeBody, fallbackEmailCodeBody, passwordEyeUrls } from './fixtures/rsi-email-code';
 
 const root = path.resolve(process.argv.find(x => x.startsWith('--test-root='))!.slice(12));
 app.setPath('userData', path.join(root, 'runtime')); app.setPath('sessionData', path.join(root, 'memory')); app.setPath('crashDumps', path.join(root, 'crashes'));
@@ -50,6 +51,9 @@ app.whenReady().then(async () => {
     const wrongCode = '000000';
     const rejectedConfirmationBody = JSON.stringify([{ ...confirmationOperation,
       variables: { ...confirmationOperation.variables, captcha_code: wrongCode } }]);
+    const rejectedEmailCodeBody = JSON.stringify([{ ...emailCodeOperation,
+      variables: { ...emailCodeOperation.variables, code: wrongCode } }]);
+    const passwordEyePaths = passwordEyeUrls.map(url => new URL(url).pathname);
     // Fresh ephemeral fixture certificate, never installed in any Windows trust store.
     const certificateScript = `$ErrorActionPreference='Stop'
 $rsa=[Security.Cryptography.RSA]::Create(2048)
@@ -89,6 +93,11 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
         response.end('globalThis.syntheticCaptchaFrameLoaded = true;');
         return;
       }
+      if (passwordEyePaths.includes(pathname)) {
+        response.setHeader('Content-Type', 'image/svg+xml');
+        response.end('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="8"/></svg>');
+        return;
+      }
       if (['/en/connect', '/en/sign-in', '/en/sign-in/send-confirmation-code', '/account/pledges', '/en/account/pledges'].includes(pathname)) {
         response.setHeader('Content-Type', 'text/html; charset=utf-8');
         response.end(pathname.endsWith('/pledges') ? auth :
@@ -102,13 +111,21 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
           const body = Buffer.concat(chunks).toString('utf8');
           const isImage = body === persistedImageBody || body === fallbackImageBody;
           const acceptsCode = body === persistedConfirmationBody || body === fallbackConfirmationBody;
-          if (!isImage && !acceptsCode && body !== rejectedConfirmationBody) {
+          const acceptsEmailCode = body === persistedEmailCodeBody || body === fallbackEmailCodeBody;
+          const isEmailCode = acceptsEmailCode || body === rejectedEmailCodeBody;
+          if (!isImage && !acceptsCode && body !== rejectedConfirmationBody && !isEmailCode) {
             response.writeHead(400); response.end(); return;
           }
           if (redirectGraphqlToCheckout) {
             response.writeHead(307, { Location: '/api/checkout' }); response.end(); return;
           }
           response.setHeader('Content-Type', 'application/json');
+          if (isEmailCode) {
+            response.end(JSON.stringify(acceptsEmailCode
+              ? [{ data: { account_multistep: { status: 'Active' } } }]
+              : [{ errors: [{ message: 'Invalid synthetic email code' }] }]));
+            return;
+          }
           if (!isImage) {
             response.end(JSON.stringify(acceptsCode
               ? [{ data: { account_signin: { status: 'Active' } } }]
@@ -160,6 +177,16 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     await original.call(child, origin + '/en/connect');
     assert.equal(await child.webContents.executeJavaScript('globalThis.syntheticConsentLoaded'), true);
     results.push('The first RSI login document loads and executes its exact consent script through the production request guard.');
+    const icons = await child.webContents.executeJavaScript(`Promise.all(${JSON.stringify(passwordEyeUrls)}.map(url => new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = () => resolve([image.naturalWidth, image.naturalHeight]);
+      image.onerror = () => reject(Error('Local eye icon fixture failed to load'));
+      image.src = url;
+    })))`);
+    assert.deepEqual(icons, [[24, 24], [24, 24]]);
+    assert.deepEqual(served.filter(r => passwordEyePaths.includes(r.path)).map(r => r.path).sort(), [...passwordEyePaths].sort());
+    results.push('Both exact RSI password-eye SVGs load and decode in the login document; the browser keeps the native RSI control.');
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in', {method:'POST',body:'synthetic'}).then(r=>r.ok)"), true);
     assert.ok(served.some(request => request.path === '/en/sign-in' && request.method === 'POST'));
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in/send-confirmation-code', {method:'POST',body:'synthetic'}).then(r=>r.ok)"), true);
@@ -268,6 +295,50 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     redirectGraphqlToCheckout = false;
     results.push('Manual image confirmation reaches the local fixture in both RSI wire forms. Its incorrect code stays rejected; altered, mixed and foreign-frame submissions and a checkout redirect stay blocked.');
 
+    for (const { code, fallback, accepted } of [
+      { code: wrongCode, fallback: false, accepted: false },
+      { code: emailCodeOperation.variables.code, fallback: false, accepted: true },
+      { code: emailCodeOperation.variables.code, fallback: true, accepted: true },
+    ]) {
+      const result = await child.webContents.executeJavaScript(`new Promise((resolve, reject) => {
+        const form = document.createElement('form');
+        const codeField = document.createElement('input');
+        const authenticate = document.createElement('button');
+        authenticate.textContent = 'Authenticate';
+        codeField.value = ${JSON.stringify(code)};
+        form.append(codeField, authenticate);
+        document.body.append(form);
+        form.addEventListener('submit', async event => {
+          event.preventDefault();
+          try {
+            const operation = ${JSON.stringify(emailCodeOperation)};
+            operation.variables.code = codeField.value;
+            if (${fallback}) operation.query = ${JSON.stringify(emailCodeQuery)};
+            const reply = await fetch('/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([operation]) });
+            if (!reply.ok) throw Error('Unexpected local e-mail code status');
+            const [result] = await reply.json();
+            resolve(result.data?.account_multistep?.status === 'Active' ? 'accepted' :
+              result.errors?.[0]?.message === 'Invalid synthetic email code' ? 'rejected' : 'unexpected');
+          } catch (error) { reject(error); } finally { form.remove(); }
+        }, { once: true });
+        authenticate.click();
+      })`);
+      assert.equal(result, accepted ? 'accepted' : 'rejected');
+    }
+    const beforeDeniedEmailCode = served.length;
+    assert.equal(await captchaFrames[0]!.executeJavaScript(tryGraphqlPost(persistedEmailCodeBody)), false);
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(JSON.stringify([emailCodeOperation, confirmationOperation]))), false);
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(JSON.stringify([{
+      ...emailCodeOperation, query: 'mutation multistep { checkout }',
+    }]))), false);
+    assert.equal(served.length, beforeDeniedEmailCode);
+    redirectGraphqlToCheckout = true;
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedEmailCodeBody)), false);
+    assert.deepEqual(served.slice(beforeDeniedEmailCode), [{ path: '/graphql', method: 'POST' }]);
+    redirectGraphqlToCheckout = false;
+    results.push('Authenticate forwards both official email code wire forms to the local fixture. A wrong code is still rejected; foreign-frame, mixed and altered requests and a redirect to checkout stay blocked.');
+
     const blockedPaths = ['/api/cart', '/api/checkout', '/api/reclaim', '/api/apply-upgrade', '/api/gift', '/api/buyback', '/api/payment',
       '/api/cart.js', '/scripts/api/cart.js', '/scripts/cart/reclaim.js', '/%63art', '/%2563art', '/scripts/..%2fapi/%63art.js'];
     const before = served.length;
@@ -318,6 +389,7 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     assert.equal(served.length, beforeHangarWidget);
     assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedImageBody)), false);
     assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedConfirmationBody)), false);
+    assert.equal(await child.webContents.executeJavaScript(tryGraphqlPost(persistedEmailCodeBody)), false);
     assert.equal(served.length, beforeHangarWidget);
     assert.equal(await child.webContents.executeJavaScript("fetch('/en/sign-in',{method:'POST'}).then(()=>true,()=>false)"), false);
     const page = await child.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: rsiFetchPageProbe(2, origin + '/account/pledges') }]);
@@ -353,6 +425,8 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     for (const value of Object.values(confirmationOperation.variables)) {
       if (typeof value === 'string') assert.equal(bytes.includes(value), false);
     }
+    assert.equal(bytes.includes(emailCodeOperation.variables.code), false);
+    assert.equal(bytes.includes(emailCodeOperation.variables.deviceName), false);
     const events = JSON.parse(bytes).events;
     assert.ok(events.every((e: { appVersion: string }) => e.appVersion === APP_VERSION));
     assert.ok(events.some((e: { reason: string }) => e.reason === 'protected-operation'));

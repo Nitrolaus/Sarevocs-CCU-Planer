@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.83 · Alpha
+
+- Der offizielle RSI-Dialog kann nach „Authenticate“ den eingegebenen E-Mail-Code, den Gerätenamen und die gewählte Vertrauensdauer an RSI senden.
+- Das RSI-eigene Auge zum Ein- und Ausblenden des Passworts kann seine beiden Symbolgrafiken laden.
+- Nach der Ordnerwahl schlägt der Installer bei Neuinstallationen den Unterordner `CCU_Planer` vor. Updates übernehmen den vorhandenen Installationspfad.
+
 ## 0.3.82 · Alpha
 
 - Das offizielle RSI-Anmeldefenster kann den manuell eingegebenen Bildcode mit der Anmeldeanfrage an RSI senden. Käufe und Hangaränderungen bleiben gesperrt.

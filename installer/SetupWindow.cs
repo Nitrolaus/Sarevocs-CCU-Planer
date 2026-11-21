@@ -32,9 +32,21 @@ public sealed class SetupWindow:Form {
    Next.BackColor=Next.Enabled?Color.FromArgb(132,217,197):Color.FromArgb(38,53,63);
   };
   Next.Enabled=false;
-  browse.Click+=delegate{using(var d=new FolderBrowserDialog()){d.Description="Programmordner für Sarevoc´s CCU Planer";d.SelectedPath=Folder.Text;if(d.ShowDialog(this)==DialogResult.OK)Folder.Text=d.SelectedPath;}};
+  browse.Click+=delegate{
+   using(var dialog=new FolderBrowserDialog()){
+    dialog.Description=update?"Programmordner für Sarevoc´s CCU Planer":"Zielordner für den Unterordner CCU_Planer auswählen";
+    dialog.SelectedPath=Folder.Text;
+    if(dialog.ShowDialog(this)==DialogResult.OK)ApplyBrowsedFolder(dialog.SelectedPath);
+   }
+  };
   Controls.AddRange(new Control[]{Heading,Hint,folderLabel,Folder,browse,bar,Destination,Note,DataHeading,DataInfo,TermsLink,AcceptTerms,CancelAction,Next});AcceptButton=Next;CancelButton=CancelAction;
   Shown+=delegate{int dark=1;try{DwmSetWindowAttribute(Handle,20,ref dark,4);}catch{}Next.Focus();};FormClosing+=delegate(object s,FormClosingEventArgs e){if(busy&&e.CloseReason==CloseReason.UserClosing)e.Cancel=true;};
+ }
+ internal void ApplyBrowsedFolder(string selectedPath){
+  const string productFolder="CCU_Planer";
+  string leaf=Path.GetFileName(selectedPath.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
+  Folder.Text=update||String.Equals(leaf,productFolder,StringComparison.OrdinalIgnoreCase)
+   ?selectedPath:Path.Combine(selectedPath,productFolder);
  }
  Button Button(string name,string text,Rectangle bounds,bool primary){var b=new Button{Name=name,Text=text,Bounds=bounds,BackColor=primary?Color.FromArgb(132,217,197):Color.FromArgb(31,49,62),ForeColor=primary?Color.FromArgb(15,41,39):ForeColor,FlatStyle=FlatStyle.Flat};b.FlatAppearance.BorderColor=Color.FromArgb(76,107,124);return b;}
  public void ShowPathError(){Hint.Text="Bitte einen eigenen, leeren Programmordner wählen.";}
