@@ -2,7 +2,8 @@ import React from 'react';
 import type { CatalogueShip } from '../market/model';
 import type { ShopPair, ShopPrice } from '../market/shop-prices';
 import { catalogueIdentity } from '../market/ship-values';
-import { formatMinor } from '../pricing/money';
+import { displayShopMinor, formatMinor, type EuroRate } from '../pricing/money';
+import type { DisplaySettings } from '../pricing/model';
 import { useText } from './i18n';
 
 export function ccuShopPair(from: string, to: string, catalogue: readonly CatalogueShip[]): ShopPair | null {
@@ -13,18 +14,37 @@ export function ccuShopPair(from: string, to: string, catalogue: readonly Catalo
 
 export type DisplayShopPrice = ShopPrice & { current: boolean };
 
-export function CcuShopPrice({ prices, language }: { prices: readonly DisplayShopPrice[]; language: 'de' | 'en' }) {
+export function CcuShopPrice({ prices, settings, rate }: {
+  prices: readonly DisplayShopPrice[];
+  settings: DisplaySettings;
+  rate: EuroRate | null;
+}) {
   const t = useText();
   if (!prices.length) return <span>{t('Preis offen')}</span>;
+  const { language, currency } = settings;
   const time = new Intl.DateTimeFormat(language === 'de' ? 'de-DE' : 'en-GB', {
     dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin',
   });
   return <div className="ccu-shop-price">
-    {prices.map(price => {
+    {(['standard', 'warbond'] as const).map(edition => {
+      const entries = prices.filter(price => price.edition === edition).map(price => ({
+        price,
+        converted: price.amount.currency !== currency,
+        minor: displayShopMinor(price.amount, settings, rate),
+      }));
+      entries.sort((a, b) => Number(a.minor === null) - Number(b.minor === null) ||
+        Number(b.price.current) - Number(a.price.current) || Number(a.converted) - Number(b.converted));
+      const selected = entries[0];
+      if (!selected) return null;
+      const { price, converted, minor } = selected;
       const checkedAt = time.format(price.checkedAt);
-      return <div key={price.edition} title={`${t(price.current ? 'Geprüfter RSI-Shoppreis' : 'Zuletzt bestätigter RSI-Shoppreis')} · ${checkedAt}`}>
-        <strong>{formatMinor(price.amount.minor, price.amount.currency, language)}</strong>
-        <span>{price.edition === 'warbond' ? 'Warbond' : t('Standard')}</span>
+      const original = formatMinor(price.amount.minor, price.amount.currency, language);
+      const source = t(price.current ? 'Geprüfter RSI-Shoppreis' : 'Zuletzt bestätigter RSI-Shoppreis');
+      const rateNote = minor === null ? t('EZB-Kurs nicht verfügbar') : t('EZB-Richtwert');
+      return <div key={edition} title={`${source} · ${original} · ${checkedAt}${converted ? ' · ' + rateNote : ''}`}>
+        <strong>{minor === null ? t('Preis offen') : (converted ? '≈ ' : '') + formatMinor(minor, currency, language)}</strong>
+        <span>{edition === 'warbond' ? 'Warbond' : t('Standard')}</span>
+        {converted && <small>{rateNote}</small>}
         {!price.current && <small>{t('Letzter Stand')} · {checkedAt}</small>}
       </div>;
     })}

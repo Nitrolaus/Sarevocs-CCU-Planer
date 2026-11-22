@@ -80,11 +80,11 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
     for(const [prices,current] of [[market?.lastShopPrices,false],[market?.shopPrices,true]] as const){
       for(const price of prices??[]){
         const key=shopPairKey(price),entries=grouped.get(key)??new Map<string,DisplayShopPrice>();
-        entries.set(price.edition,{...price,current});
+        entries.set(`${price.edition}:${price.amount.currency}`,{...price,current});
         grouped.set(key,entries);
       }
     }
-    return new Map([...grouped].map(([key,entries])=>[key,[...entries.values()].sort((a,b)=>a.edition.localeCompare(b.edition))]));
+    return new Map([...grouped].map(([key,entries])=>[key,[...entries.values()]]));
   },[market?.lastShopPrices,market?.shopPrices]);
   const fx=display.rate&&!euroRateIsStale(display.rate)?display.rate:null;
   const comparisonSettings={...display.settings,taxMode:'net' as const};
@@ -153,7 +153,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
           </td>}
           <td className="ship-price ship-current-value" title={currentTitle}>
             {value.ship?<strong>{currentPrice??t('Nicht verfügbar')}</strong>:pair
-              ? <CcuShopPrice prices={quotesByPair.get(shopPairKey(pair))??[]} language={display.settings.language} />
+              ? <CcuShopPrice prices={quotesByPair.get(shopPairKey(pair))??[]} settings={display.settings} rate={fx} />
               : value.ccu&&!demo?t('Paar ungeklärt'):'—'}
           </td>
           <td className="ship-source" title={originTitle}>

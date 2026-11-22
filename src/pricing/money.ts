@@ -96,6 +96,15 @@ export function matchesShopAmount(preferences: PricePreferences, shop?: ShopAmou
     (shop.taxMode === 'net' || preferences.vatBasisPoints === shop.vatBasisPoints);
 }
 
+/** Preserve a native quote. For another currency, convert once using the requested tax basis. */
+export function displayShopMinor(shop: ShopAmount, preferences: PricePreferences, rate: EuroRate | null) {
+  if (shop.currency === preferences.currency) return shop.minor;
+  const ratio = currencyRatio(shop.currency, preferences.currency, rate);
+  if (!ratio) return null;
+  return roundMinor(BigInt(shop.minor) * ratio.numerator * taxFactor(preferences),
+    ratio.denominator * taxFactor(shop));
+}
+
 /** Debit real credit cents in their ledger currency, then tax only the cash remainder. */
 export function planPayment(amount: number, source: Currency, settings: PricePreferences, rate: EuroRate | null,
   creditCurrency: Currency, available: number) {

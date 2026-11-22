@@ -43,35 +43,40 @@ test('inventory quote shares the exact pair already being fetched for the planne
   } finally { service.close(); }
 });
 
-test('last confirmed exact shop quotes survive expiration, failed refreshes and a restart', async (t) => {
+test('last confirmed exact shop quotes survive a change of quote currency, a failed refresh and a restart', async (t) => {
   const dir = directory(), pair = { fromId: 62, toId: 206 };
   let clock = Date.now(), reject = false;
   t.mock.method(Date, 'now', () => clock);
   const quote: ShopPrice = { ...pair, edition: 'standard', checkedAt: clock,
     amount: { minor: 1320, currency: 'EUR', taxMode: 'gross', vatBasisPoints: 1900 } };
+  const dollarQuote: ShopPrice = { ...quote, checkedAt: clock + SHOP_PRICE_MAX_AGE + 1,
+    amount: { minor: 1250, currency: 'USD', taxMode: 'net', vatBasisPoints: 0 } };
   const read = async (source: string) => source === 'catalogue' ? catalogue() : feed();
   const service = new MarketService(dir, read, undefined, undefined, async () => {
     if (reject) throw new Error('offline');
-    return [quote];
+    return [clock === quote.checkedAt ? quote : dollarQuote];
   });
   try {
     await service.refresh();
     await service.checkShopPrices([pair]);
     assert.deepEqual(service.snapshot().shopPrices, [quote]);
     assert.equal(service.snapshot().lastShopPrices, undefined);
+    clock = dollarQuote.checkedAt;
+    await service.checkShopPrices([pair]);
+    assert.deepEqual(service.snapshot().shopPrices, [dollarQuote]);
     clock += SHOP_PRICE_MAX_AGE + 1;
     reject = true;
     await service.checkShopPrices([pair]);
     assert.deepEqual(service.snapshot().shopPrices, []);
-    assert.deepEqual(service.snapshot(true).lastShopPrices, [quote]);
+    assert.deepEqual(service.snapshot(true).lastShopPrices, [quote, dollarQuote]);
   } finally { service.close(); }
 
   const restored = new MarketService(dir, read, undefined, undefined, async () => []);
   try {
-    assert.deepEqual(restored.snapshot(true).lastShopPrices, [quote]);
+    assert.deepEqual(restored.snapshot(true).lastShopPrices, [quote, dollarQuote]);
     await restored.checkShopPrices([pair]);
     assert.deepEqual(restored.snapshot().shopPrices, []);
-    assert.deepEqual(restored.snapshot(true).lastShopPrices, [quote]);
+    assert.deepEqual(restored.snapshot(true).lastShopPrices, [quote, dollarQuote]);
   } finally { restored.close(); }
 });
 

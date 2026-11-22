@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEcbRate, estimateMinor, euroRateIsStale, formatMinor, type EuroRate } from '../src/pricing/money';
+import { displayShopMinor, parseEcbRate, estimateMinor, euroRateIsStale, formatMinor, type EuroRate } from '../src/pricing/money';
 
 const fetchedAt='2026-11-15T12:00:00Z';
 const xml=(day='2026-11-13',usd="<Cube currency='USD' rate='1.1052'/>") => `<?xml version="1.0"?><gesmes:Envelope xmlns:gesmes="urn:gesmes"><Cube><Cube time='${day}'>${usd}<Cube currency='GBP' rate='0.83559'/></Cube></Cube></gesmes:Envelope>`;
@@ -46,4 +46,16 @@ test('Weekend reference data is fresh; older than seven days is labelled stale',
 test('Currency formatting follows the selected language',()=>{
   assert.match(formatMinor(24882,'EUR','de'),/^248,82\s*€$/);
   assert.equal(formatMinor(24882,'EUR','en'),'€248.82');
+});
+test('CCU shop display preserves real local prices and converts foreign quotes with tax applied once',()=>{
+  const usd = { minor: 2500, currency: 'USD', taxMode: 'net', vatBasisPoints: 0 } as const;
+  const eur = { minor: 2618, currency: 'EUR', taxMode: 'gross', vatBasisPoints: 1900 } as const;
+  const gross = { ...net, taxMode: 'gross' } as const;
+  assert.equal(displayShopMinor(eur, gross, null), 2618);
+  assert.equal(displayShopMinor(usd, { ...net, currency: 'USD' }, null), 2500);
+  assert.equal(displayShopMinor(usd, net, rate), 2262);
+  assert.equal(displayShopMinor(usd, gross, rate), 2692);
+  assert.equal(displayShopMinor(eur, { ...gross, currency: 'USD' }, rate), 2893);
+  assert.equal(displayShopMinor(eur, { ...net, currency: 'USD' }, rate), 2431);
+  assert.equal(displayShopMinor(usd, gross, null), null);
 });

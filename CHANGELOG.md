@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.95 · Alpha
+
+- Der CCU-Bestand zeigt Standard- und Warbond-Preise in der eingestellten Währung. Liegt nur ein RSI-Preis in einer anderen Währung vor, kennzeichnet der Planer die Umrechnung als EZB-Richtwert. Ohne Wechselkurs bleibt der Betrag offen.
+- Der letzte bestätigte Preis bleibt je Währung mit Prüfdatum gespeichert.
+
 ## 0.3.94 · Alpha
 
 - Der Bestand ruft RSI-Shoppreise für erkannte CCU-Schiffspaare automatisch ab. Bestätigte Standard- und Warbond-Preise bleiben lokal mit Prüfdatum verfügbar.

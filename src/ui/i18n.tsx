@@ -411,6 +411,7 @@ Object.assign(english, {
   'Summe ausblenden': 'Hide pledge total',
   'RSI-Shoppreis': 'RSI shop price',
   'Geprüfter RSI-Shoppreis': 'Verified RSI shop price',
+  'EZB-Kurs nicht verfügbar': 'ECB rate unavailable',
   'Zuletzt bestätigter RSI-Shoppreis': 'Last confirmed RSI shop price',
   'Letzter Stand': 'Last known',
   'Paar ungeklärt': 'Ship pair unresolved',

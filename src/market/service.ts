@@ -84,7 +84,7 @@ export class MarketService {
     pending: !!this.inFlight, errors: this.errors, refreshSchedule: PUBLIC_REFRESH_SCHEDULE }); }
 
   private rememberShopPrice(price: ShopPrice) {
-    const key = `${shopPairKey(price)}:${price.edition}`;
+    const key = `${shopPairKey(price)}:${price.edition}:${price.amount.currency}`;
     if ((this.lastShopPrices.get(key)?.checkedAt ?? -1) > price.checkedAt) return;
     this.lastShopPrices.delete(key);
     this.lastShopPrices.set(key, price);
