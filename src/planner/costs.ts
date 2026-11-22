@@ -5,8 +5,9 @@ import {convertPurchaseValue,parseRsiPledgeValue,RSI_ORDER_PRICE,sameStandaloneS
 import {estimatePlanningMinor,euroRateIsStale,matchesShopAmount} from '../pricing/money';
 import type {PurchasePriceReader} from './shopping-list';
 import {ccuObservationTime,observedStandaloneCcu,type ChainObservation} from './observation';
+import {packageBasis,samePackageBasis,type PackageShare} from './package-shares';
 
-export type CostPosition={minor:number|null;approximate:boolean;usdMinor:number|null;rsiOrder?:true};
+export type CostPosition={minor:number|null;approximate:boolean;usdMinor:number|null;rsiOrder?:true;packageShare?:true};
 export type CostTotal={knownMinor:number;missing:number;approximate:boolean};
 const unknown=():CostPosition=>({minor:null,approximate:false,usdMinor:null});
 function rate(display:PricingSnapshot){return display.rate&&!euroRateIsStale(display.rate)?display.rate:null;}
@@ -37,8 +38,16 @@ function recordedCost(pledge:Pledge,display:PricingSnapshot,observation?:ChainOb
   if(converted.minor===null)return unknown();
   return {...converted,usdMinor:payment.currency==='USD'?payment.minor:null,...(!recorded?{rsiOrder:true as const}:{})};
 }
-export function paidBaseCost(base:ChainBase|null,pledges:readonly Pledge[],display:PricingSnapshot,observation?:ChainObservation):CostPosition{
+export function paidBaseCost(base:ChainBase|null,pledges:readonly Pledge[],display:PricingSnapshot,observation?:ChainObservation,shares?:readonly PackageShare[]):CostPosition{
   const pledge=base?pledges.find(p=>p.pledgeId===base.pledgeId):undefined;
+  if(base?.multiShip&&shares?.length&&display.settings.taxMode==='gross'){
+    const basis=packageBasis(pledge,base.childId,observation);
+    const share=basis&&shares.find(item=>samePackageBasis(item,basis));
+    if(share){
+      const cost=convertPurchaseValue({minor:share.minor,currency:share.currency,taxBasis:'unknown',evidence:'Eigene Angabe'},display);
+      if(cost.minor!==null)return {...cost,approximate:true,usdMinor:share.currency==='USD'?share.minor:null,packageShare:true};
+    }
+  }
   if(pledge?.ships.length!==1||pledge.ccus.length||pledge.ships[0]!.childId!==base?.childId)return unknown();
   // An RSI order for the original pledge does not include any applied CCUs.
   const configuration=pledge.sourceValues.pledgeConfigurationValue;
@@ -60,9 +69,9 @@ function sum(values:readonly CostPosition[]):CostTotal{return values.reduce<Cost
   const valid=v.minor!==null&&Number.isSafeInteger(v.minor)&&v.minor>=0&&Number.isSafeInteger(s.knownMinor+v.minor);
   return {knownMinor:s.knownMinor+(valid?v.minor!:0),missing:s.missing+Number(!valid),approximate:s.approximate||v.approximate||v.rsiOrder===true};
 },{knownMinor:0,missing:0,approximate:false});}
-export function chainCosts(plan:{base:ChainBase|null;steps:readonly ChainStep[]},pledges:readonly Pledge[],display:PricingSnapshot,current:boolean,priceFor?:PurchasePriceReader,observation?:ChainObservation){
+export function chainCosts(plan:{base:ChainBase|null;steps:readonly ChainStep[]},pledges:readonly Pledge[],display:PricingSnapshot,current:boolean,priceFor?:PurchasePriceReader,observation?:ChainObservation,shares?:readonly PackageShare[]){
   const additional=sum(plan.steps.filter(s=>s.kind!=='conflict').map(s=>additionalCost(s,display,current,priceFor)));
-  const baseCost=paidBaseCost(plan.base,pledges,display,observation);
+  const baseCost=paidBaseCost(plan.base,pledges,display,observation,shares);
   const paid=sum([baseCost,...plan.steps.filter(s=>s.kind==='owned'||s.kind==='missing').map(s=>paidCcuCost(s,pledges,display,observation))]);
   const invalid=!plan.base||plan.steps.some(s=>s.kind==='conflict'||s.kind==='missing');
   const investment=paid.knownMinor+additional.knownMinor;

@@ -8,12 +8,14 @@ import {shipValuesSchema,parseShipValues,type ShipValues} from './ship-values';
 import {shipImagesSchema,parseShipImages,type ShipImages} from './ship-images';
 import type { FairNewsStore } from './fair-news';
 import { creditBudgetSchema, type CreditBudget } from '../planner/credit-budget';
+import { packageKey, packageShareEditSchema, packageSharesSchema, type PackageShare, type PackageShareEdit } from '../planner/package-shares';
 import { SHOP_PRICE_MAX_AGE, shopPairKey, shopPriceSchema, type ShopPair, type ShopPrice, type ReadShopPrices } from './shop-prices';
 
 export type PublicReader = (source: MarketSource, signal: AbortSignal) => Promise<unknown>;
 const EMPTY: MarketCache = { schemaVersion: 1, catalogue: null, offers: null };
 const targetsSchema = z.array(z.number().int().positive().max(1_000_000_000).nullable()).length(3);
 const budgetFileSchema = z.object({ schemaVersion: z.literal(1), accountId: z.uuid(), budget: creditBudgetSchema }).strict();
+const packageSharesFileSchema = z.object({ schemaVersion: z.literal(1), accountId: z.uuid(), shares: packageSharesSchema }).strict();
 const SHOP_CACHE_LIMIT = 4096;
 const shopCacheSchema = z.object({ schemaVersion: z.literal(1), prices: z.array(shopPriceSchema).max(SHOP_CACHE_LIMIT) }).strict();
 type ShopEntry = { startedAt: number; prices: ShopPrice[]; pending?: Promise<void> };
@@ -223,6 +225,26 @@ export class MarketService {
     const next = budgetFileSchema.parse({ schemaVersion: 1, accountId: id, budget: update });
     if (!saved || next.budget.minor !== saved.minor || next.budget.currency !== saved.currency) this.write(name, next);
     return next.budget;
+  }
+  packageShares(accountId: string, update?: PackageShareEdit): PackageShare[] {
+    const id = z.uuid().parse(accountId);
+    const name = `package-shares-${id}.json`;
+    let shares: PackageShare[] = [];
+    try {
+      const record = packageSharesFileSchema.parse(this.load(name));
+      if (record.accountId !== id) throw new Error('PACKAGE_SHARES_PROFILE');
+      shares = record.shares;
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+    }
+    if (!update) return shares;
+    const edit = packageShareEditSchema.parse(update);
+    const next = shares.filter(share => packageKey(share) !== packageKey(edit) || share.childId !== edit.childId);
+    if (edit.minor !== null) next.push({ ...edit, minor: edit.minor });
+    const record = packageSharesFileSchema.parse({ schemaVersion: 1, accountId: id, shares: next });
+    if (Buffer.byteLength(JSON.stringify(record)) > 8 * 1024 * 1024) throw new Error('PACKAGE_SHARES_SIZE');
+    this.write(name, record);
+    return record.shares;
   }
   close(): void { this.closed = true; this.schedule.close(); this.controller?.abort(); this.shopController.abort(); this.saveShopPrices(); }
 }

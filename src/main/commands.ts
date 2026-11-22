@@ -13,6 +13,7 @@ import { helpDocumentSchema, helpResourceSchema } from './help-resources';
 import { releaseTagSchema } from './release-updates';
 import { creditBudgetSchema } from '../planner/credit-budget';
 import { giveawayEditSchema } from '../storage/giveaway-origins';
+import { packageShareEditSchema } from '../planner/package-shares';
 export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('state') }).strict(),
   z.object({ action: z.literal('help.openRsi'), topic: rsiHelpTopicSchema }).strict(),
@@ -32,6 +33,7 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({action:z.literal('planner.batch'),accountId:z.uuid(),entries:draftBatchSchema}).strict(),
   z.object({action:z.literal('planner.priorities'),accountId:z.uuid(),order:priorityOrderSchema.optional()}).strict(),
   z.object({ action: z.literal('planner.creditBudget'), accountId: z.uuid(), budget: creditBudgetSchema.optional() }).strict(),
+  z.object({ action: z.literal('planner.packageShares'), accountId: z.uuid(), edit: packageShareEditSchema.optional() }).strict(),
   z.object({action:z.literal('planner.exclusions'),accountId:z.uuid()}).strict(),
   z.object({action:z.literal('planner.exclude'),accountId:z.uuid(),ccuKey:ccuResourceKeySchema,excluded:z.boolean()}).strict(),
   z.object({ action: z.literal('loaners.status') }).strict(),

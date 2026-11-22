@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.98 · Alpha
+
+- Die Paketdetails zeigen den belegten RSI-Gesamtpreis für eine Startbasis aus einem Mehrschiffpaket. Ein selbst eingetragener Anteil bleibt lokal beim konkreten Schiff gespeichert.
+- In der Bruttoansicht fließt der Anteil als eigene Angabe in Gesamtkosten und Ersparnis ein. „Noch zu zahlen“ enthält die fehlenden CCUs.
+
 ## 0.3.97 · Alpha
 
 - Die CCU-Bestandstabelle erklärt „≈“ für umgerechnete Shoppreise einmal über der Tabelle.

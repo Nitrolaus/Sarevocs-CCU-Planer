@@ -21,9 +21,10 @@ import {LOANER_ARTICLES,type LoanerCache} from '../loaners/model';
 import {loanerReviewBasis,loanerReviewKey,type LoanerReviewsSnapshot} from '../loaners/review-model';
 import {paintAdvice} from '../paints/advice';
 import {gameAccessEvidence} from '../domain/game-access';
+import type {PackageShare} from '../planner/package-shares';
 
 export type ReportInput={kind:ReportKind;inventory:AccountInventory;observed:LastSeen|null;market:MarketSnapshot;display:PricingSnapshot;
- chain?:ReportChain;excluded?:string[];targets?:(number|null)[];drafts?:Map<number,PlannerDraft>;now?:string;allowEmpty?:boolean;
+ chain?:ReportChain;excluded?:string[];targets?:(number|null)[];drafts?:Map<number,PlannerDraft>;now?:string;allowEmpty?:boolean;packageShares?:readonly PackageShare[];
  loaners?:LoanerCache|null;loanerStatus?:Map<string,string>;filters?:readonly string[]};
 
 export async function createReports(input:Omit<ReportInput,'kind'>,kinds:readonly ReportKind[],reviews?:LoanerReviewsSnapshot,filters?:ReportFilters):Promise<ReportDocument>{
@@ -164,13 +165,13 @@ export function createReport(input:ReportInput):ReportDocument{
   const blocked=analyseReservations(higher).resources;
   const plan=manualChain(withStartBase(pool,base.key),target,market.catalogue!.ships,market.offers?.items??[],current,context.draft,blocked);
   const priceFor=purchasePriceReader(market.offers?.items??[],market.values,current,Date.parse(snapshot.createdAt),market.shopPrices);
-  const costs=chainCosts(plan,pledges,display,current,priceFor,observation),conflicts=blockingPlanResources(plan,blocked),invalid=costs.invalid||plan.invalid||!!conflicts.length;
+  const costs=chainCosts(plan,pledges,display,current,priceFor,observation,input.packageShares),conflicts=blockingPlanResources(plan,blocked),invalid=costs.invalid||plan.invalid||!!conflicts.length;
   title=`CCU-Kette → ${target.name}`;
   if(currency==='EUR')notes.push(l('Preisquelle · RSI-Shoppreis, sonst EZB-Richtwert','Price source · RSI shop price, otherwise ECB estimate'));
   notes.push(input.chain.preview?l('Testvorschau; eigener Entwurf bleibt unverändert.','Test preview; your saved draft remains unchanged.'):l('Lokaler Planungsentwurf.','Local planning draft.'),l('Richtwerte werden je Schritt auf Cent gerundet.','Estimates are rounded to cents per step.'),l('Erfasste Kaufpreise benötigen eine passende Steuerbasis. In der Bruttoansicht fließen eindeutig zugeordnete RSI-Bestellpreise in ihrer ursprünglichen Höhe in den Richtwert ein.','Recorded purchase prices require a matching tax basis. In the gross view, uniquely matched RSI order prices contribute to the estimate at their original amounts.'),invalid?l('Anschlüsse oder Ressourcenkonflikte prüfen; keine gültige Kaufkette bestätigt.','Check connections or resource conflicts; no valid purchase chain confirmed.'):l('CCU-Anwendbarkeit und Kaufbarkeit ungeprüft.','CCU applicability and purchase availability unverified.'));
   col('#',5);col(l('Von','From'),27);col(l('Nach','To'),27);col(l('Status','Status'),20);col(l('Bereits bezahlt','Already paid')+' '+currency,17,'money');col(l('Noch zu kaufen','Still to buy')+' '+priceHeader,19,'money');col(l('Zusatz USD netto','Additional USD net'),17,'money');col(l('Bezahlt Original USD','Paid original USD'),18,'money');col(l('Hinweis','Note'),27);
-  const paidBase=paidBaseCost(base,pledges,display,observation);
-  if(!filtered)rows.push({tone:'owned',cells:[0,l('Startbasis','Start base'),base.model.name,l('Im Bestand','Owned'),paidBase.minor===null?null:paidBase.minor/100,0,0,paidBase.usdMinor===null?null:paidBase.usdMinor/100,base.pledgeName]});
+  const paidBase=paidBaseCost(base,pledges,display,observation,input.packageShares);
+  if(!filtered)rows.push({tone:'owned',cells:[0,l('Startbasis','Start base'),base.model.name,l('Im Bestand','Owned'),paidBase.minor===null?null:paidBase.minor/100,0,0,paidBase.usdMinor===null?null:paidBase.usdMinor/100,paidBase.packageShare?l('Paketanteil · Eigene Angabe','Package share · User allocation'):base.pledgeName]});
   plan.steps.forEach((s,i)=>{const paid=paidCcuCost(s,pledges,display,observation),additional=additionalCost(s,display,current,priceFor),bad=s.kind==='conflict'||s.kind==='missing'||s.validity==='invalid';
    if(!matches(bad?'warning':s.kind))return;
    const note=bad?l('Ungültig / fehlt','Invalid / missing'):s.kind==='owned'?l('Anwendbarkeit ungeprüft','Applicability unverified'):

@@ -14,6 +14,12 @@
 .ccu-price-cards>*{box-sizing:border-box;min-width:0}
 .ccu-builder .ccu-savings{font-size:12px}
 .ccu-builder .ccu-savings small{color:#bdf4e9}
+.ccu-package-share summary{cursor:pointer}
+.ccu-package-share p{margin:6px 0}
+.ccu-package-share form{display:flex;flex-wrap:wrap;gap:5px}
+.ccu-package-share label{display:grid;gap:3px;width:100%}
+.ccu-package-share input{width:100%;padding:4px 6px}
+.ccu-package-share button{padding:4px 6px}
 .ccu-total strong{font-size:clamp(20px,2vw,27px);line-height:1.18;font-variant-numeric:tabular-nums;color:#ecfffa}
 .ccu-total small{color:#ffca85;font-size:12px}
 .ccu-builder button.ccu-total:hover,.ccu-builder button.ccu-total[aria-expanded=true]{border-color:#9af4e3;background:#154448}

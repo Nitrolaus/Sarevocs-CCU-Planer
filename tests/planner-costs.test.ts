@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {additionalCost,paidBaseCost,paidCcuCost,chainCosts,chainSavings} from '../src/planner/costs';
+import {packageBasis} from '../src/planner/package-shares';
 import type {ChainStep,ChainBase} from '../src/planner/chain';import type {PricingSnapshot} from '../src/pricing/model';import type {Pledge} from '../src/domain/model';
 const at=new Date().toISOString(),day=at.slice(0,10);
 const display:PricingSnapshot={settings:{schemaVersion:1,language:'de',currency:'EUR',taxMode:'net',vatBasisPoints:1900},configured:true,settingsError:false,rate:{source:'ECB',sourceDate:day,fetchedAt:at,usdPerEurMicros:1250000},pending:false,rateError:false};
@@ -94,6 +95,32 @@ test('verified RSI order amounts are used once without adding VAT to past purcha
  assert.equal(paidBaseCost(base,[{...withPaint,sourceValues:{pledgeConfigurationValue:'$25.00 USD'}}],gross,observation).minor,null);
  assert.equal(paidBaseCost(base,[{...b,sourceValues:{pledgeConfigurationValue:'$25.00 USD'}}],gross,observation).minor,null);
  assert.equal(paidBaseCost(base,[{...b,ships:[{...b.ships[0]!,modelName:'Upgraded model'}]}],gross,observation).minor,null);
+});
+
+test('an allocated package share is paid cost for that exact base and leaves remaining CCU costs unchanged',()=>{
+ const gross={...display,settings:{...display.settings,taxMode:'gross' as const}};
+ const observation={kind:'rsi-hangar' as const,observedAt:at};
+ const bundle: Pledge={...pledge,pledgeId:base.pledgeId,ccus:[],
+   ships:[{childId:base.childId,modelName:'from',modelId:null,identity:'unresolved',role:'unverified'},
+     {childId:'another',modelName:'another',modelId:null,identity:'unresolved',role:'unverified'}],
+   rsiPurchase:{status:'documented',source:'order',minor:7000,currency:'EUR'}};
+ const selected={...base,multiShip:true};
+ const basis=packageBasis(bundle,selected.childId,observation);
+ assert.ok(basis);
+ const allocation={...basis,minor:3200};
+ const plan={base:selected,steps:[gap]};
+ const before=chainCosts(plan,[bundle],gross,true,undefined,observation);
+ const after=chainCosts(plan,[bundle],gross,true,undefined,observation,[allocation]);
+ assert.equal(before.investment,null);
+ assert.deepEqual(after.additional,before.additional);
+ assert.equal(after.investment,7960);
+ assert.equal(chainSavings(after.investment,10000,gross),1560);
+ assert.equal(paidBaseCost(selected,[bundle],gross,observation,[allocation]).packageShare,true);
+ assert.equal(paidBaseCost(selected,[bundle],display,observation,[allocation]).minor,null);
+ assert.equal(paidBaseCost(selected,[bundle],gross,observation,[{...allocation,totalMinor:7100}]).minor,null);
+ assert.equal(paidBaseCost(selected,[bundle],gross,observation,[{...allocation,modelName:'other model'}]).minor,null);
+ assert.equal(paidBaseCost(selected,[bundle],gross,undefined,[allocation]).minor,null);
+ assert.equal(paidBaseCost({...selected,childId:'another'},[bundle],gross,observation,[allocation]).minor,null);
 });
 
 test('unrepresentable totals stay unknown instead of rounding unsafe integer sums',()=>{

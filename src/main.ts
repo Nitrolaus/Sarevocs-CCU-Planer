@@ -25,6 +25,7 @@ import {APP_USER_MODEL_ID,taskbarDetails} from './main/taskbar-details';
 import {PlannerPriorityStore} from './planner/priority-store';
 import {CcuExclusionStore} from './planner/exclusion-store';
 import {ccuKeysIn} from './planner/exclusions';
+import {packageBasis,samePackageBasis} from './planner/package-shares';
 import { UpgradeHistoryReader } from './importers/upgrade-history';
 import { mayReadUpgradeHistory } from './main/upgrade-history-access';
 import { MarketService } from './market/service';
@@ -198,7 +199,8 @@ async function start() {
           const kinds=cmd.action==='report.selection'?cmd.kinds:[cmd.kind],hasChain=kinds.includes('chain'),hasLoaners=kinds.includes('loaners');
           const targets=hasChain?market.targets(cmd.accountId):[],drafts=new Map(targets.flatMap(id=>{const d=id?plannerDrafts.load(cmd.accountId,id):null;return id&&d?[[id,d] as const]:[];}));
           const input={chain:hasChain?cmd.chain:undefined,inventory:store.inventory(cmd.accountId),observed:background.snapshot(cmd.accountId).view??null,
-            market:market.snapshot(),display:pricing.snapshot(),excluded:hasChain?ccuExclusions.load(cmd.accountId):[],targets,drafts,loaners:hasLoaners?loaners.snapshot().data:null};
+            market:market.snapshot(),display:pricing.snapshot(),excluded:hasChain?ccuExclusions.load(cmd.accountId):[],
+            packageShares:hasChain?market.packageShares(cmd.accountId):undefined,targets,drafts,loaners:hasLoaners?loaners.snapshot().data:null};
           data=cmd.action==='report.preview'?reports.preview({...input,kind:cmd.kind}):
             await reports.selection(input,cmd.kinds,hasLoaners?loanerReviews.snapshot(cmd.accountId):undefined,cmd.filters);break;
         }
@@ -225,6 +227,29 @@ async function start() {
         case 'planner.batch':store.account(cmd.accountId);data=plannerDrafts.saveBatch(cmd.accountId,cmd.entries);break;
         case 'planner.priorities':store.account(cmd.accountId);data=cmd.order?plannerPriorities.save(cmd.accountId,cmd.order):plannerPriorities.load(cmd.accountId);break;
         case 'planner.creditBudget': store.account(cmd.accountId); data = market.creditBudget(cmd.accountId, cmd.budget); break;
+        case 'planner.packageShares': {
+          if (cmd.accountId !== selectedAccountId) throw new UserError('Das Bestandsprofil wurde gewechselt.');
+          store.account(cmd.accountId);
+          const edit = cmd.edit;
+          if (!edit) {
+            data = market.packageShares(cmd.accountId);
+            break;
+          }
+          const inventory = store.inventory(cmd.accountId);
+          const observed = background.snapshot(cmd.accountId).view;
+          const acceptedAt = inventory.items.reduce((latest, item) => Math.max(latest, Date.parse(item.importedAt) || 0),
+            Date.parse(inventory.account.lastComplete ?? '') || 0);
+          const accepted = inventory.items.find(item => item.availability === 'present' && item.pledge.pledgeId === edit.pledgeId);
+          const basis = observed && Date.parse(observed.observedAt) > acceptedAt
+            ? packageBasis(observed.document.pledges.find(pledge => pledge.pledgeId === edit.pledgeId), edit.childId,
+              { kind:'rsi-hangar', observedAt:observed.observedAt })
+            : packageBasis(accepted?.pledge, edit.childId, accepted?.source === 'rsi-dom-probe/1'
+              ? { kind:'rsi-imports', observations:{ [accepted.pledge.pledgeId]:accepted.importedAt } } : undefined);
+          if (!basis || !samePackageBasis(basis, edit)) throw new UserError('Der Paketkaufpreis oder die Startbasis hat sich geändert.');
+          try { data = market.packageShares(cmd.accountId, edit); }
+          catch { throw new UserError('Paketanteil konnte nicht gespeichert werden. Prüfe den Kaufpreis und die vergebenen Anteile.'); }
+          break;
+        }
         case 'planner.exclusions':store.account(cmd.accountId);data=ccuExclusions.load(cmd.accountId);break;
         case 'planner.exclude':{
           store.account(cmd.accountId);

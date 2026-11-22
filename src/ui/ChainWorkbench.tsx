@@ -23,6 +23,8 @@ import {searchShips} from '../market/search';
 import type {PricingSnapshot} from '../pricing/model';import {estimateMinor,estimatePlanningMinor,formatMinor,euroRateIsStale} from '../pricing/money';
 import {planningRateLabel} from './planning-rate-label';
 import {useShopPrices} from './useShopPrices';
+import {PackageShareDetails,usePackageShares} from './PackageShareDetails';
+import {packageBasis} from '../planner/package-shares';
 import type {DraftEditor} from './usePlannerDrafts';import {useText} from './i18n';import {vatLabel} from './vat-label';
 import './chain.css';import './workbench.css';
 type Drag={scope:string;signature:string;anchor:DraftAnchor;step:ChainStep;index?:number};
@@ -147,7 +149,13 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   function remove(index:number){commit({...active,anchors:active.anchors.filter((_,i)=>i!==index)});}
   const variantSignature=(list:readonly ChainStep[])=>JSON.stringify(list.map(s=>[s.kind,s.from.key,s.to.key]));
   const variantIndex=plan?variants.findIndex(v=>variantSignature(v.steps)===variantSignature(steps)):-1;
-  const pledges=ready?inventory!.pledges:[],rawCosts=editor.ready&&ready&&plan?chainCosts(plan,pledges,display,current,priceFor,observation):null;
+  const pledges=ready?inventory!.pledges:[];
+  const shareBase=plan?.base??chosenBase;
+  const shareBasis=shareBase?.multiShip&&!blockedBase
+    ? packageBasis(pledges.find(pledge=>pledge.pledgeId===shareBase.pledgeId),shareBase.childId,observation)
+    : null;
+  const packageEditor=usePackageShares(shareBasis?accountId:null);
+  const rawCosts=editor.ready&&ready&&plan?chainCosts(plan,pledges,display,current,priceFor,observation,packageEditor.shares):null;
   const paidFor=(step:ChainStep)=>paidCcuCost(step,pledges,display,observation);
   function dateBadge(pledgeId?:string){const p=pledges.find(p=>p.pledgeId===pledgeId);if(!p)return null;const date=pledgeDateLabel(p,display.settings.language,true);return date?<span title={t('Erhalten am (RSI)')+': '+pledgeDateLabel(p,display.settings.language)+' · '+t('Kein Beleg des persönlichen Kaufdatums.')}> · {date}</span>:null;}
   const costs=rawCosts&&(resourceConflicts.length||!reservationsReady)?{...rawCosts,invalid:true,investment:null}:rawCosts;
@@ -161,7 +169,7 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   const savings=chainSavings(investment,standardUsd,display);
   const knownInvestment=pricedTotal&&costs?costs.paid.knownMinor+costs.additional.knownMinor:0;
   const partialInvestment=investment===null&&knownInvestment>0&&Number.isSafeInteger(knownInvestment);
-  const packageBasisOpen=!!plan?.base?.multiShip&&paidBaseCost(plan.base,pledges,display,observation).minor===null;
+  const packageBasisOpen=!!plan?.base?.multiShip&&paidBaseCost(plan.base,pledges,display,observation,packageEditor.shares).minor===null;
   const partialTotal=!!pricedTotal?.missing;
   const amountLabel=partialTotal&&pricedTotal.knownMinor?t('Bekannte Teilsumme'):t('Summe');
   const amountText=partialTotal?(pricedTotal.knownMinor?money(pricedTotal.knownMinor,pricedTotal.approximate):t('offen')):additional;
@@ -209,7 +217,7 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   function applyComparison(){if(!compared||!scan.result?.bestProven||active.anchors.length>100)return;endDrag();editor.change(active);setWorking(null);setComparison(null);setNotice('');}
   const shownVariants=scan.result?scan.result.plans.map(p=>p.plan):variants;
   const selectedVariant=scan.result?(compared?String(comparison!.index):'own'):variantIndex<0?'own':String(variantIndex);
-  function priceRow(value:NonNullable<typeof plan>,label:string,index?:number){const c=chainCosts(value,pledges,display,current,priceFor,observation),conflicted=blockingPlanResources(value,blockedResources).length>0;return <tr key={index??label} className={testDraft?label===t('Testentwurf')?'selected':'':compared&&index===comparison?.index?'selected':''}>
+  function priceRow(value:NonNullable<typeof plan>,label:string,index?:number){const c=chainCosts(value,pledges,display,current,priceFor,observation,packageEditor.shares),conflicted=blockingPlanResources(value,blockedResources).length>0;return <tr key={index??label} className={testDraft?label===t('Testentwurf')?'selected':'':compared&&index===comparison?.index?'selected':''}>
     <th scope="row">{index===undefined?label:<button aria-label={t('Variante ansehen')+' '+(index+1)} onClick={()=>chooseComparison(index)}>{label}</button>}<small>{value.base?.model.name??t('Basis ungeprüft')} · {value.ownedCount} {t('Bestand')} · {value.gapCount} {t('Lücken')}</small></th>
     <td>{total(c.paid,true)}</td><td>{conflicted?t('Ressourcenkonflikt'):c.invalid?t('Anschluss prüfen'):total(c.additional)}{scan.result?.fallbackUsd&&index!==undefined&&<small>≈ {formatMinor(scan.result.plans[index]!.score[0],'USD',display.settings.language)} · {t('Vergleich vor Steuer')}</small>}</td>
     <td>{conflicted?t('Ressourcenkonflikt'):money(c.investment,c.paid.approximate||c.additional.approximate)}</td><td>{t(c.paid.missing?'Kaufpreise unvollständig':c.additional.approximate?'Altpreise belegt':'Kaufpreise belegt')}{(c.additional.approximate||c.additional.missing>0)&&<small>{t('Zukauf ungeprüft')}</small>}{c.paid.approximate&&<small>{t('Altpreise als Richtwert')}</small>}</td></tr>;}
@@ -223,6 +231,7 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
             {partialInvestment?`${t('Bekannte Teilsumme')} ${money(knownInvestment,investmentEstimate)} · ${t(packageBasisOpen?'Basispreis im Paket offen':'Preise offen')}`
               :packageBasisOpen?t('Basispreis im Paket offen'):`${t('Schiff kostet dich')} ${money(investment,investmentEstimate)}`}
           </small>
+          {shareBasis&&<PackageShareDetails key={JSON.stringify([accountId,shareBasis])} basis={shareBasis} settings={display.settings} editor={packageEditor}/>}
         </div>
       <button className="ccu-total" type="button" ref={costToggle} aria-expanded={detail==='cost'} aria-controls={costDetailId}
         onClick={()=>setDetail(detail==='cost'?null:'cost')}>

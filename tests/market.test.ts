@@ -206,6 +206,27 @@ test('credit budgets are separate per profile and survive a restart, including a
   assert.throws(() => restored.creditBudget('../outside'));
   restored.close();
 });
+test('package shares are separate per profile and retain the total cap after editing and restart', () => {
+  const dir = directory(), a = randomUUID(), b = randomUUID(), service = new MarketService(dir, async () => null);
+  const basis = { pledgeId: 'package', childId: 'first', modelName: 'Test Vehicle', totalMinor: 7000, currency: 'EUR' as const };
+  const second = { ...basis, childId: 'second', modelName: 'Second Vehicle' };
+  const firstShare = { ...basis, minor: 3200 };
+  assert.deepEqual(service.packageShares(a, firstShare), [firstShare]);
+  assert.throws(() => service.packageShares(a, { ...second, minor: 3900 }));
+  assert.deepEqual(service.packageShares(a), [firstShare]);
+  const secondShare = { ...second, minor: 3800 };
+  service.packageShares(a, secondShare);
+  assert.deepEqual(service.packageShares(b), []);
+  service.close();
+  const restored = new MarketService(dir, async () => null);
+  try {
+    assert.deepEqual(restored.packageShares(a), [firstShare, secondShare]);
+    assert.throws(() => restored.packageShares(a, { ...basis, minor: 3201 }));
+    assert.deepEqual(restored.packageShares(a, { ...basis, minor: null }), [secondShare]);
+    assert.equal(commandSchema.safeParse({ action:'planner.packageShares', accountId:a, edit:{ ...firstShare, minor:12.34 } }).success, false);
+  } finally { restored.close(); }
+});
+
 test('credit budget rejects invalid amounts and preserves unreadable or foreign profile records', () => {
   const dir = directory(), accountId = randomUUID(), service = new MarketService(dir, async () => null);
   for (const budget of [{ minor: -1, currency: 'USD' }, { minor: 1.5, currency: 'EUR' },
