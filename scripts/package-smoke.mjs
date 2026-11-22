@@ -104,9 +104,14 @@ try {
       search.getBoundingClientRect().bottom <= table.getBoundingClientRect().top + 1;
   }), 'Concierge card and inventory search must fit between the filters and table');
   const importButton = page.getByRole('button', { name: 'Datei importieren', exact: true });
-  const importTooltip = await importButton.getAttribute('title');
-  assert.match(importTooltip, /Planer-JSON v1.*HangarLink-JSON v2.*in der Vorschau bestätigst/);
-  assert.equal(await importButton.getAttribute('aria-description'), importTooltip);
+  const importTooltip = page.locator('.inventory-panel').getByRole('tooltip', { includeHidden: true });
+  assert.equal(await importTooltip.isVisible(), false);
+  await importButton.hover();
+  await importTooltip.waitFor({ state: 'visible' });
+  assert.match(await importTooltip.innerText(), /Planer-JSON v1.*HangarLink-JSON v2\s+.*in der Vorschau bestätigst/);
+  assert.equal(await importButton.getAttribute('aria-describedby'), await importTooltip.getAttribute('id'));
+  await page.mouse.move(0, 0);
+  await importTooltip.waitFor({ state: 'hidden' });
   results.push('Kompakte Suche steht über der Bestandstabelle. Der Import-Tooltip erklärt die JSON-Formate und die Bestätigung der Vorschau.');
   const pledgeLayout = await page.locator('.concierge-private').evaluate(controls => ({
     button: controls.querySelector('button').getBoundingClientRect().left,

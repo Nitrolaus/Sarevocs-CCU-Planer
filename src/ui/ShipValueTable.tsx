@@ -155,9 +155,10 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
         ].filter(Boolean).join('\n'):undefined;
         const ccuInsurance=value.ccu||unresolved?ccuInsuranceDisplay(p):null;
         const pair=value.ccu?pairsByModel.get(ccuModelKey(value.ccu.from,value.ccu.to)):null;
+        const ccuStatus=value.ccu?.status;
+        const ccuType=ccuStatus==='unused'?'CCU · '+t('unbenutzt'):ccuStatus==='applied'?'CCU · '+t('angewendet'):'CCU';
         const type=gameKind?t(gameKind==='package'?'Spielpaket':'Spielkopie')+' · '+gameCopyLabel(access)
-          :value.ccu?'CCU · '+t(value.ccu.status==='unused'?'unbenutzt':value.ccu.status==='applied'?'angewendet':'ungeprüft')
-          :unresolved?'CCU':value.ship?t('Schiff / Fahrzeug'):t('Gegenstand');
+          :value.ccu||unresolved?ccuType:value.ship?t('Schiff / Fahrzeug'):t('Gegenstand');
         const typeTitle=type+'\n'+(gameKind?npcEvidenceNote(p,access)+'\n':'')+(protectedLabel?t('RSI-Hangar: geschützter Spielzugang. Nicht einschmelzbar oder verschenkbar.')+'\n'+protectedLabel:assignment.state==='unknown'?t('RSI-Zugangsmarkierungen noch nicht eingelesen.'):t('Keine geschützte RSI-Zugangsmarkierung gelesen.'))+
           (issue?'\n'+t('Lese- oder Zuordnungsproblem erkannt.'): '');
         return <tr key={p.pledgeId+':'+value.childId} data-pledge={p.pledgeId} data-child={value.childId} data-read-issue={issue||undefined}>

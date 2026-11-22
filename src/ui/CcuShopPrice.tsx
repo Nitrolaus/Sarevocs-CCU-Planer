@@ -22,9 +22,6 @@ export function CcuShopPrice({ prices, settings, rate }: {
   const t = useText();
   if (!prices.length) return <span>{t('Preis offen')}</span>;
   const { language, currency } = settings;
-  const time = new Intl.DateTimeFormat(language === 'de' ? 'de-DE' : 'en-GB', {
-    dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin',
-  });
   return <div className="ccu-shop-price">
     {(['standard', 'warbond'] as const).map(edition => {
       const entries = prices.filter(price => price.edition === edition).map(price => ({
@@ -37,15 +34,13 @@ export function CcuShopPrice({ prices, settings, rate }: {
       const selected = entries[0];
       if (!selected) return null;
       const { price, converted, minor } = selected;
-      const checkedAt = time.format(price.checkedAt);
       const original = formatMinor(price.amount.minor, price.amount.currency, language);
       const source = t(price.current ? 'Geprüfter RSI-Shoppreis' : 'Zuletzt bestätigter RSI-Shoppreis');
       const rateNote = minor === null ? t('EZB-Kurs nicht verfügbar') : t('EZB-Richtwert');
       return <div key={edition} data-ecb-estimate={converted && minor !== null ? '' : undefined}
-        title={`${source} · ${original} · ${checkedAt}${converted ? ' · ' + rateNote : ''}`}>
+        title={`${source} · ${original}${converted ? ' · ' + rateNote : ''}`}>
         <strong>{minor === null ? t('Preis offen') : (converted ? '≈ ' : '') + formatMinor(minor, currency, language)}</strong>
         <span>{edition === 'warbond' ? 'Warbond' : t('Standard')}</span>
-        {!price.current && <small>{t('Letzter Stand')} · {checkedAt}</small>}
       </div>;
     })}
   </div>;

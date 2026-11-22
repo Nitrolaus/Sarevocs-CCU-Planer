@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.102 · Alpha
+
+- „Datei importieren“ zeigt eine dunkle Tooltip-Karte mit Zeilenumbruch.
+- Standard- und Warbond-Preise stehen ohne Datumszeile in „RSI-Shoppreis“.
+- CCUs ohne belegten Status stehen in „Art / Hinweise“ als „CCU“.
+
 ## 0.3.101 · Alpha
 
 - Die kompakte Bestandssuche und die Trefferzahl stehen direkt über der Tabelle.

@@ -91,7 +91,7 @@ function App() {
   const [state, setState] = useState<State>();
   const [display, setDisplay] = useState<PricingSnapshot>({ settings: { ...DEFAULT_DISPLAY_SETTINGS }, configured: true, settingsError: false, rate: null, pending: false, rateError: false });
   const t = (text: string) => translate(display.settings.language, text);
-  const importTooltip = t('Planer-JSON v1 oder HangarLink-JSON v2 auswählen. Dein lokaler Bestand wird erst geändert, wenn du die Übernahme in der Vorschau bestätigst.');
+  const [importTooltipDismissed, setImportTooltipDismissed] = useState(false);
   useEffect(() => { let active = true, first = true, timer: ReturnType<typeof setTimeout>;
     const poll = async () => { try { const data = await call<PricingSnapshot>({ action: 'pricing.status' }); if (active) { setDisplay(previous=>JSON.stringify(previous)===JSON.stringify(data)?previous:data); if (first && !data.configured) setPage('settings'); first = false; } } catch { /* A failed preferences read never starts RSI authentication. */ }
       if (active) timer = setTimeout(() => void poll(), 1500); };
@@ -380,8 +380,18 @@ function App() {
         <div className="stat"><label>{t("Noch zu prüfen")}</label><strong>{unresolved}</strong><small>{t("Lesefehler oder Zuordnungsprobleme")}</small></div></div>
       <section className="panel inventory-panel"><div className="inventory-panel-head">
         <div className="inventory-panel-line"><h2>{t("Schiffe, Fahrzeuge & CCUs")}</h2>
-          <div className="actions inventory-actions">
-            <button className="secondary" title={importTooltip} aria-description={importTooltip} disabled={busy||!state} onClick={() => accountId?void run(()=>chooseImport(accountId)):addProfile('import')}>{t("Datei importieren")}</button>
+          <div className="actions inventory-actions" data-tooltip-dismissed={importTooltipDismissed}
+            onPointerEnter={() => setImportTooltipDismissed(false)}>
+            <button className="secondary" aria-describedby="inventory-import-tooltip" disabled={busy||!state}
+              onFocus={() => setImportTooltipDismissed(false)}
+              onKeyDown={event => { if (event.key === 'Escape') setImportTooltipDismissed(true); }}
+              onClick={() => accountId?void run(()=>chooseImport(accountId)):addProfile('import')}>{t("Datei importieren")}</button>
+            <span className="inventory-import-tooltip" id="inventory-import-tooltip" role="tooltip">
+              <span className="inventory-import-tooltip-card">
+                <strong>{t('Planer-JSON v1 oder HangarLink-JSON v2')}</strong>
+                <span>{t('Dein Bestand ändert sich erst, wenn du die Übernahme in der Vorschau bestätigst.')}</span>
+              </span>
+            </span>
           </div>
         </div>
         <div className="inventory-panel-line inventory-panel-tabs">
