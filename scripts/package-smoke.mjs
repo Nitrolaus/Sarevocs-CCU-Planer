@@ -93,6 +93,14 @@ try {
   assert.equal(fs.existsSync(diagnosticFile), false, 'Normal start must not open RSI or create connection diagnostics');
   assert.equal(await page.getByRole('button', { name: 'Demo-Datei ansehen' }).count(), 0);
   assert.equal(await page.locator('.concierge-card').count(), 1);
+  assert.ok(await page.locator('.inventory-panel').evaluate(panel => {
+    const header = panel.querySelector(':scope > .panel-head');
+    const card = panel.querySelector(':scope > .concierge-card');
+    const table = panel.querySelector('.ship-value-table');
+    return !!header && !!card && !!table && header.nextElementSibling === card &&
+      !!(card.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING);
+  }), 'Concierge card must be between the inventory filters and table');
+  results.push('Concierge-Karte steht in der verpackten Anwendung zwischen Filtern und Bestandstabelle.');
   const pledgeLayout = await page.locator('.concierge-private').evaluate(controls => ({
     button: controls.querySelector('button').getBoundingClientRect().left,
     hint: controls.querySelector('p').getBoundingClientRect().left,

@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.91 · Alpha
+
+- Die Concierge-Karte steht im Bestand direkt unter der Filterleiste und über der Tabelle.
+
 ## 0.3.90 · Alpha
 
 - Die Concierge-Karte zeigt den RSI-Rang und Fortschritt des ausgewählten Profils im Bestand. Sie ersetzt das Demo-Panel.
