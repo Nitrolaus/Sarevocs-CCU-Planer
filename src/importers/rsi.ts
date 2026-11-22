@@ -2,7 +2,7 @@ import { BrowserWindow, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { allowedRsiNavigation, evaluateRsiSessionRequest, insecureRsiTransport, isPledgesPage, isRsiLoginPage, rsiCaptchaFrame, rsiReturnCandidate, RSI_HANGAR_URL, RSI_LOGIN_URL, RSI_ORIGIN } from '../main/policy';
 import { UserError, type ImportCandidate } from '../domain/model';
-import {readHangarPages} from './hangar-read';
+import {readHangarPages,type HangarRefreshProgress} from './hangar-read';
 import { SessionVault, type StoredCookie } from '../security/session-vault';
 import { captureRsiCookie, hasAuthenticationCookie, isAuthenticationCookieName } from '../security/rsi-cookies';
 import { isDeepStrictEqual } from 'node:util';
@@ -14,7 +14,7 @@ import { readPurchases } from './rsi-purchases';
 import { MAX_FILE_BYTES } from './files';
 export { RSI_PAGE_PROBE, RSI_CONNECTION_PROBE } from './rsi-page';
 
-export type LoginStatus = { state: 'closed' | 'login-required' | 'page-ready' | 'restricted' | 'error'; message: string };
+export type LoginStatus = { state: 'closed' | 'login-required' | 'page-ready' | 'restricted' | 'error'; message: string; progress?: HangarRefreshProgress };
 export type BackgroundRestoreCode = 'auth-required' | 'unavailable' | 'cancelled';
 export class BackgroundRestoreError extends UserError {
   constructor(readonly code: BackgroundRestoreCode) {
@@ -489,10 +489,13 @@ export class RsiLogin {
     this.record({ event: 'hangar-observation', target: 'hangar', resource: 'xhr', observation: 'reading-pages' });
     const {candidate,pagesRead}=await readHangarPages({accountId,initial:raw,restartAtFirst:!!new URL(startUrl).search,
       assertActive:checkWindow,loadPage:page=>win.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: rsiFetchPageProbe(page,startUrl) }]),
-      onProgress:progress=>this.statuses.set(accountId,{state:'page-ready',message:progress.waiting
+      onProgress:progress=>this.statuses.set(accountId,{state:'page-ready',progress:{...progress,phase:'reading'},message:progress.waiting
         ? 'RSI benötigt eine Pause. Hangarlesen wird begrenzt erneut versucht.'
         : 'Lese Hangar: '+progress.pledgesRead+' Einträge auf '+progress.pagesRead+' Seiten.'})})
       .catch(error=>{this.record({event:'hangar-observation',target:'hangar',resource:'xhr',observation:'page-read-failed'});this.statuses.set(accountId,{state:'error',message:error instanceof UserError?error.message:'Hangar konnte nicht vollständig gelesen werden.'});throw error;});
+    const pageProgress = this.status(accountId).progress;
+    const finishing = pageProgress ? { ...pageProgress, phase: 'finishing' as const } : undefined;
+    this.statuses.set(accountId, {state:'page-ready',message:'Hangar gelesen. Prüfe ergänzende Daten.',progress:finishing});
     // A missing optional balance does not invalidate inventory or imply zero credits.
     try {
       const csrf: unknown = await win.webContents.executeJavaScriptInIsolatedWorld(1, [{code: CREDIT_CSRF_PROBE}]);
@@ -521,7 +524,7 @@ export class RsiLogin {
     const observePurchase = (observation: ConnectionEvent['observation']) =>
       this.record({ event: 'hangar-observation', target: 'hangar', resource: 'xhr', observation });
     if (hasAuthenticationCookie(snapshot) && (matchedProfile || manualReference)) {
-      this.statuses.set(accountId, {state:'page-ready',message:'Bestand gelesen. Prüfe belegte Kaufpreise.'});
+      this.statuses.set(accountId, {state:'page-ready',message:'Bestand gelesen. Prüfe belegte Kaufpreise.',progress:finishing});
       if (manualReference) observePurchase('purchase-orders-only');
       try {
         const prices = await this.purchaseReader(active.session, candidate.document.pledges,

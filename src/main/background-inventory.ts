@@ -1,8 +1,9 @@
 import type { Account, ImportCandidate } from '../domain/model';
 import { LastSeenStore, type LastSeen } from '../storage/last-seen';
+import type { HangarRefreshProgress } from '../importers/hangar-read';
 
 export type BackgroundStatus = 'idle' | 'connecting' | 'connected' | 'auth-required' | 'unavailable';
-export type BackgroundSnapshot = { status: BackgroundStatus; revision: string | null; changed: boolean; view?: LastSeen | null };
+export type BackgroundSnapshot = { status: BackgroundStatus; revision: string | null; changed: boolean; view?: LastSeen | null; progress?: HangarRefreshProgress };
 type StoredState = { status: BackgroundStatus; view: LastSeen | null };
 
 /** Each result belongs to a profile and generation. This class never stages or commits an import. */

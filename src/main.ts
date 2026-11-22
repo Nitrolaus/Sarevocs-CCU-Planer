@@ -278,6 +278,7 @@ async function start() {
         }
         case 'market.refresh': void market.refresh(); void pricing.refresh(); void loaners.refresh(); data = market.snapshot(); break;
         case 'market.shopPrices': void market.checkShopPrices(cmd.pairs); data = null; break;
+        case 'market.ccuQuote': data = await market.quoteShopPrice(cmd.pair); break;
         case 'market.targets': {
           store.account(cmd.accountId);
           data = cmd.ids ? market.setTargets(cmd.accountId, cmd.ids) : market.targets(cmd.accountId); break;
@@ -300,7 +301,14 @@ async function start() {
           })().catch(() => {});
           data = { selectedAccountId }; break;
         }
-        case 'rsi.background': store.account(cmd.accountId); data = background.snapshot(cmd.accountId, cmd.knownRevision); break;
+        case 'rsi.background': {
+          store.account(cmd.accountId);
+          const snapshot = background.snapshot(cmd.accountId, cmd.knownRevision);
+          const progress = snapshot.status === 'connecting' || interactive.has(cmd.accountId)
+            ? login.status(cmd.accountId).progress : undefined;
+          data = { ...snapshot, ...(progress ? { progress } : {}) };
+          break;
+        }
         case 'rsi.refresh': store.account(cmd.accountId); if (!shuttingDown && !sessionBusy(cmd.accountId)) void background.refresh(cmd.accountId); data = background.snapshot(cmd.accountId); break;
         case 'rsi.conciergeRank':
         case 'rsi.pledgeTotal': {

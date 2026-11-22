@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.92 · Alpha
+
+- Unter der Profilzeile zeigt ein Fortschrittsbalken mit drehendem Kreis, wie viele RSI-Hangarseiten und Einträge gelesen wurden. Ist die Gesamtseitenzahl bekannt, erscheint auch der Prozentwert.
+- Bei vorübergehenden Lesefehlern zeigt der Planer an, welche Seite erneut versucht wird. Der Seitenabruf läuft nach dem Verbindungsaufbau ohne Gesamttimer. Bei einem dauerhaften Lesefehler bleibt der letzte Stand erhalten.
+- Im CCU-Bestand fragt „Preis prüfen“ beim RSI-Shop nach dem Preis für das genaue Schiffspaar. Standard und Warbond werden getrennt angezeigt, soweit ein bestätigtes Angebot vorliegt.
+
 ## 0.3.91 · Alpha
 
 - Die Concierge-Karte steht im Bestand direkt unter der Filterleiste und über der Tabelle.

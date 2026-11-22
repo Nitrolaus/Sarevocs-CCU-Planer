@@ -19,6 +19,7 @@ import './ship-values.css';
 import {ResizableTable} from './ResizableTable';
 import {GiveawayOriginDialog} from './GiveawayOriginDialog';
 import {giveawayShip} from '../domain/giveaway';
+import { CcuShopPrice, ccuShopPair } from './CcuShopPrice';
 
 type Row = {pledge:Pledge; source:string};
 type DisplayRow = CurrentShipValue & {ccu?:Pledge['ccus'][number]; ship:boolean};
@@ -65,7 +66,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
   const maker=(name:string)=>{const identity=catalogueIdentity(name,market?.catalogue?.ships??[]);return identity?.manufacturerCode==='RSI'?'RSI':identity?.manufacturer||t('Nicht belegt');};
   const isGameView=view==='packages'||view==='access';
 
-  const labels=[t(view==='ships'?'Schiff / Fahrzeug':isGameView?'Paket / Zugang':'Gegenstand / Upgrade'),t('Hersteller'),t('Versicherung'),t('Art / Hinweise'),t('Kaufpreis beim Erwerb'),t('Aktueller Kaufpreis'),t('Herkunft / Datum')];
+  const labels=[t(view==='ships'?'Schiff / Fahrzeug':isGameView?'Paket / Zugang':'Gegenstand / Upgrade'),t('Hersteller'),t('Versicherung'),t('Art / Hinweise'),t('Kaufpreis beim Erwerb'),t(view==='ccus'?'RSI-Shoppreis':'Aktueller Kaufpreis'),t('Herkunft / Datum')];
   const columns=labels.map((label,i)=>({label,min:[160,90,70,90,135,125,90][i]!,preferred:[310,160,100,170,150,145,135][i]!,autoLimit:[920,680,240,680,420,480,420][i]!}));
   return <><ResizableTable columns={columns} storageKey="inventory" className="inventory-table ship-value-table compact-inventory" label={t(view==='ships'?'Schiffswerte':'Bestand')}><tbody>
     {rows.flatMap(({pledge:p,source})=>{
@@ -102,6 +103,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
           value.observedAt?t('Datenstand')+': '+new Intl.DateTimeFormat(display.settings.language==='de'?'de-DE':'en-GB',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Berlin'}).format(new Date(value.observedAt)):null,
         ].filter(Boolean).join('\n'):undefined;
         const ccuInsurance=value.ccu||unresolved?ccuInsuranceDisplay(p):null;
+        const pair=value.ccu&&!demo?ccuShopPair(value.ccu.from,value.ccu.to,market?.catalogue?.ships??[]):null;
         const type=gameKind?t(gameKind==='package'?'Spielpaket':'Spielkopie')+' · '+gameCopyLabel(access)
           :value.ccu?'CCU · '+t(value.ccu.status==='unused'?'unbenutzt':value.ccu.status==='applied'?'angewendet':'ungeprüft')
           :unresolved?'CCU':value.ship?t('Schiff / Fahrzeug'):t('Gegenstand');
@@ -124,7 +126,9 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
             </small>}
           </td>}
           <td className="ship-price ship-current-value" title={currentTitle}>
-            {value.ship?<strong>{currentPrice??t('Nicht verfügbar')}</strong>:'—'}
+            {value.ship?<strong>{currentPrice??t('Nicht verfügbar')}</strong>:pair
+              ? <CcuShopPrice key={pair.fromId+':'+pair.toId} pair={pair} language={display.settings.language} />
+              : value.ccu&&!demo?t('Paar ungeklärt'):'—'}
           </td>
           <td className="ship-source" title={originTitle}>
             <div className="ship-origin-line">

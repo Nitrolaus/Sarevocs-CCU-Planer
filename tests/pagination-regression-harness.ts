@@ -23,6 +23,7 @@ type Mode = 'direct' | 'language-redirect' | 'login-redirect' | 'foreign-redirec
 let mode: Mode = 'direct';
 let targetRequests = 0, pageRequests = 0, unexpectedRequests = 0;
 let expectedPath = '/en/account/pledges';
+let pager = '';
 let passed = false;
 const expect = (x: unknown, code: string) => { if (!x) throw new Error(code); };
 const timer = setTimeout(() => { phase = 'WATCHDOG'; app.quit(); }, 20000);
@@ -47,7 +48,7 @@ app.whenReady().then(async () => {
         if (mode === 'foreign-redirect') return new Response(null, { status: 302, headers: { location: 'https://example.invalid/foreign-login' } });
         expect(mode === 'direct' || u.pathname === expectedPath, 'WRONG_LANGUAGE_PATH');
       }
-      return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+      return new Response(html + pager, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
     });
     win = new BrowserWindow({ show: false, webPreferences: { session: isolated, sandbox: true, contextIsolation: true, nodeIntegration: false } });
     await win.loadURL(origin + '/en/account/pledges');
@@ -73,6 +74,19 @@ app.whenReady().then(async () => {
         mode = 'language-redirect'; expectedPath = '/en/account/pledges';
         const raw = await win!.webContents.executeJavaScript(makeProbe(1, origin + '/account/pledges'));
         expect(validUpgrade(raw) && pageRequests === 1, 'FALLBACK_EN_FAILED');
+      });
+      await check('HANGAR_TOTAL_ACCEPTS_ONLY_EXPLICIT_CONSISTENT_LAST_PAGE_LINKS', async () => {
+        mode = 'direct';
+        const read = () => win!.webContents.executeJavaScript(makeProbe(1, origin + '/en/account/pledges'));
+        pager = '<a rel="last" href="?page=170&amp;pagesize=10">Last</a>';
+        const identified = await read();
+        expect(validUpgrade(identified) && identified.totalPages === 170, 'LAST_PAGE_NOT_READ');
+        pager += '<a rel="last" href="?page=171&amp;pagesize=10">Conflicting</a>';
+        expect((await read()).totalPages === undefined, 'CONFLICTING_LAST_PAGE_USED');
+        pager = '<a rel="last" href="https://example.invalid/en/account/pledges?page=170&amp;pagesize=10">Foreign</a>' +
+          '<a rel="last" href="?page=170&amp;pagesize=50">Different page size</a>';
+        expect((await read()).totalPages === undefined, 'FOREIGN_OR_DIFFERENT_LAST_PAGE_USED');
+        pager = '';
       });
       for (const redirectMode of ['login-redirect', 'foreign-redirect'] as const) {
         await check(redirectMode === 'login-redirect' ? 'LOGIN_REDIRECT_REMAINS_REJECTED' : 'FOREIGN_REDIRECT_REMAINS_REJECTED', async () => {

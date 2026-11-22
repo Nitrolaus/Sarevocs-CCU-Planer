@@ -1,7 +1,7 @@
 import { isPledgesPage, RSI_ORIGIN } from '../main/policy';
 
 // Fixed browser-side reader. Remote HTML remains inert; scripts and arbitrary selectors never execute.
-const extractPage = String.raw`(root, live) => {
+const extractPage = String.raw`(root, live, pageUrl) => {
   if (live) {
     const consent = [...root.querySelectorAll('button,a,[role="button"],input[type="button"]')].some(n => {
       const label = (n.textContent || n.value || '').trim().replace(/\s+/g, ' ');
@@ -18,6 +18,23 @@ const extractPage = String.raw`(root, live) => {
   const txt = (n, selector) => n.querySelector(selector)?.textContent?.trim() ?? '';
   const empty = rows.length === 1 && !!rows[0].querySelector('.empty-list') && !rows[0].querySelector('.js-pledge-id');
   const handle = root.querySelector('.c-account-sidebar__profile-info-handle')?.textContent?.trim() || null;
+  const totals = new Set();
+  const current = new URL(pageUrl);
+  if (current.searchParams.get('pagesize') === '10') {
+    for (const link of root.querySelectorAll('a[rel~="last"], .pagination a[aria-label="Last page"], .pagination a[title="Last page"]')) {
+      const href = link.getAttribute('href');
+      if (!href || href.length > 1000) continue;
+      try {
+        const url = new URL(href, current);
+        if (url.origin !== current.origin || url.pathname.replace(/\/$/, '') !== current.pathname.replace(/\/$/, '') ||
+            url.username || url.password || url.hash || url.searchParams.getAll('pagesize').length !== 1 || url.searchParams.get('pagesize') !== '10' ||
+            url.searchParams.getAll('page').length !== 1 || [...url.searchParams.keys()].some(key => key !== 'page' && key !== 'pagesize')) continue;
+        const last = url.searchParams.get('page') || '';
+        if (/^[1-9]\d{0,3}$/.test(last) && Number(last) <= 5000 && Number(last) >= Number(current.searchParams.get('page') || 1)) totals.add(Number(last));
+      } catch { /* Pagination is optional display metadata. */ }
+    }
+  }
+  const totalPages = totals.size === 1 ? [...totals][0] : null;
   if (empty) return { ok: true, type: 'hangarexport', version: 2, handle, pledges: [] };
   if (rows.some(n => {
     const id = value(n, '.js-pledge-id'), name = value(n, '.js-pledge-name').split(':')[0].trim();
@@ -94,10 +111,10 @@ const extractPage = String.raw`(root, live) => {
     }
     pledges.push(pledge);
   }
-  return { ok: true, type: 'hangarexport', version: 2, handle, pledges };
+  return { ok: true, type: 'hangarexport', version: 2, handle, pledges, ...(totalPages !== null ? { totalPages } : {}) };
 }`;
 
-export const RSI_PAGE_PROBE = `(() => { const extract = ${extractPage}; return extract(document, true); })()`;
+export const RSI_PAGE_PROBE = `(() => { const extract = ${extractPage}; return extract(document, true, location.href); })()`;
 export const RSI_CONNECTION_PROBE = `(() => {
   const result = (${RSI_PAGE_PROBE});
   if (result.ok) return 'ready';
@@ -142,7 +159,7 @@ export function rsiFetchPageProbe(page: number, hangarUrl: string): string {
       const template = document.createElement('template');
       template.innerHTML = chunks.join('');
       const extract = ${extractPage};
-      return extract(template.content, false);
+      return extract(template.content, false, ${JSON.stringify(pageUrl)});
     } catch { return { ok: false, reason: 'page-read-failed', retryable: true }; }
     finally { clearTimeout(timer); }
   })()`;

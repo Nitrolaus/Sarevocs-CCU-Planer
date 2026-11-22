@@ -17,6 +17,31 @@ const feed = (items: unknown[] = [offer()]) => ({ at: source(), checkedAt: Date.
 function directory() { const folder = path.resolve('work/temp/market-unit'); fs.mkdirSync(folder, { recursive: true }); return fs.mkdtempSync(path.join(folder, 'case-')); }
 function snapshot(data = parseOffers(feed(), now())): MarketSnapshot { return { schemaVersion: 1, catalogue: null, offers: data, pending: false, errors: { catalogue: null, offers: null }, refreshSchedule: { hour: 17, timeZone: 'Europe/Berlin' } }; }
 
+test('inventory quote shares the exact pair already being fetched for the planner', async () => {
+  const pair = { fromId: 62, toId: 206 };
+  let finish = () => {};
+  const transport = new Promise<void>(resolve => { finish = resolve; });
+  let reads = 0;
+  const service = new MarketService(directory(), async source => source === 'catalogue' ? catalogue() : feed(),
+    undefined, undefined, async requested => {
+      reads++;
+      assert.deepEqual(requested, pair);
+      await transport;
+      return [{ ...pair, edition: 'warbond', checkedAt: Date.now(), amount: { minor: 1047, currency: 'EUR', taxMode: 'gross', vatBasisPoints: 1900 } }];
+    });
+  try {
+    await service.refresh();
+    const planner = service.checkShopPrices([pair]);
+    const inventory = service.quoteShopPrice(pair);
+    finish();
+    const [prices] = await Promise.all([inventory, planner]);
+    assert.equal(reads, 1);
+    assert.equal(prices[0]?.amount.minor, 1047);
+    assert.equal(prices[0]?.edition, 'warbond');
+    assert.deepEqual(await service.quoteShopPrice({ fromId: 62, toId: 207 }), []);
+  } finally { service.close(); }
+});
+
 test('Matrix identities distinguish variants with the same chassis and drop all media', () => {
   const data = parseCatalogue(catalogue());
   assert.deepEqual(data.map(s => s.id), [62, 206]); assert.equal(data[0]!.chassisId, data[1]!.chassisId);

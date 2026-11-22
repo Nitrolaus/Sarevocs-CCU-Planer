@@ -1,12 +1,14 @@
 import {UserError,type ImportCandidate} from '../domain/model';import {MAX_FILE_BYTES,parseImport} from './files';
-export type HangarReadProgress={pagesRead:number;pledgesRead:number;page:number;attempt:number;waiting:boolean};
+export type HangarReadProgress={pagesRead:number;pledgesRead:number;page:number;attempt:number;waiting:boolean;totalPages:number|null};
+export type HangarRefreshProgress=HangarReadProgress&{phase:'reading'|'finishing'};
 type Reader={accountId:string;initial:unknown;restartAtFirst:boolean;loadPage:(page:number)=>Promise<unknown>;assertActive:()=>void;onProgress?:(value:HangarReadProgress)=>void;sleep?:(ms:number)=>Promise<void>};
-type Page={ok:true;handle:string|null;pledges:unknown[]};
+type Page={ok:true;handle:string|null;pledges:unknown[];totalPages?:number|null};
 const realSleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 /** Sequential, bounded read. A rejected page never returns a partial success. No account changes. */
 export async function readHangarPages(input:Reader):Promise<{candidate:ImportCandidate;pagesRead:number}>{
  const sleep=input.sleep??realSleep,pledges:unknown[]=[],ids=new Set<string>(),signatures=new Set<string>();let handle:string|null=null,pagesRead=0,sourceBytes=0,normalizedBytes=0;
- const progress=(page:number,attempt=1,waiting=false)=>input.onProgress?.({page,pagesRead,pledgesRead:pledges.length,attempt,waiting});
+ let totalPages:number|null=null,conflictingTotals=false;
+ const progress=(page:number,attempt=1,waiting=false)=>input.onProgress?.({page,pagesRead,pledgesRead:pledges.length,attempt,waiting,totalPages});
  const pause=async(ms:number)=>{for(let left=ms;left>0;left-=250){input.assertActive();await sleep(Math.min(left,250));}input.assertActive();};
  const validate=(value:unknown):{page:Page;validated:ImportCandidate}=>{
   if(!value||typeof value!=='object'||!('ok'in value)||value.ok!==true||!('pledges'in value)||!Array.isArray(value.pledges)||value.pledges.length>100||!('handle'in value)||(value.handle!==null&&typeof value.handle!=='string'))throw new UserError('Eine Hangarseite konnte nicht sicher gelesen werden. Der letzte gültige Stand bleibt erhalten.');
@@ -20,7 +22,14 @@ export async function readHangarPages(input:Reader):Promise<{candidate:ImportCan
   for(const pledge of page.pledges)sourceBytes+=Buffer.byteLength(JSON.stringify(pledge),'utf8')+1;
   for(const pledge of validated.document.pledges)normalizedBytes+=Buffer.byteLength(JSON.stringify(pledge),'utf8')+1;
   if(Math.max(sourceBytes,normalizedBytes)+2048>MAX_FILE_BYTES)throw new UserError('Der Hangar überschreitet das sichere Datenlimit von 20 MiB. Der letzte gültige Stand bleibt erhalten.');
-  for(const id of pageIds)ids.add(id);signatures.add(signature);pledges.push(...page.pledges);pagesRead++;return page.pledges.length;
+  for(const id of pageIds)ids.add(id);signatures.add(signature);pledges.push(...page.pledges);pagesRead++;
+  const reported=page.totalPages;
+  if(typeof reported==='number'&&Number.isInteger(reported)&&reported>0&&reported<=5000){
+   if(totalPages!==null&&totalPages!==reported)conflictingTotals=true;
+   if(!conflictingTotals)totalPages=reported;
+  }
+  if(conflictingTotals||(totalPages!==null&&pagesRead>totalPages&&page.pledges.length>0)){totalPages=null;conflictingTotals=true;}
+  return page.pledges.length;
  };
  input.assertActive();const first=validate(input.initial).page;
  if(input.restartAtFirst||first.pledges.length>=10){

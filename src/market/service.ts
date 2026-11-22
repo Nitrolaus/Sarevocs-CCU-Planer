@@ -24,7 +24,7 @@ export class MarketService {
   private readonly schedule: DailyRefresh;
   private closed = false;
   private readonly shopController = new AbortController();
-  private readonly shop = new Map<string, { startedAt: number; prices: ShopPrice[] }>();
+  private readonly shop = new Map<string, { startedAt: number; prices: ShopPrice[]; pending?: Promise<void> }>();
   private shopPending = 0;
   constructor(readonly directory: string, private readonly read: PublicReader, clock?: RefreshClock,
     private readonly fairNews?: FairNewsStore, private readonly readShop?: ReadShopPrices) {
@@ -72,7 +72,8 @@ export class MarketService {
     shopPrices:[...this.shop.values()].flatMap(entry => entry.prices).filter(price => Date.now() - price.checkedAt < SHOP_PRICE_MAX_AGE),
     pending: !!this.inFlight, errors: this.errors, refreshSchedule: PUBLIC_REFRESH_SCHEDULE }); }
   async checkShopPrices(pairs: readonly ShopPair[]) {
-    if (this.closed || !this.readShop || this.shopPending >= 2) return;
+    const read = this.readShop;
+    if (this.closed || !read || this.shopPending >= 2) return;
     const known = new Set(this.cache.catalogue?.ships.map(ship => ship.id));
     this.shopPending++;
     try {
@@ -82,11 +83,26 @@ export class MarketService {
         if (!known.has(pair.fromId) || !known.has(pair.toId) || now - (this.shop.get(key)?.startedAt ?? 0) < SHOP_PRICE_MAX_AGE) continue;
         this.shop.delete(key);
         if (this.shop.size >= 128) this.shop.delete(this.shop.keys().next().value!);
-        const entry = { startedAt: now, prices: [] as ShopPrice[] };
+        const entry: { startedAt: number; prices: ShopPrice[]; pending?: Promise<void> } = { startedAt: now, prices: [] };
         this.shop.set(key, entry);
-        try { entry.prices = await this.readShop(pair, this.shopController.signal); } catch { /* A missing shop quote falls back to the public reference rate. */ }
+        entry.pending = Promise.resolve().then(() => read(pair, this.shopController.signal)).then(prices => {
+          entry.prices = prices;
+        }, () => { /* A missing quote leaves the price open. */ });
+        await entry.pending;
+        entry.pending = undefined;
       }
     } finally { this.shopPending--; }
+  }
+  async quoteShopPrice(pair: ShopPair): Promise<ShopPrice[]> {
+    const key = `${pair.fromId}:${pair.toId}`;
+    const previous = this.shop.get(key);
+    if (previous && !previous.pending && !previous.prices.length && Date.now() - previous.startedAt >= 3000) {
+      this.shop.delete(key);
+    }
+    await this.checkShopPrices([pair]);
+    const entry = this.shop.get(key);
+    await entry?.pending;
+    return this.closed ? [] : structuredClone(entry?.prices.filter(price => Date.now() - price.checkedAt < SHOP_PRICE_MAX_AGE) ?? []);
   }
   markFairNoticeSeen(noticeId: string) { this.fairNews?.markSeen(noticeId); }
   start(): void {

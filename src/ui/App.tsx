@@ -33,6 +33,7 @@ import {PaintAdvisor} from './PaintAdvisor';
 import {ProfileDialog} from './ProfileDialog';
 import {StoreCreditBadge} from './StoreCreditBadge';
 import { ConciergeCard } from './ConciergeCard';
+import { HangarProgress } from './HangarProgress';
 import {pledgeDateLabel,comparePledgeDates} from '../domain/pledge-date';
 import type { LoanerSnapshot } from '../loaners/model';
 declare global { interface Window { ccu: {
@@ -115,6 +116,7 @@ function App() {
   const [lastSeen, setLastSeen] = useState<LastSeen | null>(null);
   const [backgroundStatus, setBackgroundStatus] = useState<BackgroundSnapshot['status']>('idle');
   const [backgroundPending, setBackgroundPending] = useState(false);
+  const [hangarProgress, setHangarProgress] = useState<BackgroundSnapshot['progress']>();
   const selectedAccount = useRef(''); const selectionEpoch = useRef(0);
   const backgroundEpoch = useRef(0); const knownRevision = useRef<string | undefined>(undefined);
   const historyTooltips = useRef(new HistoryTooltipCache());
@@ -144,7 +146,7 @@ function App() {
     if (selectedAccount.current === id) return;
     selectedAccount.current = id; selectionEpoch.current++; backgroundEpoch.current++; knownRevision.current = undefined;
     historyTooltips.current.activate(id);
-    pendingRef.current = false; setBackgroundPending(false); connectionStatus('idle'); setLastSeen(null);
+    pendingRef.current = false; setBackgroundPending(false); connectionStatus('idle'); setLastSeen(null); setHangarProgress(undefined);
     setAccountId(id); setMessage(''); setError('');
   }
   async function selectAccount(id: string) {
@@ -159,6 +161,7 @@ function App() {
     if (snapshot.view !== undefined) setLastSeen(snapshot.view);
     historyTooltips.current.activate(id, snapshot.revision ?? undefined);
     knownRevision.current = snapshot.revision ?? undefined; connectionStatus(snapshot.status);
+    setHangarProgress(snapshot.progress);
   }
   useEffect(() => {
     let active = true;
@@ -332,6 +335,8 @@ function App() {
         onClick={() => page === 'paints' ? void call({action:'paints.refresh'}).catch(()=>setError('Paint-Preise konnten nicht gelesen werden.')) : page === 'inventory' && filter === 'Loaner & Beiboote' ? void call<LoanerSnapshot>({ action: 'loaners.refresh' }).then(setLoanerSnapshot).catch(() => setLoanerSnapshot(s => ({ ...s, error: true }))) : page === 'market' ? void updatePlanner() : page !== 'inventory' ? void call({ action: 'market.refresh' }).catch(() => setError('Marktdaten konnten nicht aktualisiert werden.')) : void updateBackground(!viewingBuybacks && backgroundStatus === 'auth-required')}>{t(page === 'inventory' && !viewingBuybacks && filter !== 'Loaner & Beiboote' && backgroundStatus === 'auth-required' && !connectionBusy ? 'Anmelden' : 'Daten aktualisieren')}</button>
       </div>
     </section>}
+      {page === 'inventory' && connectionBusy && <HangarProgress progress={hangarProgress}
+        hasInventory={!!lastSeen || !!acceptedInventory?.items.length} />}
       {page === 'help' && <HelpView />}
       {(page === 'market' || page === 'fleet') && <MarketView accountId={accountId || null} display={display} inventory={plannerInventory} storeCredit={storeCredit}
         buybacks={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} buybackObservation={liveBuybacks?.buybackObservation}

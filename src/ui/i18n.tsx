@@ -409,6 +409,23 @@ Object.assign(english, {
   'RSI-Pledge-Summe derzeit nicht verfügbar.': 'The RSI pledge total is currently unavailable.',
   'Bestätigung läuft …': 'Waiting for confirmation …',
   'Summe ausblenden': 'Hide pledge total',
+  'RSI-Shoppreis': 'RSI shop price',
+  'Preis prüfen': 'Check price',
+  'Preis wird geprüft …': 'Checking price …',
+  'Preis erneut prüfen': 'Check price again',
+  'Geprüfter RSI-Shoppreis': 'Verified RSI shop price',
+  'Paar ungeklärt': 'Ship pair unresolved',
+  'Startschiff wählen': 'Choose a source ship',
+  'Hangar wird gelesen': 'Reading your hangar',
+  'Bestand wird geprüft': 'Checking inventory',
+  'von': 'of',
+  'Seite': 'Page',
+  'Seiten': 'pages',
+  'Seiten gelesen': 'pages read',
+  'Einträge gelesen': 'entries read',
+  'Dein bisheriger Bestand bleibt sichtbar.': 'Your previous inventory stays visible.',
+  'RSI antwortet vorübergehend langsam.': 'RSI is taking longer to respond.',
+  'wird erneut versucht.': 'will be retried.',
 });
 export function translate(language:'de'|'en',text:string):string{
   const exports:Record<string,string>={'LOKALER EXPORT':'LOCAL EXPORT','Exportieren':'Export','Exportieren …':'Export …','Dateiformat':'File format','Inhalt':'Contents','Bestand dieses Profils':'Inventory of this profile','Aktuelle CCU-Kette':'Current CCU chain','Vorschau wird erstellt …':'Preparing preview …','Zeilen':'rows','Lokale Momentaufnahme':'Local snapshot','Währung und Mehrwertsteuersatz aus deinen Einstellungen. Offene Werte bleiben offen.':'Currency and VAT from your settings. Unknown values remain unknown.','Hinweise zum Datenstand':'Data notes','Speicherort wählen …':'Choose save location …','Wird gespeichert …':'Saving …','Export gespeichert.':'Export saved.','Export fehlgeschlagen.':'Export failed.','Zuerst eine CCU-Kette mit Startbasis anzeigen.':'First display a CCU chain with a start base.'};
