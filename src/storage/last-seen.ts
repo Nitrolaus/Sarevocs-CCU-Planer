@@ -78,6 +78,11 @@ export class LastSeenStore {
           && old.rsiPurchase.status === 'documented' && old.rsiPurchase.source === 'order') {
           return { ...pledge, rsiPurchase: old.rsiPurchase };
         }
+        if(incoming.status==='documented'&&incoming.currency==='GBP'&&!incoming.poundRate&&
+            old.rsiPurchase.status==='documented'&&old.rsiPurchase.currency==='GBP'&&old.rsiPurchase.poundRate&&
+            old.rsiPurchase.minor===incoming.minor&&old.rsiPurchase.purchaseDate===incoming.purchaseDate) {
+          return {...pledge,rsiPurchase:{...incoming,poundRate:old.rsiPurchase.poundRate}};
+        }
         return pledge;
       });
       const retained = { ...view.document, pledges };

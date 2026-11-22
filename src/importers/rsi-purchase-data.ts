@@ -1,24 +1,26 @@
 import type { Pledge, RsiPurchase } from '../domain/model';
+import { pledgeDate } from '../domain/pledge-date';
 
 const normalize = (value: string) => value.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
 const titleKey = (value: string) => normalize(value).replace(/^standalone ships? [-–] /, 'standalone ship - ');
 
-function amount(value: string): { minor: number; currency: 'USD' | 'EUR' } | null {
-  const match = /^([$€])?\s*((?:0|[1-9]\d{0,6}|[1-9]\d{0,2}(?:,\d{3}){1,2}))(?:\.(\d{2}))?\s+(USD|EUR)$/.exec(value);
+function amount(value: string): { minor: number; currency: 'USD' | 'EUR' | 'GBP' } | null {
+  const match = /^([$€£])?\s*((?:0|[1-9]\d{0,6}|[1-9]\d{0,2}(?:,\d{3}){1,2}))(?:\.(\d{2}))?(?:\s+(USD|EUR|GBP))?$/.exec(value);
   if (!match) return null;
   const [, symbol, dollars, cents, code] = match;
-  const currency = code === 'EUR' ? 'EUR' : 'USD';
-  if (symbol && symbol !== (currency === 'EUR' ? '€' : '$')) return null;
+  const currency = code==='USD'||code==='EUR'||code==='GBP'?code:symbol==='£'?'GBP':null;
+  if (!currency || symbol && symbol !== {EUR:'€',USD:'$',GBP:'£'}[currency]) return null;
   const minor = Number(dollars!.replaceAll(',', '')) * 100 + Number(cents ?? 0);
   return minor <= 100_000_000 ? { minor, currency } : null;
 }
 
-export type PurchaseLogRow = { id: string; title: string; owner: string; order: string; value: string }
+export type PurchaseLogRow = { id: string; title: string; owner: string; order: string; value: string; date?: string }
   | { id: string; excluded: true };
 export type PurchaseOrder = {
   id: string;
   paid: boolean;
   discount: string;
+  date?: string;
   lines: Array<{ title: string; quantity: string; total: string }>;
 };
 
@@ -41,7 +43,8 @@ const logParser = String.raw`(root, ids) => {
       continue;
     }
     const purchase = /^Created by (.{1,160}?) - (?:Buy-Back )?order #([a-z0-9-]{1,64})(?:, value: (.{1,96}))?$/i.exec(row[2]);
-    if (purchase) result.push({id: row[1], title, owner: purchase[1], order: purchase[2], value: purchase[3] || ''});
+    if (purchase) result.push({id: row[1], title, owner: purchase[1], order: purchase[2], value: purchase[3] || '',
+      date: txt.slice(0,boundary).length <= 120 ? txt.slice(0,boundary) : ''});
   }
   return result;
 }`;
@@ -77,7 +80,8 @@ const orderParser = String.raw`(root, ids) => {
       const title = clean(cells[0].textContent), quantity = clean(cells[2].textContent), total = clean(cells[4].textContent);
       if (title.length <= 500 && quantity.length <= 12 && total.length <= 96) lines.push({title, quantity, total});
     }
-    result.push({id, paid, discount: clean(discount).slice(0, 96), lines});
+    const date = metadata.get('order date:') || metadata.get('date:');
+    result.push({id, paid, discount: clean(discount).slice(0, 96), lines, ...(date && date.length <= 120 ? {date} : {})});
   }
   return result;
 }`;
@@ -94,7 +98,7 @@ export function purchaseParserProbe(kind: 'log' | 'order', html: string, ids: re
 export function purchaseMatches(pledges: readonly Pledge[], log: readonly PurchaseLogRow[], owner: string | null) {
   const byId = new Map(pledges.map(p => [p.pledgeId, p]));
   const knownOwner = owner === null ? null : normalize(owner);
-  const matches = new Map<string, { title: string; order: string; value: ReturnType<typeof amount> }>();
+  const matches = new Map<string, { title: string; order: string; value: ReturnType<typeof amount>; date?: string }>();
   const excluded = new Set<string>();
   for (const row of log) {
     const pledge = byId.get(row.id);
@@ -104,7 +108,7 @@ export function purchaseMatches(pledges: readonly Pledge[], log: readonly Purcha
       matches.delete(row.id);
     } else if (!excluded.has(row.id)) {
       // Without a verified handle, the log can link IDs, but only a paid order from this session can prove a purchase.
-      matches.set(row.id, { title: titleKey(row.title), order: row.order.toUpperCase(), value: knownOwner === null ? null : amount(row.value) });
+      matches.set(row.id, { title: titleKey(row.title), order: row.order.toUpperCase(), value: knownOwner === null ? null : amount(row.value), date: row.date });
     }
   }
   return { matches, excluded };
@@ -132,11 +136,13 @@ export function purchasePrices({ matches, excluded }: ReturnType<typeof purchase
     const total = line ? amount(line.total) : null;
     const discount = order ? amount(order.discount) : null;
     const assigned = linesUsed.get(`${match.order}\0${match.title}`) ?? 0;
+    const date=pledgeDate({sourceValues:{date:order?.date??''}})??pledgeDate({sourceValues:{date:match.date??''}});
     if (total && quantity > 0 && assigned <= quantity && total.minor % quantity === 0 && discount?.minor === 0 && discount.currency === total.currency) {
       const unitMinor = total.minor / quantity;
-      result.set(id, unitMinor > 0 ? { status: 'documented', source: 'order', minor: unitMinor, currency: total.currency } : { status: 'excluded' });
+      result.set(id, unitMinor > 0 ? { status: 'documented', source: 'order', minor: unitMinor, currency: total.currency,
+        ...(total.currency==='GBP'&&date?{purchaseDate:date}:{}) } : { status: 'excluded' });
     } else if (match.value && match.value.minor > 0) {
-      result.set(id, { status: 'documented', source: 'log', ...match.value });
+      result.set(id, { status: 'documented', source: 'log', ...match.value, ...(match.value.currency==='GBP'&&date?{purchaseDate:date}:{}) });
     } else if (match.value?.minor === 0) {
       result.set(id, { status: 'excluded' });
     }

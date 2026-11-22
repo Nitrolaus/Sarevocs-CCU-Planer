@@ -8,11 +8,10 @@ import { conciergePageProbe } from './rsi-concierge-data';
 const PARSER_URL = 'data:text/html,' + encodeURIComponent(
   '<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; base-uri \'none\'; form-action \'none\'">',
 );
-const MAX_BYTES = 2 * 1024 * 1024;
 export const CONCIERGE_URL = RSI_ORIGIN + '/en/account/concierge';
 export const PLEDGE_TOTAL_URL = RSI_ORIGIN + '/en/account/billing';
 
-async function readHtml(response: Response): Promise<string> {
+async function readHtml(response: Response, maxBytes: number): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('CONCIERGE_NO_BODY');
   let bytes = 0;
@@ -23,7 +22,7 @@ async function readHtml(response: Response): Promise<string> {
       const chunk = await reader.read();
       if (chunk.done) return html + decoder.decode();
       bytes += chunk.value.byteLength;
-      if (bytes > MAX_BYTES) throw new Error('CONCIERGE_RESPONSE_SIZE');
+      if (bytes > maxBytes) throw new Error('CONCIERGE_RESPONSE_SIZE');
       html += decoder.decode(chunk.value, { stream: true });
     }
   } finally {
@@ -44,9 +43,9 @@ class ConciergeRequest {
       if (allowed) issued = true;
       complete({ cancel: !allowed });
     });
-    const auth = cookies.filter(cookie => officialCookie(cookie) && isAuthenticationCookieName(cookie.name) &&
+    const auth = cookies.filter(cookie => officialCookie(cookie) && isAuthenticationCookieName(cookie.name) && cookie.value.length > 0 &&
       cookie.domain.replace(/^\./, '') === 'robertsspaceindustries.com');
-    if (!auth.length) return { status: 'unavailable' } as const;
+    if (!auth.length) return { status: 'session-required' } as const;
     for (const cookie of auth) {
       signal.throwIfAborted();
       await this.io.cookies.set({ url: RSI_ORIGIN + '/', name: cookie.name, value: cookie.value,
@@ -54,12 +53,14 @@ class ConciergeRequest {
         httpOnly: cookie.httpOnly, expirationDate: cookie.expirationDate, sameSite: cookie.sameSite });
     }
     const response = await this.io.fetch(url, { method: 'GET', credentials: 'include', redirect: 'error',
-      bypassCustomProtocolHandlers: true, signal });
-    if (!response.ok || !/^text\/html\b/i.test(response.headers.get('content-type') ?? '')) {
+      bypassCustomProtocolHandlers: true, headers: { 'Accept-Language': 'en', Accept: 'text/html' }, signal });
+    if (!response.ok || response.redirected || response.url && response.url !== url ||
+        !/^text\/html\b/i.test(response.headers.get('content-type') ?? '')) {
       await response.body?.cancel().catch(() => {});
-      return { status: 'unavailable' } as const;
+      return response.status === 401
+        ? { status: 'session-required' } as const : { status: 'unavailable', reason: 'response' } as const;
     }
-    const html = await readHtml(response);
+    const html = await readHtml(response, (mode === 'rank' ? 2 : 4) * 1024 * 1024);
     signal.throwIfAborted();
     this.parserSession = session.fromPartition('concierge-parser-' + randomUUID(), { cache: false });
     this.parserSession.webRequest.onBeforeRequest((details, complete) => complete({ cancel: details.url !== PARSER_URL }));
@@ -68,12 +69,14 @@ class ConciergeRequest {
     this.parser = new BrowserWindow({ show: false, webPreferences: { session: this.parserSession, sandbox: true,
       nodeIntegration: false, contextIsolation: true, devTools: false, disableDialogs: true } });
     this.parser.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    this.parser.webContents.on('will-navigate', event => event.preventDefault());
     const close = () => { if (this.parser && !this.parser.isDestroyed()) this.parser.destroy(); };
     signal.addEventListener('abort', close, { once: true });
     try {
       await this.parser.loadURL(PARSER_URL);
-      const result = await this.parser.webContents.executeJavaScript(conciergePageProbe(html, mode));
+      const result = await this.parser.webContents.executeJavaScriptInIsolatedWorld(1, [{code:conciergePageProbe(html, mode)}]);
       signal.throwIfAborted();
+      if(result?.status==='unavailable')return {status:'unavailable',reason:'format'} as const;
       return result as T extends 'rank' ? ConciergeRank : PledgeTotal;
     } finally { signal.removeEventListener('abort', close); }
   }
@@ -92,7 +95,7 @@ export async function readConcierge<T extends 'rank' | 'total'>(mode: T, cookies
   try {
     return await request.read(mode, cookies, AbortSignal.any([signal, AbortSignal.timeout(12_000)]));
   } catch {
-    return { status: 'unavailable' } as const;
+    return { status: 'unavailable', reason: 'response' } as const;
   } finally {
     await request.close();
   }

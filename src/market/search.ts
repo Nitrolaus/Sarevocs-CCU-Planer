@@ -10,6 +10,18 @@ function distance(a:string,b:string):number{
   for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]!+1,row[j]!+1,row[j-1]!+(a[i-1]===b[j-1]?0:1));row=next;}
   return row[b.length]!;
 }
+export function inventorySearch(query:string):(...fields:string[])=>boolean{
+  const words=normalizedShipQuery(query.slice(0,160)).split(' ').filter(Boolean);
+  return (...fields)=>{
+    if(!words.length)return true;
+    const tokens=normalizedShipQuery(fields.join(' ')).split(' ');
+    return words.every(word=>tokens.some(token=>{
+      if(token.includes(word))return true;
+      const threshold=word.length>12?3:word.length>6?2:word.length>=4?1:0;
+      return threshold>0&&Math.abs(token.length-word.length)<=threshold&&distance(word,token)<=threshold;
+    }));
+  };
+}
 /** Fuzzy suggestions only. Identity joins and the selected variant remain exact. */
 export function searchShips(ships:readonly CatalogueShip[],query:string):CatalogueShip[]{
   const q=normalizedShipQuery(query.slice(0,160)),words=q.split(' ').filter(Boolean);

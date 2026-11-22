@@ -3,10 +3,11 @@ import type { ConciergeRank, PledgeTotal } from '../domain/concierge';
 import type { Command } from '../main/commands';
 import { translate } from './i18n';
 
-export function ConciergeCard({ accountId, revision, connected, language, request }: {
+export function ConciergeCard({ accountId, revision, connected, busy=false, language, request }: {
   accountId?: string;
   revision?: string;
   connected: boolean;
+  busy?: boolean;
   language: 'de' | 'en';
   request: <T>(command: Command) => Promise<T>;
 }) {
@@ -32,14 +33,14 @@ export function ConciergeCard({ accountId, revision, connected, language, reques
     return () => { ++revealEpoch.current; document.removeEventListener('visibilitychange', onVisibility); unsubscribe?.(); };
   }, []);
   useEffect(() => {
-    if (!accountId) return;
+    if (!accountId || busy) return;
     let active = true;
     setRank(null);
     void request<ConciergeRank>({ action: 'rsi.conciergeRank', accountId }).then(result => {
       if (active) setRank(result);
     }).catch(() => { if (active) setRank({ status: 'unavailable' }); });
     return () => { active = false; };
-  }, [accountId, revision, connected, request]);
+  }, [accountId, revision, connected, busy, request]);
   useEffect(() => {
     if (!total) return;
     const timeout = setTimeout(clear, 30_000);
@@ -47,7 +48,7 @@ export function ConciergeCard({ accountId, revision, connected, language, reques
   }, [total]);
 
   async function reveal() {
-    if (!accountId || reading) return;
+    if (!accountId || reading || busy) return;
     dialog.current?.close();
     const epoch = ++revealEpoch.current;
     setReading(true);
@@ -57,7 +58,9 @@ export function ConciergeCard({ accountId, revision, connected, language, reques
       if (epoch !== revealEpoch.current || document.hidden) return;
       if (result.status === 'loaded') setTotal(result);
       else if (result.status === 'hello-unavailable') setNotice('Windows Hello ist nicht verfügbar.');
-      else if (result.status === 'unavailable') setNotice('RSI-Pledge-Summe derzeit nicht verfügbar.');
+      else if (result.status === 'session-required') setNotice('Eine gültige gespeicherte RSI-Sitzung ist erforderlich.');
+      else if (result.status === 'unavailable') setNotice(result.reason==='format'
+        ? 'RSI-Billing enthält keine lesbare Pledge-Summe.' : 'RSI-Pledge-Summe derzeit nicht verfügbar.');
     } catch {
       if (epoch === revealEpoch.current) setNotice('RSI-Pledge-Summe derzeit nicht verfügbar.');
     } finally {
@@ -85,13 +88,15 @@ export function ConciergeCard({ accountId, revision, connected, language, reques
         {rank.progress !== null && <progress value={rank.progress} max={100} aria-label={t('Richtung') + ' ' + rank.nextRank} />}
       </div>}
       {rank?.status !== 'loaded' && rank?.status !== 'no-rank' && <p className="concierge-status">
-        {t(!accountId ? 'Ein RSI-Profil auswählen.' : rank ? 'RSI-Rang derzeit nicht verfügbar.' : 'RSI-Rang wird gelesen …')}
+        {t(!accountId ? 'Ein RSI-Profil auswählen.' : rank?.status==='session-required' ? 'Eine gültige gespeicherte RSI-Sitzung ist erforderlich.'
+          : rank?.status==='unavailable'&&rank.reason==='format' ? 'Die RSI-Concierge-Seite enthält keinen lesbaren Rang.'
+          : busy||!rank ? 'RSI-Rang wird gelesen …' : 'RSI-Rang derzeit nicht verfügbar.')}
       </p>}
     </div>
     <div className="concierge-private">
       {amount
         ? <><strong className="concierge-amount">{amount}</strong><button type="button" onClick={clear}>{t('Summe ausblenden')}</button></>
-        : <><button type="button" disabled={!accountId || reading} onClick={() => dialog.current?.showModal()}>
+        : <><button type="button" disabled={!accountId || reading || busy} onClick={() => dialog.current?.showModal()}>
           {t(reading ? 'Bestätigung läuft …' : 'Pledge-Summe anzeigen')}
         </button><p>{t('Mit Windows Hello freigeben')}</p></>}
       {notice && <p role="status">{t(notice)}</p>}

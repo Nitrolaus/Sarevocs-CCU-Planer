@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {searchShips,normalizedShipQuery} from '../src/market/search';import {safeRsiShipUrl} from '../src/market/ship-link';
+import {searchShips,normalizedShipQuery,inventorySearch} from '../src/market/search';import {safeRsiShipUrl} from '../src/market/ship-link';
 import type {CatalogueShip} from '../src/market/model';
 const ship=(id:number,name:string,maker='Roberts Space Industries',code='RSI'):CatalogueShip=>({id,name,manufacturer:maker,manufacturerCode:code,chassisId:1,status:'flight-ready',focus:'',length:null});
 const ships=[ship(1,'Galaxy'),ship(2,'Constellation Mk V Centaurus'),ship(3,'Constellation Andromeda'),ship(4,'F7C-M Super Hornet Mk II','Anvil Aerospace','ANVL'),ship(5,'Aurora')];
@@ -7,5 +7,10 @@ test('Common misspellings produce suggestions without changing original IDs or n
 test('Case, accents, punctuation, reordered words, manufacturer and Mk variants are searchable',()=>{for(const q of ['GALAXY','rsi galax','hornet f7c','F7C M Super Hornet mk2','anvl hornet'])assert.ok(searchShips(ships,q).length>0,q);assert.equal(normalizedShipQuery('F7C-M Mk II'),'f7c m mk2');assert.equal(normalizedShipQuery('ÄÖÜ ß'),'aeoeue ss');});
 test('Short unmatched input does not fan out through arbitrary edit-distance matches',()=>{assert.deepEqual(searchShips(ships,'zx'),[]);assert.equal(searchShips(ships,'gal')[0]?.name,'Galaxy');});
 test('Empty search returns a separate complete list, preserving all variant identities',()=>{const copy=searchShips(ships,'');assert.equal(copy.length,5);assert.notEqual(copy,ships);assert.equal(ships[0]?.name,'Galaxy');});
+test('Inventory search matches variants, manufacturers and package terms across the row',()=>{
+ const fields=['Constellation Mk IV Taurus','Roberts Space Industries','RSI','Cargo starter package'];
+ for(const term of ['taurs','rsi taurus','mk4','cargo pack',''])assert.equal(inventorySearch(term)(...fields),true,term);
+ for(const term of ['anvil taurus','zx','freelancer'])assert.equal(inventorySearch(term)(...fields),false,term);
+});
 test('Only observed official ship landing paths are accepted',()=>{assert.equal(safeRsiShipUrl('/pledge/ships/galaxy/Galaxy'),'https://robertsspaceindustries.com/pledge/ships/galaxy/Galaxy');assert.equal(safeRsiShipUrl('https://robertsspaceindustries.com/en/pledge/ships/galaxy/Galaxy'),'https://robertsspaceindustries.com/en/pledge/ships/galaxy/Galaxy');});
 test('External links refuse checkout, actions, redirects, credentials, encoded paths and unrelated origins',()=>{for(const value of [null,'','javascript:alert(1)','https://evil.invalid/pledge/ships/galaxy/Galaxy','//evil.invalid/pledge/ships/galaxy/Galaxy','https://robertsspaceindustries.com.evil.invalid/pledge/ships/galaxy/Galaxy','https://user:password@robertsspaceindustries.com/pledge/ships/galaxy/Galaxy','/pledge/checkout','/pledge/ships/galaxy/Galaxy?redirect=evil','/pledge/ships/galaxy/Galaxy#buy','/pledge/ships/galaxy/%47alaxy','/pledge/ships/galaxy/../galaxy/Galaxy','/pledge\\ships\\galaxy\\Galaxy'])assert.equal(safeRsiShipUrl(value),null,String(value));});

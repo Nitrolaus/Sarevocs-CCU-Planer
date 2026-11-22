@@ -104,6 +104,12 @@ function App() {
   useEffect(()=>{setExportKind(null);setExportContext(null);setExportNotice('');},[accountId]);
   const [inventory, setInventory] = useState<AccountInventory>();
   const [filter, setFilter] = useState('CCUs');
+  const [inventoryQuery, setInventoryQuery] = useState('');
+  const [inventoryCount, setInventoryCount] = useState({ shown: 0, total: 0 });
+  const inventorySearchInput = useRef<HTMLInputElement>(null);
+  const reportInventoryCount = useCallback((shown: number, total: number) => {
+    setInventoryCount(previous => previous.shown === shown && previous.total === total ? previous : { shown, total });
+  }, []);
   const [loanerSnapshot, setLoanerSnapshot] = useState<LoanerSnapshot>({ data: null, pending: false, error: false });
   useEffect(() => {
     if (page !== 'inventory' || filter !== 'Loaner & Beiboote') return;
@@ -201,6 +207,7 @@ function App() {
   useEffect(() => { if (open && !dialog.current?.open) dialog.current?.showModal(); if (!open) dialog.current?.close(); }, [open]);
   useEffect(() => { if (loginProfile && !loginDialog.current?.open) loginDialog.current?.showModal(); if (!loginProfile) loginDialog.current?.close(); }, [loginProfile]);
   const acceptedInventory = inventory?.account.id === accountId ? inventory : undefined;
+  useEffect(() => setInventoryQuery(''), [accountId]);
   const latestAcceptedAt = acceptedInventory?.items.reduce((latest, item) => Math.max(latest, Date.parse(item.importedAt) || 0),
     Date.parse(acceptedInventory.account.lastComplete ?? '') || 0) ?? 0;
   const observed = account?.mode === 'real' && lastSeen?.accountId === accountId && Date.parse(lastSeen.observedAt) > latestAcceptedAt ? lastSeen : null;
@@ -218,8 +225,9 @@ function App() {
     if (!current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
     if (historyTooltips.current.finish(ticket, result)) redrawHistory(value => value + 1);
   }
-  const present = observed ? observed.document.pledges.map(pledge => ({ pledge, availability: 'present' as const,
-    source: 'rsi-dom-probe/1', importedAt: observed.observedAt })) : acceptedInventory?.items.filter(x => x.availability === 'present') ?? [];
+  const present = useMemo(() => observed ? observed.document.pledges.map(pledge => ({ pledge, availability: 'present' as const,
+    source: 'rsi-dom-probe/1', importedAt: observed.observedAt })) : acceptedInventory?.items.filter(x => x.availability === 'present') ?? [],
+  [observed, acceptedInventory]);
   const plannerInventory = useMemo(() => observed ? { accountId, pledges: observed.document.pledges,
     observation: { kind: 'rsi-hangar' as const, observedAt: observed.observedAt } }
     : acceptedInventory ? { accountId, pledges: acceptedInventory.items.filter(x => x.availability === 'present').map(x => x.pledge),
@@ -230,11 +238,16 @@ function App() {
   const shipCount = present.reduce((count, x) => count + x.pledge.ships.length, 0);
   const ccus = present.reduce((count, x) => count + x.pledge.ccus.length + (unresolvedUpgrade(x.pledge) ? 1 : 0), 0);
   const unresolved = present.filter(x => hasInventoryReadIssue(x.pledge)).length;
-  const visible = present.filter(x => filter === 'Alle Gegenstände' ||
+  const visible = useMemo(() => present.filter(x => filter === 'Alle Gegenstände' ||
     (filter === 'Spielpakete' && gameContentKind(x.pledge)==='package') ||
     (filter === 'Spielzugänge' && hasProtectedGameAccess(x.pledge,x.source)) ||
     (filter === 'Schiffe & Fahrzeuge' && x.pledge.ships.length > 0) ||
-    (filter === 'CCUs' && (x.pledge.ccus.length > 0 || unresolvedUpgrade(x.pledge)))).sort((a,b)=>comparePledgeDates(a.pledge,b.pledge));
+    (filter === 'CCUs' && (x.pledge.ccus.length > 0 || unresolvedUpgrade(x.pledge)))).sort((a,b)=>comparePledgeDates(a.pledge,b.pledge)), [present, filter]);
+  const inventorySearchProps = { query: inventoryQuery, onSearchCount: reportInventoryCount };
+  function clearInventorySearch() {
+    setInventoryQuery('');
+    inventorySearchInput.current?.focus();
+  }
   const connectionBusy = backgroundPending || backgroundStatus === 'connecting';
   const stand = observedLabel(observed?.observedAt ?? (latestAcceptedAt ? new Date(latestAcceptedAt).toISOString() : undefined));
   const connectionText = !account ? 'Kein Kontoprofil' : account.mode === 'demo' ? 'Demobestand · lokal'
@@ -364,14 +377,33 @@ function App() {
       <div className="stats"><div className="stat"><label>{t("Schiffe & Fahrzeuge")}</label><strong>{shipCount}</strong><small>{t('davon')} {lti} {t('mit LTI')}</small></div>
         <div className="stat"><label>{t("Erkannte CCUs")}</label><strong>{ccus}</strong><small>{t("Einzelne Exemplare · ungeprüfte bleiben erkennbar")}</small></div>
         <div className="stat"><label>{t("Noch zu prüfen")}</label><strong>{unresolved}</strong><small>{t("Lesefehler oder Zuordnungsprobleme")}</small></div></div>
-      <section className="panel inventory-panel"><div className="panel-head"><div><h2>{t("Schiffe, Fahrzeuge & CCUs")}</h2><div className="filters" aria-label={t("Bestandsfilter")}>
-        {['Alle Gegenstände', 'Schiffe & Fahrzeuge', 'CCUs', 'Spielpakete', 'Spielzugänge', 'Buy Back', 'Loaner & Beiboote'].map(f => <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>{t(f)}</button>)}</div></div>
-        <div className="actions"><button className="secondary" disabled={busy||!state} onClick={() => accountId?void run(()=>chooseImport(accountId)):addProfile('import')}>{t("Datei importieren")}</button></div></div>
+      <section className="panel inventory-panel"><div className="inventory-panel-head">
+        <div className="inventory-panel-line"><h2>{t("Schiffe, Fahrzeuge & CCUs")}</h2>
+          <div className="actions inventory-actions">
+            <div className="inventory-search">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
+              <input ref={inventorySearchInput} aria-label={t('Bestand durchsuchen')} placeholder={t('Bestand durchsuchen …')} value={inventoryQuery}
+                maxLength={160} onChange={event=>setInventoryQuery(event.currentTarget.value)}
+                onKeyDown={event=>{if(event.key==='Escape'&&inventoryQuery){event.preventDefault();clearInventorySearch();}}}/>
+              <button type="button" className="inventory-search-clear" aria-label={t('Suche löschen')} disabled={!inventoryQuery} onClick={clearInventorySearch}>×</button>
+            </div>
+            <button className="secondary" disabled={busy||!state} onClick={() => accountId?void run(()=>chooseImport(accountId)):addProfile('import')}>{t("Datei importieren")}</button>
+          </div>
+        </div>
+        <div className="inventory-panel-line inventory-panel-tabs">
+          <div className="filters" aria-label={t("Bestandsfilter")}>
+            {['Alle Gegenstände', 'Schiffe & Fahrzeuge', 'CCUs', 'Spielpakete', 'Spielzugänge', 'Buy Back', 'Loaner & Beiboote'].map(f => <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>{t(f)}</button>)}
+          </div>
+          <output aria-live="polite" className="inventory-search-count">{t(inventoryCount.total===1?'{shown} von {total} Eintrag':'{shown} von {total} Einträgen')
+            .replace('{shown}', inventoryCount.shown.toLocaleString(display.settings.language))
+            .replace('{total}', inventoryCount.total.toLocaleString(display.settings.language))}</output>
+        </div>
+      </div>
         <ConciergeCard key={'concierge:' + accountId} accountId={account?.mode === 'real' ? accountId : undefined}
-          revision={lastSeen?.revision} connected={backgroundStatus === 'connected'}
+          revision={lastSeen?.revision} connected={backgroundStatus === 'connected'} busy={connectionBusy}
           language={display.settings.language} request={call} />
-        {viewingBuybacks ? <BuybackTable entries={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} observation={liveBuybacks?.buybackObservation} display={display} balance={storeCredit} />
-          : filter === 'Loaner & Beiboote' ? <LoanerTable accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} onHistory={p=>void loadUpgradeHistory(p)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={p=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,key?historyTooltips.current.get(key):undefined),gameAccessEvidence(p));}}/>}</section>
+        {viewingBuybacks ? <BuybackTable {...inventorySearchProps} entries={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} observation={liveBuybacks?.buybackObservation} display={display} balance={storeCredit} />
+          : filter === 'Loaner & Beiboote' ? <LoanerTable {...inventorySearchProps} accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable {...inventorySearchProps} key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} onHistory={p=>void loadUpgradeHistory(p)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={p=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,key?historyTooltips.current.get(key):undefined),gameAccessEvidence(p));}}/>}</section>
       <div className="bottom" id="data-location"><span>Letzter vollständiger Import: {account?.lastComplete ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(account.lastComplete)) : 'noch keiner'}<br />Datenordner: {state?.dataDir ?? 'wird geladen'}</span>
         <span><button className="text-button" disabled={busy || !account?.reference} onClick={() => void run(async () => { const r = await call<{ exported: boolean; backup: string } | null>({ action: 'export', accountId }); if (r) setMessage(`Inventar exportiert. Konsistente Datenbanksicherung: ${r.backup}`); })}>{t("Sicherung / Export")}</button>
           <button className="text-button" disabled={busy || !account || account.mode !== 'real'} onClick={() => void run(rsi)}>{t("Sitzung & Sicherheit")}</button>

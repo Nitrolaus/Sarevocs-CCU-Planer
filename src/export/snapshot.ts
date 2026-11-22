@@ -4,8 +4,9 @@ import {comparePledgeDates,pledgeDate} from '../domain/pledge-date';
 import {gameContentKind} from '../domain/game-content';
 import {gameAccessAssignment} from '../domain/game-access-assignment';
 import {purchaseValue, RSI_ORDER_PRICE, RSI_LOG_PRICE} from '../pricing/inventory-values';
+import type {PoundRate} from '../pricing/pound-history';
 
-type ReportMoney={minor:number;currency:'USD'|'EUR';taxBasis:'net'|'gross'|'unknown'};
+type ReportMoney={minor:number;currency:'USD'|'EUR'|'GBP';taxBasis:'net'|'gross'|'unknown';purchaseDate?:string;poundRate?:PoundRate};
 type ReportInsurance={kind:'lti'}|{kind:'months';months:number}|{kind:'unknown'};
 export type ReportPledge={
  id:string;name:string;date:string|null;source:string;insurance:ReportInsurance;
@@ -38,7 +39,8 @@ export function reportSnapshot(inventory:AccountInventory,observed:LastSeen|null
  const useObserved=!!observed&&Date.parse(observed.observedAt)>latestAccepted;
  const rows=useObserved?observed!.document.pledges.map(pledge=>({pledge,source:'rsi-dom-probe/1'})):
   inventory.items.filter(item=>item.availability==='present').map(item=>({pledge:item.pledge,source:item.source}));
- const money=(v:ReturnType<typeof purchaseValue>['value']):ReportMoney|null=>v?{minor:v.minor,currency:v.currency,taxBasis:v.taxBasis}:null;
+ const money=(v:ReturnType<typeof purchaseValue>['value']):ReportMoney|null=>v?{minor:v.minor,currency:v.currency,taxBasis:v.taxBasis,
+  ...(v.purchaseDate?{purchaseDate:v.purchaseDate}:{}),...(v.poundRate?{poundRate:v.poundRate}:{})}:null;
  const pledges=rows.slice().sort((a,b)=>comparePledgeDates(a.pledge,b.pledge)).map(({pledge:p,source}):ReportPledge=>{
   const cost=purchaseValue(p,source),assignment=gameAccessAssignment(p,source);
   const rsiSource=cost.value?.evidence===RSI_ORDER_PRICE?'order' as const:cost.value?.evidence===RSI_LOG_PRICE?'log' as const:undefined;

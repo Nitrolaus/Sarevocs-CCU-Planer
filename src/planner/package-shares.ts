@@ -9,7 +9,7 @@ const basisSchema = z.object({
   childId: id,
   modelName: text,
   totalMinor: shareMinor.min(1),
-  currency: z.enum(['EUR', 'USD']),
+  currency: z.enum(['EUR', 'USD', 'GBP']),
 }).strict();
 export const packageShareEditSchema = basisSchema.extend({ minor: shareMinor.nullable() }).strict();
 const shareSchema = basisSchema.extend({ minor: shareMinor }).strict();

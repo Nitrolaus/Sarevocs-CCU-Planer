@@ -3,10 +3,13 @@ export type ConciergeRank = {
   rank: string;
   nextRank: string | null;
   progress: number | null;
-} | {
-  status: 'unavailable' | 'no-rank';
-};
+} | { status: 'no-rank' } | ConciergeUnavailable;
+
+export type ConciergeUnavailable =
+  | { status: 'session-required' }
+  | { status: 'unavailable'; reason?: 'response' | 'format' };
 
 export type PledgeTotal =
   | { status: 'loaded'; amountMinor: number; currency: 'USD' | 'EUR' | 'GBP' }
-  | { status: 'cancelled' | 'unavailable' | 'hello-unavailable' };
+  | { status: 'cancelled' | 'hello-unavailable' }
+  | ConciergeUnavailable;

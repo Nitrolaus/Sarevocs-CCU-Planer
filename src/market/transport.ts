@@ -4,9 +4,10 @@ import { MARKET_SOURCES, type MarketSource } from './model';
 import type { PublicReader } from './service';
 import { SHIP_VALUES_BODY, SHIP_VALUES_URL } from './ship-values';
 import { shopPriceReader } from './shop-prices';
+import { MAX_POUND_HISTORY_BYTES, parsePoundHistory, type PoundRate } from '../pricing/pound-history';
 
 /** Dedicated nonpersistent session: never shares the hangar, vault, cookies, credentials or renderer. */
-export function publicClient(maxJsonBytes = 8 * 1024 * 1024) {
+export function publicClient(maxJsonBytes = 8 * 1024 * 1024, maxXmlBytes = 65_536) {
   const isolated = session.fromPartition('public-market-' + randomUUID());
   isolated.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   isolated.setPermissionCheckHandler(() => false);
@@ -35,7 +36,7 @@ export function publicClient(maxJsonBytes = 8 * 1024 * 1024) {
       response.on('error', () => finish(new Error('PUBLIC_SOURCE_NETWORK')));
       response.on('data', chunk => {
         const buffer = Buffer.from(chunk); bytes += buffer.length;
-        if (bytes > (xml ? 65_536 : maxJsonBytes)) finish(new Error('PUBLIC_SOURCE_SIZE')); else if (!settled) chunks.push(buffer);
+        if (bytes > (xml ? maxXmlBytes : maxJsonBytes)) finish(new Error('PUBLIC_SOURCE_SIZE')); else if (!settled) chunks.push(buffer);
       });
       response.on('end', () => {
         if (settled) return;
@@ -46,6 +47,27 @@ export function publicClient(maxJsonBytes = 8 * 1024 * 1024) {
     if (body !== undefined) request.write(body);
     request.end();
   });
+}
+
+/** This fixed public request contains no profile identifier or purchase dates. */
+export function publicPoundHistoryReader() {
+  const read = publicClient(undefined, MAX_POUND_HISTORY_BYTES);
+  const url = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml';
+  let history = new Map<string, PoundRate>(), refreshAfter = 0;
+  let inFlight: Promise<ReadonlyMap<string, PoundRate>> | undefined;
+  return () => {
+    if (inFlight) return inFlight;
+    if (Date.now() < refreshAfter) return Promise.resolve(history);
+    inFlight = read(url, AbortSignal.timeout(6000), true).then(xml => {
+      history = parsePoundHistory(xml);
+      refreshAfter = Date.now() + 24 * 60 * 60_000;
+      return history;
+    }).catch(() => {
+      refreshAfter = Date.now() + 5 * 60_000;
+      return history;
+    }).finally(() => { inFlight = undefined; });
+    return inFlight;
+  };
 }
 
 export function publicMarketReader(): PublicReader {

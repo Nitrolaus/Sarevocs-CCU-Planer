@@ -89,8 +89,10 @@ export function createReport(input:ReportInput):ReportDocument{
    const currentConverted=currentValue!==null&&currentValue<=100_000_000?convert(currentValue):null;
    const access=p.access.games.map(g=>g==='sc'?'SC':'SQ42').join(' + ');
    const hints=[p.gameKind==='package'?l('Spielpaket','Game package'):p.gameKind==='copy'?l('Spielkopie','Game copy'):'',p.protected?l('Geschützt','Protected'):'',access?`${access} (${p.access.state})`:'',(kind==='ccus'?unresolved:p.unresolvedUpgrade)?l('Upgrade ungeklärt','Upgrade unresolved'):'',ccus.some(c=>c.applicability!=='confirmed')?l('CCU-Anwendbarkeit ungeprüft','CCU applicability unverified'):''].filter(Boolean).join(' · ');
-   const basis=p.purchase.rsiSource==='order'?l('RSI-Bestellposition','RSI order line'):p.purchase.rsiSource==='log'?l('RSI-Protokollwert','RSI history value'):
+   const evidence=p.purchase.rsiSource==='order'?l('RSI-Bestellposition','RSI order line'):p.purchase.rsiSource==='log'?l('RSI-Protokollwert','RSI history value'):
     p.purchase.kind==='recorded'?l('Erfasst','Recorded'):p.purchase.kind==='rsi-pledge'?'RSI-Pledgewert':open;
+   const basis=cost?.currency==='GBP'&&converted!==null&&cost.poundRate
+    ?evidence+' · '+l('Historischer EZB-Kurs','Historical ECB rate')+' '+cost.poundRate.sourceDate:evidence;
    rows.push({tone:'owned',cells:[p.name,ships.map(s=>s.name).join(' / '),[...new Set(ships.map(s=>catalogueIdentity(s.name,market.catalogue?.ships??[])?.manufacturer??open))].join(' / '),ccus.map(c=>`${c.from} → ${c.to}`).join(' / '),ccus.length&&!p.ships.length?l('Basis gilt','Base applies'):p.insurance.kind==='lti'?'LTI':p.insurance.kind==='months'?`${p.insurance.months} ${l('Monate','months')}`:open,p.date?new Date(p.date):null,converted===null?null:converted/100,cost?cost.minor/100:null,cost?`${cost.currency} / ${cost.taxBasis}`:'',basis,currentConverted,hints]});
   }
   for(const [basis,amount]of known)totals.push({label:l('Bekannte Paket-Kaufwerte','Known pledge purchase values')+' · '+(basis==='net'?l('netto','net'):basis==='gross'?l('brutto','gross'):l('Steuerbasis ungeklärt','unknown tax basis')),value:money(amount)});

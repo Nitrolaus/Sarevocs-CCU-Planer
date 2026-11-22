@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import type { Buyback, BuybackObservation } from '../domain/model';
 import type { StoreCredit } from '../domain/store-credit';
 import { convertPurchaseValue } from '../pricing/inventory-values';
 import type { PricingSnapshot } from '../pricing/model';
 import { formatMinor } from '../pricing/money';
+import { inventorySearch } from '../market/search';
 import { useText } from './i18n';
 import './buyback.css';
 
-export function BuybackTable({ entries, observation, display, balance }: {
+export function BuybackTable({ entries, observation, display, balance, query='', onSearchCount }: {
   entries: readonly Buyback[]; observation?: BuybackObservation; display: PricingSnapshot; balance?: StoreCredit;
+  query?:string; onSearchCount?:(shown:number,total:number)=>void;
 }) {
   const t = useText();
   const { language, currency } = display.settings;
@@ -19,6 +21,11 @@ export function BuybackTable({ entries, observation, display, balance }: {
   }).format(new Date(observation.observedAt)) : null;
   const creditLabel = token === 'unavailable' ? 'Nur Frischgeld' : token === 'available'
     ? balance?.minor === 0 ? 'Kein Guthaben' : 'Ja, mit Token' : 'Offen';
+  const visible = useMemo(() => {
+    const matches=inventorySearch(query);
+    return entries.filter(entry=>matches(entry.name,...entry.originalShips??[]));
+  },[entries,query]);
+  useEffect(()=>onSearchCount?.(visible.length,entries.length),[visible.length,entries.length,onSearchCount]);
 
   return <section className="buyback-view" aria-labelledby="buyback-heading">
     <div className="buyback-head">
@@ -30,10 +37,10 @@ export function BuybackTable({ entries, observation, display, balance }: {
       <strong>{t(observation ? 'Keine Rückkaufeinträge gefunden' : 'Rückkaufliste noch nicht eingelesen')}</strong>
       <p>{t(observation?.current ? 'Die gelesene RSI-Rückkaufliste für dieses Profil ist leer.' : observation
         ? 'Die zuletzt gelesene RSI-Rückkaufliste war leer.' : 'Aktualisiere den Bestand mit einer vorhandenen RSI-Sitzung oder importiere eine Datei mit Rückkaufeinträgen.')}</p>
-    </div> : <>
+    </div> : !visible.length ? <p className="buyback-empty" role="status">{t('Keine passenden Einträge gefunden.')}</p> : <>
       <div className="table-scroll"><table className="buyback-table" aria-label={t('Rückkaufeinträge')}>
         <thead><tr><th scope="col">{t('Schiff / Paket')}</th><th scope="col">{t('Versicherung')}</th><th scope="col">{t('Rückkaufpreis')}</th><th scope="col">Store Credits</th></tr></thead>
-        <tbody>{entries.map(entry => {
+        <tbody>{visible.map(entry => {
           const price = entry.currentPrice, converted = convertPurchaseValue(price, display);
           const ships = entry.originalShips?.join(', ');
           const taxLabel = price ? t(price.taxBasis === 'net' ? 'vor Steuer' : price.taxBasis === 'gross' ? 'brutto' : 'Steuerbasis unbekannt') : '';

@@ -127,7 +127,7 @@ export function planPayment(amount: number, source: Currency, settings: PricePre
   return { cash, credit };
 }
 
-export function formatMinor(value: number, currency: 'EUR' | 'USD', language: 'de' | 'en' = 'de'): string {
+export function formatMinor(value: number, currency: 'EUR' | 'USD' | 'GBP', language: 'de' | 'en' = 'de'): string {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error('PRICE_VALUE');
   return new Intl.NumberFormat(language === 'de' ? 'de-DE' : 'en-US', { style: 'currency', currency }).format(value / 100);
 }

@@ -1,7 +1,7 @@
 import type {Pledge} from '../domain/model';
 import type {ChainBase,ChainStep} from './chain';
 import type {PricingSnapshot} from '../pricing/model';
-import {convertPurchaseValue,parseRsiPledgeValue,RSI_ORDER_PRICE,sameStandaloneShip} from '../pricing/inventory-values';
+import {convertPurchaseValue,parseRsiPledgeValue,RSI_ORDER_PRICE,sameStandaloneShip,type AcquisitionValue} from '../pricing/inventory-values';
 import {estimatePlanningMinor,euroRateIsStale,matchesShopAmount} from '../pricing/money';
 import type {PurchasePriceReader} from './shopping-list';
 import {ccuObservationTime,observedStandaloneCcu,type ChainObservation} from './observation';
@@ -27,14 +27,15 @@ function recordedCost(pledge:Pledge,display:PricingSnapshot,observation?:ChainOb
   const recorded=pledge.acquisitionCost;
   const receipt=pledge.rsiPurchase;
   const observedAt=ccuObservationTime(pledge,observation);
-  let payment: NonNullable<Pledge['acquisitionCost']>;
+  let payment: AcquisitionValue;
   if(recorded){
     if(recorded.taxBasis!==display.settings.taxMode)return unknown();
     payment=recorded;
   }else if(display.settings.taxMode==='gross'&&receipt?.status==='documented'&&receipt.source==='order'&&
       typeof observedAt==='string'&&Number.isFinite(Date.parse(observedAt))){
     // Use the booked line amount as paid. Today's VAT applies only to future estimates.
-    payment={minor:receipt.minor,currency:receipt.currency,taxBasis:'unknown',evidence:RSI_ORDER_PRICE};
+    payment={minor:receipt.minor,currency:receipt.currency,taxBasis:'unknown',evidence:RSI_ORDER_PRICE,
+      purchaseDate:receipt.purchaseDate,poundRate:receipt.poundRate};
   }else return unknown();
   const converted=convertPurchaseValue(payment,display);
   if(converted.minor===null)return unknown();
@@ -46,7 +47,9 @@ export function paidBaseCost(base:ChainBase|null,pledges:readonly Pledge[],displ
     const basis=packageBasis(pledge,base.childId,observation);
     const share=basis&&shares.find(item=>samePackageBasis(item,basis));
     if(share){
-      const cost=convertPurchaseValue({minor:share.minor,currency:share.currency,taxBasis:'unknown',evidence:'Eigene Angabe'},display);
+      const receipt=pledge?.rsiPurchase;
+      const cost=convertPurchaseValue({minor:share.minor,currency:share.currency,taxBasis:'unknown',evidence:'Eigene Angabe',
+        ...(receipt?.status==='documented'?{purchaseDate:receipt.purchaseDate,poundRate:receipt.poundRate}:{})},display);
       if(cost.minor!==null)return {...cost,approximate:true,usdMinor:share.currency==='USD'?share.minor:null,packageShare:true};
     }
   }

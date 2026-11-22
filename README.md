@@ -8,9 +8,9 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.99 Alpha** ist die aktuelle öffentliche Testversion und kostenlos verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.100 Alpha** ist die aktuelle öffentliche Testversion und kostenlos verfügbar.
 
-[Installer und Prüfsumme](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.99-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Prüfsumme](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.100-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
 #### Bestand und Angebote
 
@@ -66,9 +66,9 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.99 Alpha** is the current public test release and is available free of charge.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.100 Alpha** is the current public test release and is available free of charge.
 
-[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.99-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.100-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
 #### Inventory and offers
 

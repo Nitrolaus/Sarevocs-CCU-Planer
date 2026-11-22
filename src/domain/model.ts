@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { version } from '../../package.json';
 import {storeCreditSchema} from './store-credit';
+import {poundRateMatchesDate,poundRateSchema,purchaseDay} from '../pricing/pound-history';
 
 export const APP_NAME = 'Sarevoc´s CCU Planer';
 export const APP_VERSION = version;
@@ -20,7 +21,9 @@ export const ccuSchema = z.object({ instanceId: id, from: text, to: text,
   insurance: insuranceSchema }).strict();
 const rsiPurchaseSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('documented'), source: z.enum(['order', 'log']),
-    minor: z.number().int().positive().max(100_000_000), currency: z.enum(['USD', 'EUR']) }).strict(),
+    minor: z.number().int().positive().max(100_000_000), currency: z.enum(['USD', 'EUR', 'GBP']),
+    purchaseDate: purchaseDay.optional(), poundRate: poundRateSchema.optional() }).strict().refine(record =>
+      !record.poundRate || record.currency==='GBP'&&!!record.purchaseDate&&poundRateMatchesDate(record.poundRate,record.purchaseDate)),
   z.object({ status: z.literal('excluded') }).strict(),
 ]);
 export type RsiPurchase = z.infer<typeof rsiPurchaseSchema>;

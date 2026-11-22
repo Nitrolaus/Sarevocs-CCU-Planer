@@ -84,7 +84,7 @@ void app.whenReady().then(async () => {
     const parser = new BrowserWindow({show:false});
     await parser.loadURL('about:blank');
     assert.deepEqual(await parser.webContents.executeJavaScript(purchaseParserProbe('log', log(700,'FIXTURE01'), ['700'])),
-      [{id:'700',title,owner,order:'FIXTURE01',value:'$88.00 USD'}]);
+      [{id:'700',title,owner,order:'FIXTURE01',value:'$88.00 USD',date:'Nov 1 2026, 10:12 pm'}]);
     assert.deepEqual(await parser.webContents.executeJavaScript(purchaseParserProbe('order', '<ul class="orders-item">'+order('FIXTURE01',title,'€72.41 EUR')+'</ul>', ['FIXTURE01'])),
       [{id:'FIXTURE01',paid:true,discount:'€0.00 EUR',lines:[{title,quantity:'1',total:'€72.41 EUR'}]}]);
     parser.destroy();

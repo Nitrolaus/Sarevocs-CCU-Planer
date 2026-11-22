@@ -16,6 +16,7 @@ import { commandSchema } from './main/commands';
 import { runtimePaths } from './main/paths';
 import { DesktopLifecycle } from './main/desktop-lifecycle';
 import { SessionVault } from './security/session-vault';
+import { hasAuthenticationCookie } from './security/rsi-cookies';
 import { LastSeenStore } from './storage/last-seen';
 import { GiveawayOriginsStore } from './storage/giveaway-origins';
 import { BackgroundInventory } from './main/background-inventory';
@@ -32,7 +33,7 @@ import { MarketService } from './market/service';
 import { TableWidthStore } from './main/table-widths';
 import { LoanerService } from './loaners/service';
 import {LoanerReviews} from './loaners/reviews';
-import { publicClient, publicMarketReader, publicShopPriceReader } from './market/transport';
+import { publicClient, publicMarketReader, publicPoundHistoryReader, publicShopPriceReader } from './market/transport';
 import { PricingService } from './pricing/service';
 import { safeRsiShipUrl } from './market/ship-link';
 import { openRsiUpgrades } from './market/upgrade-link';
@@ -126,8 +127,10 @@ async function stopProfile(id: string) {
   await task?.done;
 }
 const vault = new SessionVault(paths.vault, safeStorage, paths.session);
+let poundHistory: ReturnType<typeof publicPoundHistoryReader> | undefined;
 const login = new RsiLogin(vault, new ConnectionDiagnostics(path.join(paths.crashes, 'Verbindung'), APP_VERSION),
-  path.join(__dirname, 'app.ico'), (id, identity) => lastSeen.canRemember(store.account(id), identity));
+  path.join(__dirname, 'app.ico'), (id, identity) => lastSeen.canRemember(store.account(id), identity),
+  undefined, undefined, () => (poundHistory ??= publicPoundHistoryReader())());
 // Read-only capsule load: a tooltip never saves, refreshes, or opens authentication.
 const upgradeHistory = new UpgradeHistoryReader(id => vault.load(id, false));
 const pending = new Map<string, { accountId: string; candidate: ImportCandidate; expires: number }>();
@@ -360,12 +363,11 @@ async function start() {
           if (pledgeRead) { data = { status: 'cancelled' }; break; }
           pledgeRead = controller;
           try {
-            data = await readWithPledgeConsent(current,
-              () => requestHello(win, pricing.snapshot().settings.language, controller.signal),
-              async () => {
-                const cookies = await vault.load(id, false);
-                return current() ? readConcierge('total', cookies, controller.signal) : { status: 'cancelled' };
-              });
+            const cookies = await vault.load(id, false);
+            data = !current() ? { status: 'cancelled' } : !hasAuthenticationCookie(cookies) ? { status: 'session-required' }
+              : await readWithPledgeConsent(current,
+                () => requestHello(win, pricing.snapshot().settings.language, controller.signal),
+                () => readConcierge('total', cookies, controller.signal));
           } catch { data = { status: 'unavailable' }; }
           finally { if (pledgeRead === controller) pledgeRead = undefined; }
           break;

@@ -29,3 +29,17 @@ test('Over-assigned, non-divisible, malformed and discounted multi-unit lines do
     {...order, lines:[line, line]},
   ]) assert.equal(purchasePrices(evidence(2), [invalid]).size, 0);
 });
+
+test('An old GBP order keeps its currency and matched purchase date while a documented EUR order takes precedence', () => {
+  const log=purchaseMatches([{...basePledge('1'),name:title}],
+    [{id:'1',title,owner:'Synthetic',order:order.id,value:'£20.00 GBP',date:'May 12 2019, 10:12 pm'}],'Synthetic');
+  const pounds={...order,discount:'£0.00 GBP',lines:[{title,quantity:'1',total:'£20.00'}]};
+  assert.deepEqual(purchasePrices(log,[pounds]).get('1'),{
+    status:'documented',source:'order',minor:2000,currency:'GBP',purchaseDate:'2019-05-12',
+  });
+  assert.deepEqual(purchasePrices(log,[{...pounds,discount:'€0.00 EUR',lines:[{title,quantity:'1',total:'€24.00 EUR'}]}]).get('1'),
+    {status:'documented',source:'order',minor:2400,currency:'EUR'});
+  assert.deepEqual(purchasePrices(log,[]).get('1'),{
+    status:'documented',source:'log',minor:2000,currency:'GBP',purchaseDate:'2019-05-12',
+  });
+});

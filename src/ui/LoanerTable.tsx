@@ -7,12 +7,18 @@ import {loanerReviewBasis,loanerReviewKey,type LoanerDecision,type LoanerReviews
 import type {BridgeResult,Command} from '../main/commands';
 import './loaner-reviews.css';
 import {ResizableTable} from './ResizableTable';
+import {inventorySearch} from '../market/search';
 
 async function request<T>(command:Command):Promise<T>{const result=await window.ccu.request(command) as BridgeResult<T>;if(!result.ok)throw Error('LOCAL_REVIEW_FAILED');return result.data;}
 type Menu={accountId:string;scope:string;key:string;left:number;top:number;state:LoanerDecision};
 
-export function LoanerTable({ accountId, pledges, snapshot }: { accountId:string|null;pledges: readonly Pledge[]; snapshot: LoanerSnapshot }) {
+export function LoanerTable({ accountId, pledges, snapshot, query='', onSearchCount }: {
+  accountId:string|null;pledges: readonly Pledge[]; snapshot: LoanerSnapshot; query?:string; onSearchCount?:(shown:number,total:number)=>void;
+}) {
   const t = useText(),language=useContext(LanguageContext), derived = useMemo(() => deriveLoaners(pledges, snapshot.data), [pledges, snapshot.data]);
+  const match=inventorySearch(query);
+  const visible=derived.rows.filter(row=>match(row.name,...row.origins.flatMap(origin=>[origin.parent,origin.publishedParent])));
+  useEffect(()=>onSearchCount?.(visible.length,derived.rows.length),[visible.length,derived.rows.length,onSearchCount]);
   const basis=JSON.stringify(derived.rows.map(row=>[row.key,loanerReviewBasis(row)])),scope=(accountId??'')+'|'+basis,scopeRef=useRef(scope);scopeRef.current=scope;
   const [keys,setKeys]=useState<{scope:string;values:Record<string,string>}|null>(null),[reviews,setReviews]=useState<LoanerReviewsSnapshot|null>(null);
   const [menu,setMenu]=useState<Menu|null>(null),[saving,setSaving]=useState(false),[error,setError]=useState('');
@@ -46,7 +52,7 @@ export function LoanerTable({ accountId, pledges, snapshot }: { accountId:string
   }
   const outdated = snapshot.data && Date.now() - Math.min(Date.parse(snapshot.data.loaners.fetchedAt), Date.parse(snapshot.data.included.fetchedAt)) > 36 * 3600000;
   return <><ResizableTable className="inventory-table loaner-table" storageKey="loaners" label={t('Loaner & Beiboote')} columns={['Schiff / Fahrzeug','Art','RSI-Regel für','Quelle'].map((label,i)=>({label:t(label),min:[140,90,130,120][i]!,preferred:[280,150,220,185][i]!,autoLimit:920}))}>
-    <tbody>{derived.rows.map(row => {
+    <tbody>{visible.map(row => {
       const kinds = new Set(row.origins.map(o => o.kind)), sources = [...new Set(row.origins.map(o => o.source))];
       const kind = kinds.size > 1 ? 'Loaner / Beiboot' : kinds.has('included') ? 'Beiboot' : 'Loaner';
       const origin = row.origins.map(o => `${o.parent} · Pledge ${o.pledgeId}${o.replaces ? ' · ' + t('Ersatz für enthaltenes Fahrzeug') + ': ' + o.replaces : ''}`).join('\n');
@@ -61,6 +67,7 @@ export function LoanerTable({ accountId, pledges, snapshot }: { accountId:string
           <small className="subline">{sources.map(s => snapshot.data![s].updatedAt.slice(0,10)).join(' / ')}</small></td></tr>;
     })}
     {!derived.rows.length && <tr><td colSpan={4} className="empty">{t(!snapshot.data ? snapshot.pending ? 'Loaner-Daten werden geladen …' : 'Loaner-Daten nicht verfügbar. Bitte aktualisieren.' : !pledges.length ? 'Zuerst einen Bestand einlesen.' : 'Keine ausdrücklich passenden RSI-Regeln gefunden. Loaner-Bestand bleibt ungeprüft.')}</td></tr>}
+    {!!derived.rows.length&&!visible.length&&<tr><td colSpan={4} className="empty">{t('Keine passenden Einträge gefunden.')}</td></tr>}
     </tbody></ResizableTable><div className="hint" role="status">{t('RSI-Regeln · persönliche Bestätigungen sind Benutzerangaben, keine RSI-Kontonachweise.')}
       {accountId&&!current&&' '+t('Bestätigungen werden geladen …')}
       {current&&!current.readable&&' '+t('Gespeicherte Bestätigungen sind nicht lesbar; keine Änderung möglich.')}

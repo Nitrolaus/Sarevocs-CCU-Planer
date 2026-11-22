@@ -94,10 +94,11 @@ try {
   assert.equal(await page.getByRole('button', { name: 'Demo-Datei ansehen' }).count(), 0);
   assert.equal(await page.locator('.concierge-card').count(), 1);
   assert.ok(await page.locator('.inventory-panel').evaluate(panel => {
-    const header = panel.querySelector(':scope > .panel-head');
+    const header = panel.querySelector(':scope > .inventory-panel-head');
     const card = panel.querySelector(':scope > .concierge-card');
     const table = panel.querySelector('.ship-value-table');
-    return !!header && !!card && !!table && header.nextElementSibling === card &&
+    return !!header?.querySelector('.inventory-search input') && !!header.querySelector('.inventory-search-count') &&
+      !!card && !!table && header.nextElementSibling === card &&
       !!(card.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING);
   }), 'Concierge card must be between the inventory filters and table');
   results.push('Concierge-Karte steht in der verpackten Anwendung zwischen Filtern und Bestandstabelle.');

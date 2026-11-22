@@ -10,6 +10,7 @@ import { connectionResource, connectionTarget, diagnosticLabel, networkErrorName
 import { RSI_PAGE_PROBE, RSI_CONNECTION_PROBE, rsiFetchPageProbe } from './rsi-page';
 import { CREDIT_URL, CREDIT_CSRF_PROBE, readStoreCredit } from './rsi-credit';
 import { buybackFetchProbe, buybackPageUrl, isBuybackListRead, readBuybacks } from './rsi-buyback';
+import { poundRateFor, type PoundRate } from '../pricing/pound-history';
 import { readPurchases } from './rsi-purchases';
 import { MAX_FILE_BYTES } from './files';
 export { RSI_PAGE_PROBE, RSI_CONNECTION_PROBE } from './rsi-page';
@@ -42,7 +43,8 @@ export class RsiLogin {
   constructor(private vault: SessionVault, private diagnostics?: DiagnosticSink, private icon?: string,
     private canRemember: (id: string, identity: RsiIdentity) => boolean = () => false,
     private creditTransport = async () => session.fromPartition('credit-read-' + randomUUID(), {cache: false}),
-    private purchaseReader = readPurchases) { protectNavigationWarnings(); }
+    private purchaseReader = readPurchases,
+    private readPoundHistory?: () => Promise<ReadonlyMap<string,PoundRate>>) { protectNavigationWarnings(); }
   private record(event: ConnectionEvent): string {
     let saved = false;
     try { saved = this.diagnostics?.record(event) ?? false; } catch { /* Diagnostics must not break login or cleanup. */ }
@@ -532,6 +534,18 @@ export class RsiLogin {
       try {
         const prices = await this.purchaseReader(active.session, candidate.document.pledges,
           manualReference ? null : identity.reference, checkWindow, undefined, observeSupplement);
+        const pounds=[...prices].filter(([,receipt])=>receipt.status==='documented'&&receipt.currency==='GBP'&&receipt.purchaseDate);
+        if(pounds.length&&this.readPoundHistory){
+          try{
+            const history=await this.readPoundHistory();
+            checkWindow();
+            for(const [id,receipt] of pounds){
+              if(receipt.status!=='documented'||!receipt.purchaseDate)continue;
+              const poundRate=poundRateFor(history,receipt.purchaseDate);
+              if(poundRate)prices.set(id,{...receipt,poundRate});
+            }
+          }catch{ /* Keep the original GBP price if a public rate is unavailable. */ }
+        }
         const latest = await this.cookies(active.session);
         checkWindow();
         if (!isDeepStrictEqual(auth(snapshot), auth(latest))) observeSupplement('purchase-auth-changed');

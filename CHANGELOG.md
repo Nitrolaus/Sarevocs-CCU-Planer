@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.100 · Alpha
+
+- Die kompakte Bestandssuche filtert den geöffneten Reiter nach Schiff, Hersteller oder Paket. Die Trefferzahl steht neben den Reitern.
+- In Pfund belegte Käufe behalten ihren Originalbetrag. Die Umrechnung verwendet einen historischen EZB-Referenzkurs zum belegten Kaufdatum und wird als Richtwert angezeigt.
+- Der Concierge-Rang wird nach einer Bestandsaktualisierung erneut gelesen. Fehlende Sitzungen und unlesbare RSI-Angaben erhalten eigene Hinweise. Die Pledge-Summe bleibt durch Windows Hello geschützt.
+
 ## 0.3.99 · Alpha
 
 - Die RSI-Rückkaufliste kann mehr als 20 Seiten umfassen. Bei einer vollen letzten Seite erkennt der Leser eine leere Folgeseite als Listenende.

@@ -24,6 +24,22 @@
 }
 .concierge-card h2 { margin: 3px 0 11px; }
 .inventory-panel > .concierge-card { margin: 0 22px 16px; }
+.inventory-panel-head { display:grid; gap:5px; padding:7px 22px; }
+.inventory-panel-line { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:5px 12px; }
+.inventory-panel-line > h2 { margin:0; }
+.inventory-panel-tabs { flex-wrap:nowrap; }
+.inventory-panel-tabs .filters { gap:4px; }
+#root .inventory-panel-tabs .filters button { font-size:12px; padding:2px 5px; }
+.inventory-actions { flex-wrap:nowrap; align-items:center; gap:6px; margin-inline-start:auto; max-width:100%; }
+.inventory-search { display:flex; align-items:center; gap:6px; width:190px; min-width:0; padding-inline-start:7px; background:#111c25; border:1px solid #4d797c; border-radius:6px; }
+.inventory-search:focus-within { border-color:#81ddca; }
+.inventory-search > svg { color:#81ddca; width:15px; height:15px; flex:none; }
+.inventory-search > input { flex:1; min-width:0; margin:0; padding:3px 0; border:0; background:transparent; font-size:13px; }
+.inventory-panel .inventory-actions > button { min-height:27px; padding:3px 9px; font-size:12px; }
+#root .inventory-search > .inventory-search-clear { flex:0 0 25px; min-height:25px; padding:0; border:0; background:transparent; box-shadow:none; font-size:16px; color:#a9c2d3; }
+#root .inventory-search > .inventory-search-clear::after { content:none; }
+.inventory-panel .inventory-search-clear:disabled { visibility:hidden; }
+.inventory-search-count { color:#a9cfc8; font-size:12px; font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
 .concierge-insignia { width: 68px; color: #e3c194; filter: drop-shadow(0 0 9px #b6904e44); }
 .concierge-card .concierge-eyebrow {
   margin: 0;
