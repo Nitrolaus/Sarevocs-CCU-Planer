@@ -440,6 +440,10 @@ Object.assign(english, {
   'Dein bisheriger Bestand bleibt sichtbar.': 'Your previous inventory stays visible.',
   'RSI antwortet vorübergehend langsam.': 'RSI is taking longer to respond.',
   'wird erneut versucht.': 'will be retried.',
+  'Warbond-Rabatt': 'Warbond discount',
+  'Vorteil bei Nutzung': 'Savings in chain',
+  'Aktueller RSI-Standardpreis abzüglich des Warbond-Preises für dieses Upgrade.': 'Current RSI standard price minus the Warbond price for this upgrade.',
+  'Heutiger Standardpreis oder Richtwert für dieses Upgrade abzüglich des belegten Kaufpreises.': 'Current standard price or estimate for this upgrade minus its documented purchase price.',
 });
 export function translate(language:'de'|'en',text:string):string{
   const exports:Record<string,string>={'LOKALER EXPORT':'LOCAL EXPORT','Exportieren':'Export','Exportieren …':'Export …','Dateiformat':'File format','Inhalt':'Contents','Bestand dieses Profils':'Inventory of this profile','Aktuelle CCU-Kette':'Current CCU chain','Vorschau wird erstellt …':'Preparing preview …','Zeilen':'rows','Lokale Momentaufnahme':'Local snapshot','Währung und Mehrwertsteuersatz aus deinen Einstellungen. Offene Werte bleiben offen.':'Currency and VAT from your settings. Unknown values remain unknown.','Hinweise zum Datenstand':'Data notes','Speicherort wählen …':'Choose save location …','Wird gespeichert …':'Saving …','Export gespeichert.':'Export saved.','Export fehlgeschlagen.':'Export failed.','Zuerst eine CCU-Kette mit Startbasis anzeigen.':'First display a CCU chain with a start base.'};

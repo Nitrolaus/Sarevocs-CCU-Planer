@@ -4,7 +4,8 @@ import { RSI_ORIGIN } from '../main/policy';
 
 const listPath = '/en/account/buy-back-pledges';
 const pageSize = 250;
-const maxPages = 20;
+const maxEntries = 50_000;
+const maxPages = maxEntries / pageSize + 1;
 
 export function buybackPageUrl(page: number): string {
   if (!Number.isInteger(page) || page < 1 || page > maxPages) throw new Error('BUYBACK_PAGE');
@@ -98,25 +99,33 @@ export function buybackFetchProbe(page: number): string {
 }
 
 const pageSchema = z.object({ buybacks: z.array(buybackSchema).max(pageSize), token: z.enum(['available', 'unavailable', 'unknown']), hasNext: z.boolean() }).strict();
-export async function readBuybacks(load: (page: number) => Promise<unknown>, assertActive: () => void):
+export type BuybackReadFailure = 'buyback-page-unreadable' | 'buyback-duplicate-entry' | 'buyback-limit-reached';
+
+export async function readBuybacks(load: (page: number) => Promise<unknown>, assertActive: () => void,
+  onFailure?: (reason: BuybackReadFailure) => void):
   Promise<{ entries: Buyback[]; observation: BuybackObservation } | null> {
   const entries: Buyback[] = [], ids = new Set<string>();
   let token: BuybackObservation['token'] = 'unknown';
-  const deadline = Date.now() + 10_000;
+  let verifyingEnd = false;
+  const deadline = Date.now() + 60_000;
+  const fail = (reason: BuybackReadFailure) => { onFailure?.(reason); return null; };
   for (let page = 1; page <= maxPages; page++) {
-    if (Date.now() >= deadline) return null;
+    if (Date.now() >= deadline) return fail('buyback-limit-reached');
     assertActive();
     const parsed = pageSchema.safeParse(await load(page));
     assertActive();
-    if (!parsed.success) return null;
+    if (!parsed.success) return fail('buyback-page-unreadable');
     const data = parsed.data;
     if (page === 1) token = data.token;
-    if (data.buybacks.length === 0 && (page !== 1 || data.hasNext)) return null;
+    if (data.buybacks.length === 0 && (data.hasNext || page !== 1 && !verifyingEnd)) return fail('buyback-page-unreadable');
+    if (entries.length + data.buybacks.length > maxEntries) return fail('buyback-limit-reached');
     for (const row of data.buybacks) {
-      if (ids.has(row.entryId)) return null;
+      if (ids.has(row.entryId)) return fail('buyback-duplicate-entry');
       ids.add(row.entryId); entries.push(row);
     }
     if (!data.hasNext && data.buybacks.length < pageSize) return { entries, observation: { observedAt: new Date().toISOString(), token, current: true } };
+    // A full page without a next link can be the last one. Confirm it with the explicit empty page.
+    verifyingEnd = !data.hasNext;
   }
-  return null;
+  return fail('buyback-limit-reached');
 }

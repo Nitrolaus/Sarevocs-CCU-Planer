@@ -18,15 +18,21 @@ export const SHOP_PRICE_MAX_AGE = 5 * 60_000;
 export const MAX_SHOP_PAIRS = 24;
 export const shopPairKey = ({ fromId, toId }: ShopPair) => `${fromId}:${toId}`;
 
+export function shopPairForStep(step: ChainStep): ShopPair | null {
+  if (step.validity === 'invalid' || !step.from.catalogueConfirmed || !step.to.catalogueConfirmed) return null;
+  const from = /^matrix:([1-9]\d{0,9})$/.exec(step.from.key);
+  const to = /^matrix:([1-9]\d{0,9})$/.exec(step.to.key);
+  if (!from || !to) return null;
+  const pair = shopPairSchema.safeParse({ fromId: Number(from[1]), toId: Number(to[1]) });
+  return pair.success ? pair.data : null;
+}
+
 export function shopPairs(steps: readonly ChainStep[]): ShopPair[] {
   const pairs = new Map<string, ShopPair>();
   for (const step of steps) {
-    if (step.kind !== 'purchase' || step.validity === 'invalid' || !step.from.catalogueConfirmed || !step.to.catalogueConfirmed) continue;
-    const from = /^matrix:([1-9]\d{0,9})$/.exec(step.from.key), to = /^matrix:([1-9]\d{0,9})$/.exec(step.to.key);
-    if (from && to) {
-      const pair = shopPairSchema.safeParse({ fromId: Number(from[1]), toId: Number(to[1]) });
-      if (pair.success) pairs.set(`${from[1]}:${to[1]}`, pair.data);
-    }
+    if (step.kind !== 'purchase') continue;
+    const pair = shopPairForStep(step);
+    if (pair) pairs.set(shopPairKey(pair), pair);
     if (pairs.size === MAX_SHOP_PAIRS) break;
   }
   return [...pairs.values()];

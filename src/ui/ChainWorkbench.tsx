@@ -3,7 +3,7 @@ import type {ExportContext} from '../export/model';
 import type {PlannerInventory} from './ChainBuilder';
 import {prepareChains,type ChainStep} from '../planner/chain';
 import {chainVariants,manualChain} from '../planner/manual';
-import {additionalCost,chainCosts,chainSavings,paidBaseCost,paidCcuCost,type CostTotal} from '../planner/costs';
+import {additionalCost,ccuPriceAdvantageReader,chainCosts,chainSavings,paidBaseCost,paidCcuCost,type CcuPriceAdvantage,type CostPosition,type CostTotal} from '../planner/costs';
 import {purchasePriceReader} from '../planner/shopping-list';
 import {anchorFromStep,type DraftAnchor,type PlannerDraft} from '../planner/draft';
 import {previewPlacement,type Placement} from '../planner/placement';
@@ -157,6 +157,7 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   const packageEditor=usePackageShares(shareBasis?accountId:null);
   const rawCosts=editor.ready&&ready&&plan?chainCosts(plan,pledges,display,current,priceFor,observation,packageEditor.shares):null;
   const paidFor=(step:ChainStep)=>paidCcuCost(step,pledges,display,observation);
+  const advantageFor=ccuPriceAdvantageReader(display);
   function dateBadge(pledgeId?:string){const p=pledges.find(p=>p.pledgeId===pledgeId);if(!p)return null;const date=pledgeDateLabel(p,display.settings.language,true);return date?<span title={t('Erhalten am (RSI)')+': '+pledgeDateLabel(p,display.settings.language)+' · '+t('Kein Beleg des persönlichen Kaufdatums.')}> · {date}</span>:null;}
   const costs=rawCosts&&(resourceConflicts.length||!reservationsReady)?{...rawCosts,invalid:true,investment:null}:rawCosts;
   const money=(minor:number|null,approximate=false)=>minor===null?t('Preis offen'):(approximate?'≈ ':'')+formatMinor(minor,display.settings.currency,display.settings.language);
@@ -176,12 +177,26 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   const costDetailId=React.useId();
   const costToggle=useRef<HTMLButtonElement>(null);
   const invalid=manual&&plan&&'invalid'in plan&&plan.invalid;
-  function priceInfo(step:ChainStep){const value=additionalCost(step,display,current,priceFor),paid=paidFor(step);
-    const hint=step.kind==='purchase'?t(priceFor(step).kind==='warbond'?'Warbond-Einstieg · ungeprüft':'Richtwert aus Schiffswertdifferenz'):undefined;
+  function routeInfo(step:ChainStep,saving:CcuPriceAdvantage|null,savingId?:string){
+    return <span className={'ccu-route-row'+(saving?' has-advantage':'')}>
+      <span className="ccu-route">
+        <span className="ccu-model"><small>{t('Von')}</small><strong>{step.from.name}</strong></span>
+        <span className="ccu-model"><small>{t('Nach')}</small><strong>{step.to.name}</strong></span>
+      </span>
+      {saving&&<span id={savingId} className="ccu-price-advantage" title={t(step.kind==='purchase'
+        ?'Aktueller RSI-Standardpreis abzüglich des Warbond-Preises für dieses Upgrade.'
+        :'Heutiger Standardpreis oder Richtwert für dieses Upgrade abzüglich des belegten Kaufpreises.')}>
+        <span>{t(step.kind==='purchase'?'Warbond-Rabatt':'Vorteil bei Nutzung')}</span>
+        <strong>{money(saving.minor,saving.approximate)}</strong>
+      </span>}
+    </span>;
+  }
+  function priceInfo(step:ChainStep,value:CostPosition,paid:CostPosition|null,warbond:boolean){
+    const hint=step.kind==='purchase'?t(warbond?'Warbond-Einstieg · ungeprüft':'Richtwert aus Schiffswertdifferenz'):undefined;
     const priceLabel = step.kind !== 'purchase' ? 'Noch zu zahlen' : value.minor === null ? 'Preis offen'
       : !value.approximate ? 'RSI-Shoppreis' : display.settings.currency === 'EUR' ? 'EZB-Richtwert' : 'Zukauf · Richtwert';
     return <span className="ccu-step-price" title={value.approximate?hint:undefined}><span>{t(priceLabel)}</span><strong>{money(value.minor,value.approximate)}</strong>
-      {step.kind==='owned'?<small>{t(paid.rsiOrder?'RSI-Bestellpreis':'Kaufpreis')}: {paid.minor===null?t('noch nicht erfasst'):money(paid.minor,paid.approximate)}</small>
+      {paid?<small>{t(paid.rsiOrder?'RSI-Bestellpreis':'Kaufpreis')}: {paid.minor===null?t('noch nicht erfasst'):money(paid.minor,paid.approximate)}</small>
         :<small>{t(value.minor===null?'Preis / Kaufbarkeit offen':'Kaufbarkeit ungeprüft')}</small>}
       {step.kind==='purchase'&&display.settings.currency==='EUR'&&value.usdMinor!==null&&<small>{formatMinor(estimateMinor(value.usdMinor,{...display.settings,currency:'USD'},null)!,'USD',display.settings.language)} · {display.settings.taxMode==='gross'?vatLabel(display.settings.vatBasisPoints,display.settings.language):t('vor Steuer')}</small>}</span>;
   }
@@ -197,14 +212,19 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     const held=physicalKey?stockPool.ccus.find(c=>c.key===physicalKey):undefined,locked=!!held&&excluded.has(held.key);
     const token='card:'+step.key,highlight=dropTarget?.token===token?candidate(step.boardIndex??at(index),step.boardIndex!==undefined).status:null;
     const lockedCost=locked?paidFor({...step,kind:'owned',ccu:held}):null;
+    const warbond=purchase&&priceFor(step).kind==='warbond';
+    const unpaid=additionalCost(step,display,current,priceFor);
+    const paid=step.kind==='owned'?paidFor(step):null;
+    const saving=locked?null:advantageFor(step,paid??unpaid,warbond);
+    const savingId=saving?costDetailId+'-advantage-'+index:undefined;
     return <article key={step.key+':'+index} className={'ccu-step '+(locked?'owned is-locked':step.kind)+(step.validity==='invalid'&&!locked?' invalid':'')+(snapped===step.key?' snapped':'')+(highlight?' drop-'+highlight:'')} draggable={editing&&!missing&&!locked}
       data-resource-key={physicalKey} data-anchor-index={step.boardIndex} data-step-index={index} data-drop-fit={highlight} onDragStart={event=>start(event,step,step.boardIndex)} onDragEnd={endDrag}
       onDragOver={event=>over(event,step.boardIndex??at(index),step.boardIndex!==undefined,token)} onDragLeave={event=>leave(event,token)} onDrop={event=>drop(event,step.boardIndex??at(index),step.boardIndex!==undefined)}>
-      <div className="ccu-kind"><span>{t(locked?(held?.warbond?'Warbond-CCU':'CCU'):missing?'Nicht mehr im Bestand':purchase?(priceFor(step).kind==='warbond'?'Warbond-CCU':'Standard-CCU'):step.ccu?.warbond?'Warbond-CCU':'CCU')}</span>
+      <div className="ccu-kind"><span>{t(locked?(held?.warbond?'Warbond-CCU':'CCU'):missing?'Nicht mehr im Bestand':purchase?(warbond?'Warbond-CCU':'Standard-CCU'):step.ccu?.warbond?'Warbond-CCU':'CCU')}</span>
         {purchase?<button className="ccu-ownership" disabled={opening} aria-label={t('RSI-Upgrades öffnen')+': '+step.from.name+' → '+step.to.name} onClick={()=>void openShop()}>{t('Noch kaufen')}</button>:<span className="ccu-ownership">{t(locked?'Gesperrt':missing?'Prüfen':'Im Bestand')}{dateBadge((held??step.ccu)?.pledgeId)}</span>}</div>
-      <button className="ccu-step-details" aria-label={t('CCU-Details')+': '+step.from.name+' → '+step.to.name} aria-expanded={detail===step.key} onClick={()=>setDetail(detail===step.key?null:step.key)}>
-        <span className="ccu-route"><span className="ccu-model"><small>{t('Von')}</small><strong>{step.from.name}</strong></span><span className="ccu-model"><small>{t('Nach')}</small><strong>{step.to.name}</strong></span></span>
-        {lockedCost?<span className="ccu-step-price"><span>{t('Bereits bezahlt')}</span><strong>{money(lockedCost.minor,lockedCost.approximate)}</strong><small>{t('Von Berechnungen ausgeschlossen')}</small></span>:<>{missing&&<span className="ccu-paid">{t('Exemplar fehlt')}</span>}{priceInfo(step)}</>}</button>
+      <button className="ccu-step-details" aria-label={t('CCU-Details')+': '+step.from.name+' → '+step.to.name} aria-describedby={savingId} aria-expanded={detail===step.key} onClick={()=>setDetail(detail===step.key?null:step.key)}>
+        {routeInfo(step,saving,savingId)}
+        {lockedCost?<span className="ccu-step-price"><span>{t('Bereits bezahlt')}</span><strong>{money(lockedCost.minor,lockedCost.approximate)}</strong><small>{t('Von Berechnungen ausgeschlossen')}</small></span>:<>{missing&&<span className="ccu-paid">{t('Exemplar fehlt')}</span>}{priceInfo(step,unpaid,paid,warbond)}</>}</button>
       {(step.boardIndex!==undefined||held)&&<div className="ccu-edit-buttons">
         {held&&<CcuLock locked={locked} disabled={!exclusions.ready||exclusions.saving} label={step.from.name+' → '+step.to.name} onToggle={()=>exclusions.toggle(held.key)}/>}
         {step.boardIndex!==undefined&&<><button aria-label={t('Schritt nach links')} disabled={!editing||locked||step.boardIndex===0} onClick={()=>place(active.anchors[step.boardIndex!]!,step.boardIndex!-1,false,step.boardIndex)}>←</button>
@@ -309,9 +329,11 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
       <div className="ccu-stock-tools" role="group" aria-label={t('Vorratsansicht')}><button aria-pressed={stockView==='band'} onClick={()=>setStockView('band')}>{t('Kartenband')}</button><button aria-pressed={stockView==='grid'} onClick={()=>setStockView('grid')}>{t('Raster')}</button><label>{t('Spalten')}<select aria-label={t('Spalten im Vorratsraster')} disabled={stockView!=='grid'} value={stockColumns} onChange={event=>setStockColumns(Number(event.target.value))}>{[3,4,5].map(n=><option key={n} value={n}>{n}</option>)}</select></label></div>
       {editing&&!showLocked&&<small>{t('Ziehen oder mit + einfügen')}</small>}<input aria-label={t('CCU suchen')} placeholder={t('CCU suchen …')} value={query} maxLength={160} onChange={event=>setQuery(event.target.value)}/></div>
       <div className={'ccu-stock-row'+(stockView==='grid'?' ccu-stock-grid':'')} data-columns={stockColumns}>{shownTiles.map(({step,index})=>{const locked=step.kind==='owned'&&excluded.has(step.key),assigned=step.kind==='owned'&&used.has(step.key);
-        const cost=step.kind==='owned'?paidFor(step):additionalCost(step,display,current,priceFor);return <article key={step.key+':'+index} className={'ccu-stock-tile '+step.kind+(assigned?' assigned':'')+(locked?' is-locked':'')}
+        const cost=step.kind==='owned'?paidFor(step):additionalCost(step,display,current,priceFor);
+        const saving=locked?null:advantageFor(step,cost,step.kind==='purchase'&&priceFor(step).kind==='warbond');
+        return <article key={step.key+':'+index} className={'ccu-stock-tile '+step.kind+(assigned?' assigned':'')+(locked?' is-locked':'')}
         data-resource-key={step.kind==='owned'?step.key:undefined} draggable={editing&&!assigned&&!locked} onDragStart={event=>start(event,step)} onDragEnd={endDrag}>
-        <span className="ccu-ownership">{t(locked?'Gesperrt':assigned?'Bereits eingeplant':step.kind==='owned'?'Im Bestand':'Fehlende Verbindung')}{step.kind==='owned'&&dateBadge(step.ccu?.pledgeId)}</span><span className="ccu-route"><span className="ccu-model"><small>{t('Von')}</small><strong>{step.from.name}</strong></span><span className="ccu-model"><small>{t('Nach')}</small><strong>{step.to.name}</strong></span></span>
+        <span className="ccu-ownership">{t(locked?'Gesperrt':assigned?'Bereits eingeplant':step.kind==='owned'?'Im Bestand':'Fehlende Verbindung')}{step.kind==='owned'&&dateBadge(step.ccu?.pledgeId)}</span>{routeInfo(step,saving)}
         {step.kind==='owned'&&<CcuLock locked={locked} disabled={!exclusions.ready||exclusions.saving} label={step.from.name+' → '+step.to.name} onToggle={()=>exclusions.toggle(step.key)}/>}<small>{t(step.kind==='owned'?(cost.rsiOrder?'RSI-Bestellpreis':'Bereits bezahlt'):'Preisvorschau')}: {money(cost.minor,step.kind!=='owned'||cost.approximate)}</small><button aria-label={t('CCU einfügen')+': '+step.from.name+' → '+step.to.name} disabled={!editing||assigned||locked} onClick={()=>place(anchorFromStep(step),active.anchors.length)}>+</button></article>;})}
       {!shownTiles.length&&<span>{t(query?'Keine passenden Treffer':'Noch keine CCUs verfügbar.')}</span>}</div>
     </div>

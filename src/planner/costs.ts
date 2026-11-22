@@ -6,9 +6,11 @@ import {estimatePlanningMinor,euroRateIsStale,matchesShopAmount} from '../pricin
 import type {PurchasePriceReader} from './shopping-list';
 import {ccuObservationTime,observedStandaloneCcu,type ChainObservation} from './observation';
 import {packageBasis,samePackageBasis,type PackageShare} from './package-shares';
+import {SHOP_PRICE_MAX_AGE,shopPairForStep,shopPairKey,type ShopPrice} from '../market/shop-prices';
 
 export type CostPosition={minor:number|null;approximate:boolean;usdMinor:number|null;rsiOrder?:true;packageShare?:true};
 export type CostTotal={knownMinor:number;missing:number;approximate:boolean};
+export type CcuPriceAdvantage={minor:number;approximate:boolean};
 const unknown=():CostPosition=>({minor:null,approximate:false,usdMinor:null});
 function rate(display:PricingSnapshot){return display.rate&&!euroRateIsStale(display.rate)?display.rate:null;}
 /** A current standard ship-value difference is an estimate, never a verified shop edge. */
@@ -65,6 +67,49 @@ export function paidCcuCost(step:ChainStep,pledges:readonly Pledge[],display:Pri
   if(!p.acquisitionCost&&!observedStandaloneCcu(p,observation))return unknown();
   return recordedCost(p,display,observation);
 }
+
+export function ccuPriceAdvantageReader(display:PricingSnapshot, now=Date.now()){
+  const {settings}=display;
+  const fx=display.rate&&!euroRateIsStale(display.rate,now)?display.rate:null;
+  const quotes=new Map<string,ShopPrice>();
+  for(const quote of display.shopPrices??[]){
+    if(quote.checkedAt>now||now-quote.checkedAt>=SHOP_PRICE_MAX_AGE)continue;
+    const key=shopPairKey(quote)+':'+quote.edition;
+    if((quotes.get(key)?.checkedAt??-1)<quote.checkedAt)quotes.set(key,quote);
+  }
+  return (step:ChainStep,cost:CostPosition,warbondSelected=false):CcuPriceAdvantage|null=>{
+    if(cost.minor===null||!Number.isSafeInteger(cost.minor)||cost.minor<0)return null;
+    if(step.kind!=='owned'&&(step.kind!=='purchase'||!warbondSelected))return null;
+    const pair=shopPairForStep(step);
+    if(!pair)return null;
+    const key=shopPairKey(pair);
+    const standard=quotes.get(key+':standard')?.amount;
+    const warbond=quotes.get(key+':warbond')?.amount;
+    const nativeStandard=matchesShopAmount(settings,standard)?standard.minor:null;
+    let standardMinor:number|null;
+    let approximate=cost.approximate||cost.rsiOrder===true;
+    if(step.kind==='purchase'){
+      if(!standard||!warbond)return null;
+      const native=nativeStandard!==null&&matchesShopAmount(settings,warbond);
+      const usdNet=standard.currency==='USD'&&standard.taxMode==='net'&&warbond.currency==='USD'&&warbond.taxMode==='net';
+      if(!native&&!usdNet)return null;
+      const warbondMinor=estimatePlanningMinor(warbond.minor,settings,fx,warbond);
+      if(warbondMinor!==cost.minor)return null;
+      standardMinor=estimatePlanningMinor(standard.minor,settings,fx,standard);
+      approximate||=!native;
+    }else if(nativeStandard!==null){
+      standardMinor=nativeStandard;
+    }else{
+      const from=step.from.nominalUsd,to=step.to.nominalUsd;
+      const reference=standard?.currency==='USD'&&standard.taxMode==='net'?standard.minor
+        :from!==null&&to!==null&&Number.isSafeInteger(from)&&Number.isSafeInteger(to)&&from>0&&to>from&&to<=100_000_000?to-from:null;
+      standardMinor=estimatePlanningMinor(reference,settings,fx);
+      approximate=true;
+    }
+    return standardMinor!==null&&standardMinor>cost.minor?{minor:standardMinor-cost.minor,approximate}:null;
+  };
+}
+
 function sum(values:readonly CostPosition[]):CostTotal{return values.reduce<CostTotal>((s,v)=>{
   const valid=v.minor!==null&&Number.isSafeInteger(v.minor)&&v.minor>=0&&Number.isSafeInteger(s.knownMinor+v.minor);
   return {knownMinor:s.knownMinor+(valid?v.minor!:0),missing:s.missing+Number(!valid),approximate:s.approximate||v.approximate||v.rsiOrder===true};

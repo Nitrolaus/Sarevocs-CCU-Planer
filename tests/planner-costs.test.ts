@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {additionalCost,paidBaseCost,paidCcuCost,chainCosts,chainSavings} from '../src/planner/costs';
+import {additionalCost,ccuPriceAdvantageReader,paidBaseCost,paidCcuCost,chainCosts,chainSavings} from '../src/planner/costs';
+import {SHOP_PRICE_MAX_AGE,type ShopPrice} from '../src/market/shop-prices';
 import {packageBasis} from '../src/planner/package-shares';
 import type {ChainStep,ChainBase} from '../src/planner/chain';import type {PricingSnapshot} from '../src/pricing/model';import type {Pledge} from '../src/domain/model';
 const at=new Date().toISOString(),day=at.slice(0,10);
@@ -9,6 +10,44 @@ const gap:ChainStep={key:'gap',kind:'purchase',from:model('from',35000),to:model
 const owned:ChainStep={...gap,key:'owned',kind:'owned',ccu:{key:'owned',pledgeId:'p',instanceId:'c',from:gap.from,to:gap.to,warbond:true,applicabilityConfirmed:false,protected:true}};
 const pledge:Pledge={pledgeId:'p',name:'synthetic',insurance:{kind:'lti',evidence:'test'},originalDescription:'',ships:[],ccus:[{instanceId:'c',from:'from',to:'to',status:'unused',applicability:'unverified',insurance:{kind:'lti',evidence:'test'}}],protected:true,baseReleased:false,restrictions:[],acquisitionCost:null,unknownCostReason:'test',meltValue:null,sourceValues:{}};
 const base:ChainBase={key:'base',pledgeId:'base',childId:'base',model:model('from',1000),pledgeName:'base',insurance:{kind:'lti',evidence:'test'},protected:true,released:false,multiShip:false,identityConfirmed:false};
+
+test('a Warbond discount requires fresh, comparable prices for the exact selected pair',()=>{
+ const now=Date.now();
+ const step={...gap,from:model('matrix:1',35000),to:model('matrix:2',40000)};
+ const quote=(edition:ShopPrice['edition'],minor:number):ShopPrice=>({
+   edition,fromId:1,toId:2,checkedAt:now,amount:{minor,currency:'EUR',taxMode:'net',vatBasisPoints:0},
+ });
+ const standard=quote('standard',1500),warbond=quote('warbond',1000);
+ const cost={minor:1000,usdMinor:1250,approximate:false};
+ const read=(shopPrices:ShopPrice[])=>ccuPriceAdvantageReader({...display,shopPrices},now);
+ assert.deepEqual(read([standard,warbond])(step,cost,true),{minor:500,approximate:false});
+ assert.equal(read([standard,warbond])(step,cost),null);
+ assert.equal(read([standard,warbond])(step,{...cost,minor:999},true),null);
+ assert.equal(read([warbond])(step,cost,true),null);
+ assert.equal(read([standard,{...warbond,fromId:3}])(step,cost,true),null);
+ assert.equal(read([standard,{...warbond,checkedAt:now-SHOP_PRICE_MAX_AGE}])(step,cost,true),null);
+ assert.equal(read([standard,{...warbond,amount:{...warbond.amount,taxMode:'gross'}}])(step,cost,true),null);
+ const usd=(q:ShopPrice,minor:number):ShopPrice=>({...q,amount:{...q.amount,minor,currency:'USD'}});
+ assert.deepEqual(read([usd(standard,1900),usd(warbond,1250)])(step,{...cost,approximate:true},true),
+   {minor:520,approximate:true});
+});
+
+test('owned savings use the documented cost and a standard comparison, never a fresh Warbond',()=>{
+ const now=Date.now();
+ const step={...owned,from:model('matrix:1',35000),to:model('matrix:2',40000)};
+ const paid={minor:700,usdMinor:null,approximate:false};
+ const standard:ShopPrice={edition:'standard',fromId:1,toId:2,checkedAt:now,
+   amount:{minor:3000,currency:'EUR',taxMode:'net',vatBasisPoints:0}};
+ const read=ccuPriceAdvantageReader({...display,shopPrices:[standard,{...standard,edition:'warbond',amount:{...standard.amount,minor:800}}]},now);
+ assert.deepEqual(read(step,paid),{minor:2300,approximate:false});
+ assert.deepEqual(read(step,{...paid,rsiOrder:true}),{minor:2300,approximate:true});
+ assert.equal(read(step,{...paid,minor:null}),null);
+ assert.equal(read(step,{...paid,minor:3000}),null);
+ assert.equal(read({...step,validity:'invalid'},paid),null);
+ assert.deepEqual(ccuPriceAdvantageReader(display,now)(step,paid),{minor:3300,approximate:true});
+ assert.equal(ccuPriceAdvantageReader(display,now)({...step,to:{...step.to,nominalUsd:null}},paid),null);
+ assert.equal(ccuPriceAdvantageReader({...display,rate:null},now)(step,paid),null);
+});
 test('standard gap estimate converts the value difference, with configured VAT exactly once',()=>{
  assert.deepEqual(additionalCost(gap,display,true),{minor:4000,usdMinor:5000,approximate:true});
  assert.equal(additionalCost(gap,{...display,settings:{...display.settings,taxMode:'gross'}},true).minor,4760);

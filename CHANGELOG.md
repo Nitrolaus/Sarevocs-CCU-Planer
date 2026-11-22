@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.99 · Alpha
+
+- Die RSI-Rückkaufliste kann mehr als 20 Seiten umfassen. Bei einer vollen letzten Seite erkennt der Leser eine leere Folgeseite als Listenende.
+- Die lokale Diagnose hält bei einem Buy-Back-Abbruch den technischen Grund fest. Unvollständig gelesene Listen ersetzen den zuletzt erfolgreich gelesenen Stand nicht.
+- CCU-Karten zeigen den belegbaren Warbond-Rabatt beziehungsweise den Vorteil bei Nutzung eines vorhandenen CCUs direkt neben den Schiffsnamen.
+
 ## 0.3.98 · Alpha
 
 - Die Paketdetails zeigen den belegten RSI-Gesamtpreis für eine Startbasis aus einem Mehrschiffpaket. Ein selbst eingetragener Anteil bleibt lokal beim konkreten Schiff gespeichert.

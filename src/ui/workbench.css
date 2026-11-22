@@ -33,12 +33,12 @@
 .ccu-price-comparison th button{background:transparent;border:0;text-align:left;padding:0 4px 0 0;color:#edf2f5;font-size:12px}.ccu-workbench .ccu-price-equation{font-size:12px;color:#b9d6d8;margin:12px 0;max-width:100%;overflow-wrap:anywhere}
 
 /* Approved compact cards: full endpoints and aligned remaining costs. */
-.ccu-workbench .ccu-step{min-height:270px}.ccu-workbench .ccu-step-details{justify-content:initial;gap:10px}.ccu-workbench .ccu-route{display:flex;flex:1;flex-direction:column;gap:10px;min-width:0}.ccu-workbench .ccu-model{display:block;min-width:0}.ccu-model>small{display:block;font-size:10px;line-height:1.4;color:#a9bfca;margin:0 0 3px}.ccu-workbench .ccu-model>strong{display:block;font-size:13px;line-height:1.4;color:#edf2f5;overflow-wrap:anywhere}.ccu-step-details>.ccu-route{min-height:96px}.ccu-workbench .ccu-step-price{margin-top:auto;min-height:90px;border-top:1px solid #ffffff22;padding-top:8px}.ccu-kind{min-height:28px;align-content:flex-start}.ccu-edit-buttons{min-height:19px}.ccu-workbench .ccu-stock-tile>.ccu-route{gap:7px}.ccu-stock-tile .ccu-model{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;align-items:baseline}.ccu-stock-tile .ccu-model>strong{font-size:12px}.ccu-stock-tile .ccu-model>small{padding:0;min-height:0}.ccu-workbench .ccu-comparison{border:0;margin:12px 0 8px;padding:0;overflow:visible}.ccu-price-details{margin:12px 0;border-block:1px solid #35505f;padding:10px 0;min-width:0;overflow-x:auto;color:#b9d6d8;font-size:12px}.ccu-price-details>summary{cursor:pointer}.ccu-price-details .ccu-search-evidence{margin-top:12px}
+.ccu-workbench .ccu-step{min-height:270px}.ccu-workbench .ccu-step-details{justify-content:initial;gap:10px}.ccu-workbench .ccu-route{display:flex;flex:1;flex-direction:column;gap:10px;min-width:0}.ccu-workbench .ccu-model{display:block;min-width:0}.ccu-model>small{display:block;font-size:10px;line-height:1.4;color:#a9bfca;margin:0 0 3px}.ccu-workbench .ccu-model>strong{display:block;font-size:13px;line-height:1.4;color:#edf2f5;overflow-wrap:anywhere}.ccu-step-details>.ccu-route-row{min-height:96px}.ccu-workbench .ccu-step-price{margin-top:auto;min-height:90px;border-top:1px solid #ffffff22;padding-top:8px}.ccu-kind{min-height:28px;align-content:flex-start}.ccu-edit-buttons{min-height:19px}.ccu-workbench .ccu-stock-tile .ccu-route{gap:7px}.ccu-stock-tile .ccu-model{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;align-items:baseline}.ccu-stock-tile .ccu-model>strong{font-size:12px}.ccu-stock-tile .ccu-model>small{padding:0;min-height:0}.ccu-workbench .ccu-comparison{border:0;margin:12px 0 8px;padding:0;overflow:visible}.ccu-price-details{margin:12px 0;border-block:1px solid #35505f;padding:10px 0;min-width:0;overflow-x:auto;color:#b9d6d8;font-size:12px}.ccu-price-details>summary{cursor:pointer}.ccu-price-details .ccu-search-evidence{margin-top:12px}
 .ccu-workbench .ccu-step:not(:has(.ccu-edit-buttons))::after{content:"";display:block;min-height:19px}
 .ccu-workbench .ccu-edit-buttons{height:24px;min-height:24px;flex:0 0 24px;margin-top:0;align-items:center}.ccu-workbench .ccu-step:not(:has(.ccu-edit-buttons))::after{height:24px;min-height:24px;flex:0 0 24px}.ccu-workbench .ccu-edit-buttons button{line-height:18px}
 
 /* Requested denser chain cards; endpoint names and prices remain complete. */
-.ccu-workbench .ccu-step{min-height:220px;padding:7px;gap:5px}.ccu-workbench .ccu-step-details{gap:5px}.ccu-step-details>.ccu-route{min-height:74px}.ccu-workbench .ccu-route{gap:6px}.ccu-workbench .ccu-model>strong{font-size:12px;line-height:1.3}.ccu-workbench .ccu-model>small{font-size:9px;line-height:12px;margin-bottom:1px}.ccu-workbench .ccu-step-price{min-height:82px;padding-top:5px}.ccu-workbench .ccu-kind{min-height:20px}.ccu-workbench .ccu-edit-buttons,.ccu-workbench .ccu-step:not(:has(.ccu-edit-buttons))::after{height:20px;min-height:20px;flex:0 0 20px}
+.ccu-workbench .ccu-step{min-height:220px;padding:7px;gap:5px}.ccu-workbench .ccu-step-details{gap:5px}.ccu-step-details>.ccu-route-row{min-height:74px}.ccu-workbench .ccu-route{gap:6px}.ccu-workbench .ccu-model>strong{font-size:12px;line-height:1.3}.ccu-workbench .ccu-model>small{font-size:9px;line-height:12px;margin-bottom:1px}.ccu-workbench .ccu-step-price{min-height:82px;padding-top:5px}.ccu-workbench .ccu-kind{min-height:20px}.ccu-workbench .ccu-edit-buttons,.ccu-workbench .ccu-step:not(:has(.ccu-edit-buttons))::after{height:20px;min-height:20px;flex:0 0 20px}
 .ccu-priority-warning{border:1px solid #ffbd65;border-radius:7px;padding:8px 10px;margin:8px 0;color:#ffcf8b;font-size:12px;overflow-wrap:anywhere}.ccu-priority-warning>span,.ccu-priority-warning>small{display:block;margin-top:4px}.ccu-priority-warning ul{margin:5px 0;padding-left:18px}.ccu-stock-tile .ccu-reserved{color:#ffcf8b;font-weight:600}
 .ccu-priority-info{border-color:#4f817b;background:#152b31;color:#b8eadf}
 .ccu-priority-owners{display:grid;gap:3px;font-size:13px}
@@ -50,3 +50,39 @@
 .ccu-workbench .ccu-lock[aria-pressed=true]{border-color:#ff8088;color:#ff8088;box-shadow:0 0 6px #ff808866}.ccu-lock[aria-pressed=true] svg{filter:drop-shadow(0 0 2px #ff8088)}
 .ccu-workbench .ccu-step.is-locked,.ccu-stock-tile.is-locked{background:#173334;border-color:#477371}.ccu-step.is-locked .ccu-route,.ccu-stock-tile.is-locked .ccu-route{opacity:.7}.ccu-workbench .is-locked .ccu-ownership{background:#a9bdc3;color:#14292d}
 .ccu-start-base{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,440px);align-items:center;gap:12px;margin:14px 0 20px}.ccu-start-base>label>small{display:block;color:var(--muted,#a5bcc8);margin-top:5px;font-size:12px}.ccu-start-base>select{width:100%;min-width:0;font-size:13px}.ccu-start-base>.ccu-higher{grid-column:1/-1;display:flex;gap:8px;align-items:center;font-size:12px;color:#b5c9d3}.ccu-higher input{width:16px;height:16px;margin:0;accent-color:#00dfcd}.ccu-start-base>small{grid-column:1/-1;font-size:11px;color:var(--muted,#a5bcc8)}.ccu-base-required{grid-column:1/-1;border:1px dashed #557482;border-radius:6px;text-align:center;padding:24px 14px;color:#bbd0d9}.ccu-base-required>strong{color:#edf3f6}.ccu-base-required p{margin:9px 0 0;font-size:12px}@media(max-width:1100px){.ccu-start-base{grid-template-columns:1fr}.ccu-start-base>select{max-width:100%}}
+.ccu-route-row {
+  display: flex;
+  min-width: 0;
+}
+
+.ccu-step-details > .ccu-route-row { flex: 1; }
+
+.ccu-route-row.has-advantage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
+  align-items: center;
+  gap: 6px;
+}
+
+.ccu-price-advantage {
+  display: grid;
+  gap: 2px;
+  padding: 4px 5px;
+  border: 1px solid color-mix(in srgb, var(--ccu-owned) 30%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ccu-owned) 9%, transparent);
+  color: #b8eee5;
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.purchase .ccu-price-advantage {
+  border-color: color-mix(in srgb, var(--ccu-buy) 30%, transparent);
+  background: color-mix(in srgb, var(--ccu-buy) 9%, transparent);
+  color: #ffdbad;
+}
+
+.ccu-price-advantage strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.ccu-stock-tile .has-advantage .ccu-model { grid-template-columns: minmax(0, 1fr); gap: 0; }

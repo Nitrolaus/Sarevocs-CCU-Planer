@@ -506,32 +506,35 @@ export class RsiLogin {
         if (credit) candidate.document.storeCredit = credit;
       }
     } catch { /* Keep successful hangar data; no token, URL or response is logged. */ }
+    const observeSupplement = (observation: ConnectionEvent['observation']) =>
+      this.record({ event: 'hangar-observation', target: 'hangar', resource: 'xhr', observation });
     try {
       const read = await readBuybacks(async page => {
         active.buybackListUrl = buybackPageUrl(page);
-        try { return await win.webContents.executeJavaScript(buybackFetchProbe(page)); }
+        try { return await win.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: buybackFetchProbe(page) }]); }
         finally { active.buybackListUrl = undefined; }
-      }, checkWindow);
+      }, checkWindow, observeSupplement);
       if (read) {
         const withBuybacks = { ...candidate.document, buybacks: read.entries, buybackObservation: read.observation };
-        if (Buffer.byteLength(JSON.stringify(withBuybacks)) + 512 < MAX_FILE_BYTES) candidate.document = withBuybacks;
+        if (Buffer.byteLength(JSON.stringify(withBuybacks)) + 512 < MAX_FILE_BYTES) {
+          candidate.document = withBuybacks;
+          observeSupplement('buyback-read');
+        } else observeSupplement('buyback-size-limit');
       }
-    } catch { /* A failed optional listing never invalidates a successfully read hangar. */ }
+    } catch { observeSupplement('buyback-page-unreadable'); }
     checkWindow();
     const identity = candidate.document.account;
     const matchedProfile = identity.identityKind === 'rsi-handle' && this.canRemember(accountId, identity);
     const manualReference = identity.identityKind === 'manual-reference';
-    const observePurchase = (observation: ConnectionEvent['observation']) =>
-      this.record({ event: 'hangar-observation', target: 'hangar', resource: 'xhr', observation });
     if (hasAuthenticationCookie(snapshot) && (matchedProfile || manualReference)) {
       this.statuses.set(accountId, {state:'page-ready',message:'Bestand gelesen. Prüfe belegte Kaufpreise.',progress:finishing});
-      if (manualReference) observePurchase('purchase-orders-only');
+      if (manualReference) observeSupplement('purchase-orders-only');
       try {
         const prices = await this.purchaseReader(active.session, candidate.document.pledges,
-          manualReference ? null : identity.reference, checkWindow, undefined, observePurchase);
+          manualReference ? null : identity.reference, checkWindow, undefined, observeSupplement);
         const latest = await this.cookies(active.session);
         checkWindow();
-        if (!isDeepStrictEqual(auth(snapshot), auth(latest))) observePurchase('purchase-auth-changed');
+        if (!isDeepStrictEqual(auth(snapshot), auth(latest))) observeSupplement('purchase-auth-changed');
         else if (prices.size) {
           const document = { ...candidate.document, pledges: candidate.document.pledges.map(p => {
             const rsiPurchase = prices.get(p.pledgeId);
@@ -539,9 +542,9 @@ export class RsiLogin {
           }) };
           if (Buffer.byteLength(JSON.stringify(document)) + 512 < MAX_FILE_BYTES) {
             candidate.document = document;
-            observePurchase([...prices.values()].some(price => price.status === 'documented') ? 'purchase-matched' : 'purchase-no-match');
+            observeSupplement([...prices.values()].some(price => price.status === 'documented') ? 'purchase-matched' : 'purchase-no-match');
           }
-        } else observePurchase('purchase-no-match');
+        } else observeSupplement('purchase-no-match');
       } catch { /* Purchase data is optional and is never included in connection diagnostics. */ }
     }
     checkWindow();

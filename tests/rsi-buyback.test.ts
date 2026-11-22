@@ -24,7 +24,8 @@ test('only the expected listing XHR GET is allowed by the scoped exception', () 
   assert.equal(isBuybackListRead(request), false);
   assert.equal(allowedRsiNavigation(url), false);
   assert.equal(blockedOperation(url, request), true);
-  assert.throws(() => buybackPageUrl(21));
+  assert.equal(isBuybackListRead({ ...request, url: buybackPageUrl(170) }, buybackPageUrl(170)), true);
+  assert.throws(() => buybackPageUrl(202));
 });
 
 test('only a complete listing produces an observation, and a recognized empty list is distinct from failure', async () => {
@@ -41,6 +42,28 @@ test('only a complete listing produces an observation, and a recognized empty li
   assert.equal(await readBuybacks(async () => null, () => {}), null);
   assert.equal(await readBuybacks(async page => page === 1 ? result(['101'], true) : result(['101']), () => {}), null);
   assert.equal(await readBuybacks(async page => page === 1 ? result(['101'], true) : result([]), () => {}), null);
+});
+
+test('reads a large multipage list and confirms a full last page with an explicit empty page', async () => {
+  const ids = Array.from({ length: 250 }, (_, index) => String(index + 1));
+  const pages: number[] = [];
+  const read = await readBuybacks(async page => {
+    pages.push(page);
+    if (page < 170) return result([String(1000 + page)], true);
+    if (page === 170) return result(ids);
+    return result([]);
+  }, () => {});
+  assert.equal(pages.length, 171);
+  assert.equal(read?.entries.length, 419);
+  assert.equal(read?.observation.current, true);
+});
+
+test('reports unreadable and duplicate pages without using entry contents in diagnostics', async () => {
+  const reasons: string[] = [];
+  const report = (reason: string) => reasons.push(reason);
+  assert.equal(await readBuybacks(async () => null, () => {}, report), null);
+  assert.equal(await readBuybacks(async page => result(['123'], page === 1), () => {}, report), null);
+  assert.deepEqual(reasons, ['buyback-page-unreadable', 'buyback-duplicate-entry']);
 });
 
 test('a missing listing refresh keeps old entries with a noncurrent token and a confirmed empty reply replaces them', () => {

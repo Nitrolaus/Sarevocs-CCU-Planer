@@ -7,7 +7,8 @@ const events = ['load-failed', 'request-failed', 'http-error', 'navigation-block
   'hangar-not-ready', 'connection-timeout', 'observation-failed', 'login-return-pending', 'hangar-transition', 'hangar-observation'] as const;
 export const HANGAR_OBSERVATIONS = ['consent', 'list-missing', 'pledge-fields', 'upgrade-fields', 'ready',
   'reading-pages', 'preview-ready', 'page-read-failed', 'duplicate-page',
-  'purchase-orders-only', 'purchase-matched', 'purchase-no-match', 'purchase-log-unavailable', 'purchase-orders-unavailable', 'purchase-auth-changed'] as const;
+  'purchase-orders-only', 'purchase-matched', 'purchase-no-match', 'purchase-log-unavailable', 'purchase-orders-unavailable', 'purchase-auth-changed',
+  'buyback-read', 'buyback-page-unreadable', 'buyback-duplicate-entry', 'buyback-limit-reached', 'buyback-size-limit'] as const;
 const targets = ['login', 'hangar', 'account', 'rsi-other', 'rsi-service', 'external', 'local', 'invalid'] as const;
 const resources = ['mainFrame', 'subFrame', 'xhr', 'script', 'other'] as const;
 const reasons = ['insecure-transport', 'protected-operation', 'read-only', 'navigation-policy'] as const;
