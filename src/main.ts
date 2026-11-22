@@ -8,6 +8,9 @@ import { APP_NAME, APP_VERSION, UserError, type ImportCandidate, type Preview } 
 import { giveawayShip } from './domain/giveaway';
 import { MAX_FILE_BYTES, parseImport } from './importers/files';
 import { RsiLogin } from './importers/rsi';
+import { readConcierge } from './importers/rsi-concierge';
+import { requestHello } from './main/windows-hello';
+import { readWithPledgeConsent } from './main/pledge-consent';
 import { ConnectionDiagnostics } from './diagnostics/connection';
 import { commandSchema } from './main/commands';
 import { runtimePaths } from './main/paths';
@@ -80,6 +83,15 @@ const interactive = new Map<string, InteractiveTask>();
 const revokingSessions = new Map<string, Promise<void>>();
 const sessionBusy = (id: string) => interactive.has(id) || revokingSessions.has(id);
 let selectionEpoch = 0;
+let rankRead: AbortController | undefined;
+let pledgeRead: AbortController | undefined;
+function cancelConciergeReads() {
+  rankRead?.abort();
+  pledgeRead?.abort();
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('ccu:conceal-pledge');
+  }
+}
 const reports=new ReportService();let reportSaving=false;
 function beginInteractive(id: string): InteractiveTask {
   if (revokingSessions.has(id)) throw new UserError('Die gespeicherte RSI-Sitzung wird gerade gelöscht.');
@@ -105,6 +117,7 @@ function finishInteractive(id: string, task: InteractiveTask) {
   task.finish();
 }
 async function stopProfile(id: string) {
+  if (id === selectedAccountId) cancelConciergeReads();
   const task = interactive.get(id); task?.controller.abort();
   await upgradeHistory.close(id);
   await background.cancel(id);
@@ -154,6 +167,9 @@ async function start() {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true,
       sandbox: true, webSecurity: true, webviewTag: false, spellcheck: false, partition: 'local-ui-' + randomUUID() } });
   const win = mainWindow;
+  win.on('hide', cancelConciergeReads);
+  win.on('minimize', cancelConciergeReads);
+  win.on('closed', cancelConciergeReads);
   if(process.platform==='win32'&&app.isPackaged)win.setAppDetails(taskbarDetails(process.execPath,APP_NAME));
   selectedAccountId = lastSeen.selected(store.accounts());
   background = new BackgroundInventory(lastSeen, id => store.account(id), id => login.resume(id, win), id => login.close(id));
@@ -272,6 +288,7 @@ async function start() {
         case 'account.select': {
           const account = store.account(cmd.accountId);
           const previous = selectedAccountId;
+          cancelConciergeReads();
           lastSeen.select(account.id); selectedAccountId = account.id;
           const epoch = ++selectionEpoch;
           if (previous && previous !== account.id) interactive.get(previous)?.controller.abort();
@@ -285,6 +302,41 @@ async function start() {
         }
         case 'rsi.background': store.account(cmd.accountId); data = background.snapshot(cmd.accountId, cmd.knownRevision); break;
         case 'rsi.refresh': store.account(cmd.accountId); if (!shuttingDown && !sessionBusy(cmd.accountId)) void background.refresh(cmd.accountId); data = background.snapshot(cmd.accountId); break;
+        case 'rsi.conciergeRank':
+        case 'rsi.pledgeTotal': {
+          const id = cmd.accountId;
+          const account = store.account(id);
+          const epoch = selectionEpoch;
+          const permitted = () => !shuttingDown && selectedAccountId === id && epoch === selectionEpoch &&
+            account.mode === 'real' && !sessionBusy(id) && !win.isDestroyed() &&
+            (cmd.action === 'rsi.conciergeRank' || win.isVisible() && !win.isMinimized());
+          if (!permitted()) { data = { status: 'unavailable' }; break; }
+          const controller = new AbortController();
+          const current = () => permitted() && !controller.signal.aborted;
+          if (cmd.action === 'rsi.conciergeRank') {
+            rankRead?.abort();
+            rankRead = controller;
+            try {
+              const cookies = await vault.load(id, false);
+              data = current() ? await readConcierge('rank', cookies, controller.signal) : { status: 'unavailable' };
+              if (!current()) data = { status: 'unavailable' };
+            } catch { data = { status: 'unavailable' }; }
+            finally { if (rankRead === controller) rankRead = undefined; }
+            break;
+          }
+          if (pledgeRead) { data = { status: 'cancelled' }; break; }
+          pledgeRead = controller;
+          try {
+            data = await readWithPledgeConsent(current,
+              () => requestHello(win, pricing.snapshot().settings.language, controller.signal),
+              async () => {
+                const cookies = await vault.load(id, false);
+                return current() ? readConcierge('total', cookies, controller.signal) : { status: 'cancelled' };
+              });
+          } catch { data = { status: 'unavailable' }; }
+          finally { if (pledgeRead === controller) pledgeRead = undefined; }
+          break;
+        }
         case 'rsi.upgradeHistory': {
           const permitted = () => !shuttingDown && !sessionBusy(cmd.accountId) &&
             mayReadUpgradeHistory(selectedAccountId, store.inventory(cmd.accountId), background.snapshot(cmd.accountId).view, cmd);
@@ -411,7 +463,7 @@ app.on('before-quit', event => {
   if (!single || shutdownComplete) return;
   event.preventDefault();
   if (shuttingDown) return;
-  shuttingDown = true; pending.clear();reports.clear();closeReportWindows();
+  shuttingDown = true; cancelConciergeReads(); pending.clear();reports.clear();closeReportWindows();
   inventoryRefresh?.close();
   market?.close();
   paints?.close();

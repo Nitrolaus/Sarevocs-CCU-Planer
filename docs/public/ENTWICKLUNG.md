@@ -9,7 +9,9 @@ pwsh -NoProfile -File .\Entwickeln.ps1 -Aktion Installer
 node scripts/verify-installer.mjs
 ```
 
-Installieren lädt die festgeschriebenen npm-Abhängigkeiten und die Electron-Laufzeit. Caches und temporäre Entwicklerdaten liegen unter `work` im Projekt. Es werden keine globalen npm-Pakete installiert. Der Installer-Build liegt zunächst unter `work/temp`; die exakten Dateien stehen in `work/temp/bootstrapper-artifacts.json`.
+Installieren lädt die festgeschriebenen npm-Abhängigkeiten und die Electron-Laufzeit. Caches und temporäre Entwicklerdaten liegen unter `work` im Projekt. Es werden keine globalen npm-Pakete installiert. Der Installer-Build liegt zunächst unter `work/temp`. Die exakten Dateien stehen in `work/temp/bootstrapper-artifacts.json`.
+
+Der Windows-Hello-Helfer wird beim App-Build aus `native/hello-consent.cpp` gebaut. Dafür werden Visual Studio C++ Build Tools für x64 mit C++20 und ein Windows-11-SDK mit C++/WinRT benötigt.
 
 `npm test` prüft Domänenlogik, Import, Versicherung, Ketten, Sicherheit und den täglichen Abruf mit synthetischen Daten. Die Zeitsteuerung wird ohne reale Wartezeiten einschließlich Sommerzeitwechsel, Standby-Nachholen und Beenden geprüft.
 

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { getCurrentFuseWire, FuseV1Options, FuseState } from '@electron/fuses';
+import { conciergePageProbe } from '../src/importers/rsi-concierge-data.ts';
 const root = process.cwd();
 const expected = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const executable = process.env.CCU_TEST_EXE ?? path.join(root, 'work/temp/packaged/Sarevocs-CCU-Planer-win32-x64/Sarevocs-CCU-Planer.exe');
@@ -90,9 +91,40 @@ try {
   assert.equal(runtime.version, expected.version);
   const diagnosticFile = path.join(runDir, 'data/Diagnose/Verbindung/rsi-verbindung.json');
   assert.equal(fs.existsSync(diagnosticFile), false, 'Normal start must not open RSI or create connection diagnostics');
-  await page.getByRole('button', { name: 'Demo-Datei ansehen' }).click();
-  const modal = page.getByRole('dialog'); await modal.getByRole('checkbox').nth(0).check(); await modal.getByRole('checkbox').nth(1).check();
-  await modal.getByRole('button', { name: 'Geprüften Import übernehmen' }).click(); await modal.waitFor({ state: 'hidden' });
+  assert.equal(await page.getByRole('button', { name: 'Demo-Datei ansehen' }).count(), 0);
+  assert.equal(await page.locator('.concierge-card').count(), 1);
+  const pledgeLayout = await page.locator('.concierge-private').evaluate(controls => ({
+    button: controls.querySelector('button').getBoundingClientRect().left,
+    hint: controls.querySelector('p').getBoundingClientRect().left,
+  }));
+  assert.ok(Math.abs(pledgeLayout.button - pledgeLayout.hint) <= 1, 'Pledge button and hint must align');
+  const conciergeFixture = attribute => '<div class="c-status__rank"><p>Grand Admiral</p></div>' +
+    '<section class="c-next-level"><h2 class="c-next-level__title">Space Marshal</h2><div ' + attribute +
+    '><div class="l-progress-counter"><h1>0</h1><span>% of the way</span></div></div></section>';
+  for (const [attribute, progress] of [
+    ['data-spend-until-next-rank="64"', 64],
+    ['data-spend-until-next-rank="0"', 0],
+    ['data-spend-until-next-rank="101"', null],
+    ['', null],
+  ]) {
+    assert.deepEqual(await page.evaluate(conciergePageProbe(conciergeFixture(attribute), 'rank')),
+      { status: 'loaded', rank: 'Grand Admiral', nextRank: 'Space Marshal', progress });
+  }
+  results.push('Concierge-Fortschritt aus dem RSI-Datenfeld, ignorierte Animations-Null und bündige Ausrichtung geprüft.');
+  assert.equal(await page.getByRole('button', { name: 'Datei importieren', exact: true }).count(), 1);
+  const seeded = await page.evaluate(async () => {
+    const profile = await window.ccu.request({ action: 'account.create', name: 'Demo – synthetischer Bestand', mode: 'demo' });
+    if (!profile.ok) return profile;
+    const accountId = profile.data.id;
+    const selected = await window.ccu.request({ action: 'account.select', accountId });
+    if (!selected.ok) return selected;
+    const preview = await window.ccu.request({ action: 'import.demo', accountId });
+    if (!preview.ok) return preview;
+    return window.ccu.request({ action: 'import.commit', accountId, token: preview.data.token, bindingConfirmed: true, reviewed: true });
+  });
+  assert.equal(seeded.ok, true, JSON.stringify(seeded));
+  await page.reload();
+  await page.locator('tbody tr').first().waitFor();
   assert.equal(await page.getByRole('button', { name: 'CCUs', exact: true }).getAttribute('aria-pressed'), 'true');
   await page.getByRole('button', { name: 'Alle Gegenstände', exact: true }).click();
   assert.equal(await page.locator('tbody tr').count(), 5);
@@ -104,7 +136,7 @@ try {
   assert.equal(protection.data.saved, false); assert.equal(protection.data.stored, false);
   results.push('Verpackte App bestaetigt Windows-/Schluesselordnerschutz; leeres Profil gilt nicht als gespeicherte Anmeldung.');
   await page.screenshot({ path: path.join(runDir, 'packaged-inventory.png'), fullPage: true });
-  results.push('Verpackte EXE gestartet; SQLite-WASM, Bridge, React und Demoimport lauffähig.');
+  results.push('Verpackte EXE gestartet; Concierge-Karte und Dateiimport sichtbar, synthetischer Bestand über die Bridge geprüft.');
   const exportPreview=await page.evaluate(async()=>{const state=(await window.ccu.request({action:'state'})).data;return window.ccu.request({action:'report.preview',accountId:state.accounts[0].id,kind:'inventory'});});
   assert.equal(exportPreview.ok,true);assert.ok(exportPreview.data.count>0);assert.equal(exportPreview.data.rows.length,Math.min(2,exportPreview.data.count));
   assert.match(exportPreview.data.title,/Bestand|Inventory/);assert.doesNotMatch(JSON.stringify(exportPreview.data),/sourceValues|originalDescription|session\.enc/);

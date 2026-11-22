@@ -32,9 +32,13 @@ import {ShipValueTable} from './ShipValueTable';
 import {PaintAdvisor} from './PaintAdvisor';
 import {ProfileDialog} from './ProfileDialog';
 import {StoreCreditBadge} from './StoreCreditBadge';
+import { ConciergeCard } from './ConciergeCard';
 import {pledgeDateLabel,comparePledgeDates} from '../domain/pledge-date';
 import type { LoanerSnapshot } from '../loaners/model';
-declare global { interface Window { ccu: { request(command: Command): Promise<BridgeResult> } } }
+declare global { interface Window { ccu: {
+  request(command: Command): Promise<BridgeResult>;
+  onConcealPledge?(callback: () => void): () => void;
+} } }
 type State = { accounts: Account[]; selectedAccountId: string | null; dataDir: string; version: string; packaged: boolean; electron: string; node: string };
 type LoginSettings = { available: boolean; saved: boolean; stored: boolean; directory: string; sessionOpen: boolean; error: string | null };
 const navigation = [
@@ -269,12 +273,6 @@ function App() {
     if (preview) await call({ action: 'import.cancel', token: preview.token });
     setPreview(null); setOpen(false); setError('');
   }
-  async function demo() {
-    let selected = state?.accounts.find(a => a.mode === 'demo');
-    if (!selected) selected = await call<Account>({ action: 'account.create', name: 'Demo – synthetischer Bestand', mode: 'demo' });
-    await refresh(); await selectAccount(selected.id);
-    showPreview(await call<Preview>({ action: 'import.demo', accountId: selected.id }));
-  }
   async function commit() {
     if (!preview) return;
     const result = await call<{ repeated: boolean }>({ action: 'import.commit', accountId: preview.accountId, token: preview.token, bindingConfirmed: binding, reviewed: true });
@@ -366,8 +364,9 @@ function App() {
         <div className="actions"><button className="secondary" disabled={busy||!state} onClick={() => accountId?void run(()=>chooseImport(accountId)):addProfile('import')}>{t("Datei importieren")}</button></div></div>
         {viewingBuybacks ? <BuybackTable entries={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} observation={liveBuybacks?.buybackObservation} display={display} balance={storeCredit} />
           : filter === 'Loaner & Beiboote' ? <LoanerTable accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} onHistory={p=>void loadUpgradeHistory(p)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={p=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,key?historyTooltips.current.get(key):undefined),gameAccessEvidence(p));}}/>}</section>
-      <section className="panel import"><div><h2>{t("Erst prüfen, dann übernehmen")}</h2><p>{t("Die Importvorschau zeigt Umfang, Kontozuordnung und Änderungen. Ein unvollständiger Import entfernt keine vorhandenen Gegenstände.")}</p></div>
-        <button disabled={busy} onClick={() => void run(demo)}>{t("Demo-Datei ansehen")}</button></section>
+      <ConciergeCard key={accountId} accountId={account?.mode === 'real' ? accountId : undefined}
+        revision={lastSeen?.revision} connected={backgroundStatus === 'connected'}
+        language={display.settings.language} request={call} />
       <div className="bottom" id="data-location"><span>Letzter vollständiger Import: {account?.lastComplete ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(account.lastComplete)) : 'noch keiner'}<br />Datenordner: {state?.dataDir ?? 'wird geladen'}</span>
         <span><button className="text-button" disabled={busy || !account?.reference} onClick={() => void run(async () => { const r = await call<{ exported: boolean; backup: string } | null>({ action: 'export', accountId }); if (r) setMessage(`Inventar exportiert. Konsistente Datenbanksicherung: ${r.backup}`); })}>{t("Sicherung / Export")}</button>
           <button className="text-button" disabled={busy || !account || account.mode !== 'real'} onClick={() => void run(rsi)}>{t("Sitzung & Sicherheit")}</button>

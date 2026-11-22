@@ -8,9 +8,9 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.88 Alpha** ist die aktuelle öffentliche Testversion und kostenlos verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.90 Alpha** ist die aktuelle öffentliche Testversion und kostenlos verfügbar.
 
-[Installer und Prüfsumme](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.88-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Prüfsumme](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.90-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
 #### Bestand und Angebote
 
@@ -26,7 +26,7 @@ Die Kettenvorschau vergleicht strukturierte CCUs aus deinem Hangar mit den noch 
 
 Der Konfliktberater berücksichtigt gemeinsam benötigte Exemplare. Ziel 1 hat Vorrang vor Ziel 2 und Ziel 2 vor Ziel 3. Du kannst die vorgeschlagenen Änderungen gemeinsam übernehmen. Der Kaufoptimierer vergleicht die Gesamtkosten verschiedener Einstiege. Bei beiden Beratern bleiben die begonnene Kette und ihre Kosten sichtbar.
 
-Der Windows-Installer lässt dich den Programmordner wählen. Der Planer läuft in einer Instanz und ist über den Infobereich der Taskleiste erreichbar. Unter **Bestand** findest du eine Demo mit synthetischen Daten.
+Der Windows-Installer lässt dich den Programmordner wählen. Der Planer läuft in einer Instanz und ist über den Infobereich der Taskleiste erreichbar. Unter **Bestand** zeigt die Concierge-Karte den von RSI gemeldeten Rang und Fortschritt für das ausgewählte Profil. Die Pledge-Summe kannst du mit Windows Hello vorübergehend einblenden.
 
 ### Über mich
 
@@ -66,9 +66,9 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.88 Alpha** is the current public test release and is available free of charge.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.90 Alpha** is the current public test release and is available free of charge.
 
-[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.88-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.90-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
 #### Inventory and offers
 
@@ -84,7 +84,7 @@ The chain preview compares the CCUs read from your hangar with the gaps you stil
 
 The conflict advisor checks which chains need the same CCU copy. Target 1 takes priority over target 2, which takes priority over target 3. You can apply the proposed changes together. The purchase advisor compares the total cost of different starting upgrades. The current chain and its costs stay visible in both views.
 
-The Windows installer lets you choose where to install the app. The planner runs as a single instance and is available from the system tray. A demo with synthetic data is available under **Inventory**.
+The Windows installer lets you choose where to install the app. The planner runs as a single instance and is available from the system tray. The Concierge card under **Inventory** shows the rank and progress reported by RSI for the selected profile. Use Windows Hello to reveal the pledge total temporarily.
 
 ### About me
 

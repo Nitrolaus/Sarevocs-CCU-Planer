@@ -1,13 +1,19 @@
 import { build } from 'esbuild';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { applicationEntries } from './packaged-app-files.mjs';
+import { buildWindowsHello } from './build-windows-hello.mjs';
 fs.mkdirSync('build/renderer/fonts', { recursive: true });
+fs.mkdirSync('work/temp', { recursive: true });
+buildWindowsHello();
+const helloSha256 = createHash('sha256').update(fs.readFileSync('build/hello-consent.exe')).digest('hex');
 await Promise.all([
   build({ entryPoints: ['src/ui/planner-worker.ts'], outfile: 'build/renderer/planner-worker.js', bundle: true, platform: 'browser', format: 'esm', target: 'chrome156', minify: true }),
   build({ entryPoints: ['src/ui/advisor-worker.ts'], outfile: 'build/renderer/advisor-worker.js', bundle: true, platform: 'browser', format: 'esm', target: 'chrome156', minify: true }),
   build({ entryPoints: ['src/bootstrap.ts'], outfile: 'build/bootstrap.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron', './main.cjs'] }),
-  build({ entryPoints: ['src/main.ts'], outfile: 'build/main.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron', 'sql.js','exceljs'] }),
+  build({ entryPoints: ['src/main.ts'], outfile: 'build/main.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron', 'sql.js','exceljs'],
+    define: { CCU_HELLO_SHA256: JSON.stringify(helloSha256) } }),
   build({ entryPoints: ['src/preload.ts'], outfile: 'build/preload.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] }),
   build({ entryPoints: ['src/ui/App.tsx'], outfile: 'build/renderer/app.js', bundle: true, platform: 'browser', target: 'chrome156', minify: true, define: { 'process.env.NODE_ENV': '"production"' } }),
 ]);
@@ -21,4 +27,4 @@ for (const source of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'docs/public/NUTZUNGS
 }
 const built = ['build', ...fs.readdirSync('build', { recursive: true }).map(file => 'build/' + file.replaceAll('\\', '/'))];
 assert.deepEqual(built.sort(), [...applicationEntries].sort(), 'Build-Verzeichnis enthält unerwartete Dateien.');
-console.log('Build: main, sandboxed preload, lokale React-Oberfläche, SQLite-WASM und sichtbare Demo.');
+console.log('Build: main, sandboxed preload, lokale React-Oberfläche, SQLite-WASM und Windows-Hello-Helfer.');

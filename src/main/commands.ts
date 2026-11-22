@@ -51,6 +51,8 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('account.create'), name: z.string().trim().min(1).max(80), mode: z.enum(['demo', 'real']) }).strict(),
   ...(['inventory', 'import.choose', 'import.demo', 'export', 'rsi.status', 'rsi.probe', 'rsi.close', 'rsi.settings', 'rsi.delete'] as const).map(action =>
     z.object({ action: z.literal(action), accountId: z.uuid() }).strict()),
+  z.object({ action: z.literal('rsi.conciergeRank'), accountId: z.uuid() }).strict(),
+  z.object({ action: z.literal('rsi.pledgeTotal'), accountId: z.uuid() }).strict(),
   z.object({ action: z.literal('rsi.open'), accountId: z.uuid(), remember: z.boolean() }).strict(),
   z.object({ action: z.literal('rsi.connect'), accountId: z.uuid(), remember: z.boolean() }).strict(),
   z.object({ action: z.literal('rsi.authorize'), accountId: z.uuid(), remember: z.boolean() }).strict(),

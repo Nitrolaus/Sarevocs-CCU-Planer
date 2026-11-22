@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.90 · Alpha
+
+- Die Concierge-Karte zeigt den RSI-Rang und Fortschritt des ausgewählten Profils im Bestand. Sie ersetzt das Demo-Panel.
+- Der Planer ruft die Pledge-Summe nach einer erfolgreichen Bestätigung mit Windows Hello ab und blendet sie vorübergehend ein.
+
 ## 0.3.88 · Alpha
 
 - Der Planer prüft einmal beim Programmstart auf eine neue Version. Wenn eine verfügbar ist, erscheint der Update-Button auf der Bestandsseite neben „Exportieren“.

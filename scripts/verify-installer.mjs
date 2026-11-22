@@ -52,6 +52,10 @@ try {
   assert.equal(/^Path = .*([\\/](?:Anmeldung|LetzterStand)[\\/]|\.session\.enc$|inventory\.sqlite$)/im.test(listing), false);
   const asar = path.join(app, 'resources/app.asar');
   const appFiles = listPackage(asar);
+  const helper = path.join(app, 'resources/app.asar.unpacked/build/hello-consent.exe');
+  assert.equal(digest(helper), digest(path.resolve('build/hello-consent.exe')));
+  assert.ok(extractFile(asar, path.normalize('build/main.cjs')).includes(digest(helper)), 'Windows Hello helper digest missing from main app');
+  results.push('Nativer Windows-Hello-Helfer stimmt mit der im Programm hinterlegten SHA-256-Prüfsumme überein.');
   assert.equal(appFiles.some(file => /(?:^|[\\/])(?:Anmeldung|LetzterStand|FluechtigeSitzungen|Laufzeit|Diagnose)(?:[\\/]|$)|\.session\.enc$|(?:^|[\\/])(?:inventory\.sqlite|rsi-verbindung\.json|Local State)$/.test(file)), false);
   for (const file of ['build/main.cjs', 'build/preload.cjs', 'build/bootstrap.cjs', 'build/renderer/app.js', 'build/renderer/planner-worker.js', 'build/renderer/advisor-worker.js']) {
     const bundled = extractFile(asar, path.normalize(file));

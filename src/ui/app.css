@@ -14,3 +14,42 @@
 @keyframes connection-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.connection-status.pending .status-dot{animation:none}}
 .store-credit{padding:6px 11px;border:1px solid #426874;border-radius:6px;line-height:1.4;white-space:nowrap}.store-credit small{display:block;font-size:10px;color:#b5c9d3}.store-credit strong{font-size:15px;color:#96f7e9}
+.concierge-card {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) minmax(210px, auto);
+  align-items: center;
+  gap: 21px;
+  padding: 22px 24px;
+  background: linear-gradient(112deg,#1c2d36,#15212b 66%,#20272d);
+}
+.concierge-card h2 { margin: 3px 0 11px; }
+.concierge-insignia { width: 68px; color: #e3c194; filter: drop-shadow(0 0 9px #b6904e44); }
+.concierge-card .concierge-eyebrow {
+  margin: 0;
+  color: #e3c194;
+  text-transform: uppercase;
+  font-size: .75rem;
+  font-weight: 650;
+  letter-spacing: .13em;
+}
+.concierge-progress > div { display: flex; justify-content: space-between; gap: 12px; color: #b8ccd6; }
+.concierge-progress strong { color: #a0e1db; white-space: nowrap; }
+.concierge-progress progress { width: 100%; height: 6px; display: block; margin-top: 8px; border: 0; }
+.concierge-progress progress::-webkit-progress-bar { background: #344650; border-radius: 8px; }
+.concierge-progress progress::-webkit-progress-value { background: linear-gradient(90deg,#48b6aa,#b0e5d0); border-radius: 8px; }
+.concierge-private { border-left: 1px solid #354753; padding-left: 22px; }
+.concierge-private > button { margin-left: 0; }
+.concierge-private p, .concierge-status { margin: 5px 0 0; color: #a1b8c5; font-size: .85rem; }
+.concierge-amount { display: block; margin-bottom: 6px; font-size: 1.5rem; }
+.concierge-dialog { width: min(460px, calc(100vw - 32px)); padding: 24px; }
+.concierge-dialog h2 { margin: 0 0 8px; }
+.concierge-dialog .actions { justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+@media (max-width: 1100px) {
+  .concierge-card { grid-template-columns: 48px minmax(0, 1fr) minmax(190px, auto); gap: 14px; padding: 16px; }
+  .concierge-insignia { width: 48px; }
+  .concierge-private { padding-left: 13px; }
+}
+@media (max-width: 850px) {
+  .concierge-card { grid-template-columns: 44px minmax(0, 1fr); }
+  .concierge-private { grid-column: 1 / -1; padding: 12px 0 0; border-left: 0; border-top: 1px solid #354753; }
+}

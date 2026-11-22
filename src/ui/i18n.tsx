@@ -394,6 +394,21 @@ Object.assign(english, {
   'Kein Ausgangsschiff unter dem Warbond-Wert belegt.': 'No verified starting ship below the Warbond value.',
   'Nächstniedrigere Preisstufe': 'Next lower price tier',
   'Richtwerte': 'Estimated prices',
+  'Concierge-Rang': 'Concierge rank',
+  'Kein Concierge-Rang': 'No Concierge rank',
+  'Richtung': 'Towards',
+  'Ein RSI-Profil auswählen.': 'Select an RSI profile.',
+  'RSI-Rang wird gelesen …': 'Reading RSI rank …',
+  'RSI-Rang derzeit nicht verfügbar.': 'RSI rank is currently unavailable.',
+  'Pledge-Summe anzeigen': 'Show pledge total',
+  'Pledge-Summe anzeigen?': 'Show pledge total?',
+  'Mit Windows Hello freigeben': 'Unlock with Windows Hello',
+  'Bestätige die Anzeige mit Windows Hello.': 'Confirm with Windows Hello to show the total.',
+  'Mit Windows Hello bestätigen': 'Confirm with Windows Hello',
+  'Windows Hello ist nicht verfügbar.': 'Windows Hello is unavailable.',
+  'RSI-Pledge-Summe derzeit nicht verfügbar.': 'The RSI pledge total is currently unavailable.',
+  'Bestätigung läuft …': 'Waiting for confirmation …',
+  'Summe ausblenden': 'Hide pledge total',
 });
 export function translate(language:'de'|'en',text:string):string{
   const exports:Record<string,string>={'LOKALER EXPORT':'LOCAL EXPORT','Exportieren':'Export','Exportieren …':'Export …','Dateiformat':'File format','Inhalt':'Contents','Bestand dieses Profils':'Inventory of this profile','Aktuelle CCU-Kette':'Current CCU chain','Vorschau wird erstellt …':'Preparing preview …','Zeilen':'rows','Lokale Momentaufnahme':'Local snapshot','Währung und Mehrwertsteuersatz aus deinen Einstellungen. Offene Werte bleiben offen.':'Currency and VAT from your settings. Unknown values remain unknown.','Hinweise zum Datenstand':'Data notes','Speicherort wählen …':'Choose save location …','Wird gespeichert …':'Saving …','Export gespeichert.':'Export saved.','Export fehlgeschlagen.':'Export failed.','Zuerst eine CCU-Kette mit Startbasis anzeigen.':'First display a CCU chain with a start base.'};

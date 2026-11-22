@@ -14,6 +14,8 @@ Ein automatisches Wiederherstellen einer vorhandenen Sitzung ist keine Garantie,
 
 Beim Hangarabruf gleicht der Planer Kaufpreise lesend mit dem RSI-Kaufprotokoll und der Bestellübersicht ab. Dazu verarbeitet er die Antworten vorübergehend im Speicher. Lokal verbleiben zum vorhandenen Bestand nur zugeordneter Betrag, Währung, Preisquelle oder der Status einer ausgeschlossenen Zuordnung. Bestellnummern, Adressen, Zahlungsmethoden und vollständige Bestellseiten werden weder gespeichert noch protokolliert.
 
+Die Concierge-Karte liest Rang und Fortschritt mit der gespeicherten Sitzung des ausgewählten Profils. Nach deiner Bestätigung mit Windows Hello liest der Planer zusätzlich das RSI-Feld „Total Spent“. Die PIN oder biometrische Bestätigung verarbeitet Windows. Die Summe bleibt vorübergehend im Speicher und erscheint weder in Protokollen noch in Exporten.
+
 Der öffentliche Katalog, Open-Hangar-Angebote und der EZB-Eurokurs werden ohne Weitergabe der gespeicherten RSI-Sitzung geladen. Quellenangaben und Fremdlizenzen stehen in THIRD_PARTY_NOTICES.md. Der Tagesabruf gilt nur im laufenden Programm; ein beendeter Planer ruft nichts ab.
 
 Im Reiter „Sicherheit & Download“ fragt der Planer die öffentlichen Veröffentlichungen dieses Projekts bei GitHub ab. Die Abfrage verwendet die feste Projektadresse und sendet weder Profil- und Hangardaten noch RSI-Anmeldedaten. Den Download einer neuen Version startest du selbst auf GitHub.
