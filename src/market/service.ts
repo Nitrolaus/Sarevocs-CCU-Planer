@@ -8,12 +8,15 @@ import {shipValuesSchema,parseShipValues,type ShipValues} from './ship-values';
 import {shipImagesSchema,parseShipImages,type ShipImages} from './ship-images';
 import type { FairNewsStore } from './fair-news';
 import { creditBudgetSchema, type CreditBudget } from '../planner/credit-budget';
-import { SHOP_PRICE_MAX_AGE, type ShopPair, type ShopPrice, type ReadShopPrices } from './shop-prices';
+import { SHOP_PRICE_MAX_AGE, shopPairKey, shopPriceSchema, type ShopPair, type ShopPrice, type ReadShopPrices } from './shop-prices';
 
 export type PublicReader = (source: MarketSource, signal: AbortSignal) => Promise<unknown>;
 const EMPTY: MarketCache = { schemaVersion: 1, catalogue: null, offers: null };
 const targetsSchema = z.array(z.number().int().positive().max(1_000_000_000).nullable()).length(3);
 const budgetFileSchema = z.object({ schemaVersion: z.literal(1), accountId: z.uuid(), budget: creditBudgetSchema }).strict();
+const SHOP_CACHE_LIMIT = 4096;
+const shopCacheSchema = z.object({ schemaVersion: z.literal(1), prices: z.array(shopPriceSchema).max(SHOP_CACHE_LIMIT) }).strict();
+type ShopEntry = { startedAt: number; prices: ShopPrice[]; pending?: Promise<void> };
 export class MarketService {
   private cache: MarketCache = { ...EMPTY };
   private values:ShipValues|null=null;private valuesError:string|null=null;
@@ -24,8 +27,11 @@ export class MarketService {
   private readonly schedule: DailyRefresh;
   private closed = false;
   private readonly shopController = new AbortController();
-  private readonly shop = new Map<string, { startedAt: number; prices: ShopPrice[]; pending?: Promise<void> }>();
-  private shopPending = 0;
+  private readonly shop = new Map<string, ShopEntry>();
+  private readonly lastShopPrices = new Map<string, ShopPrice>();
+  private readonly shopQueue: (() => Promise<void>)[] = [];
+  private shopRunning = 0;
+  private shopSave?: ReturnType<typeof setTimeout>;
   constructor(readonly directory: string, private readonly read: PublicReader, clock?: RefreshClock,
     private readonly fairNews?: FairNewsStore, private readonly readShop?: ReadShopPrices) {
     this.schedule = new DailyRefresh(() => this.refresh(), clock);
@@ -33,6 +39,10 @@ export class MarketService {
     try{this.values=shipValuesSchema.parse(this.load('ship-values-v1.json'));}catch(e){if(!(e&&typeof e==='object'&&'code'in e&&e.code==='ENOENT'))this.valuesError='Gespeicherte Schiffswerte nicht lesbar.';}
     try { this.cache = marketCacheSchema.parse(this.load('public-v1.json')); }
     catch (e) { if (!(e && typeof e === 'object' && 'code' in e && e.code === 'ENOENT')) this.errors = { catalogue: 'Gespeicherte Marktdaten nicht lesbar.', offers: 'Gespeicherte Marktdaten nicht lesbar.' }; }
+    try {
+      const saved = shopCacheSchema.parse(this.load('shop-prices-v1.json'));
+      for (const price of saved.prices) this.rememberShopPrice(price);
+    } catch { /* A missing or unreadable public price cache can be refreshed. */ }
   }
   private load(name: string): unknown {
     const file = path.join(this.directory, name), fd = fs.openSync(file, 'r');
@@ -68,33 +78,72 @@ export class MarketService {
     }
     return results;
   }
-  snapshot(): MarketSnapshot { return structuredClone({ ...this.cache, fairNews: this.fairNews?.snapshot(this.cache.offers, Date.now(), !!this.errors.offers), images:this.images,values:this.values,valuesError:this.valuesError,
+  snapshot(includeLastShopPrices = false): MarketSnapshot { return structuredClone({ ...this.cache, fairNews: this.fairNews?.snapshot(this.cache.offers, Date.now(), !!this.errors.offers), images:this.images,values:this.values,valuesError:this.valuesError,
     shopPrices:[...this.shop.values()].flatMap(entry => entry.prices).filter(price => Date.now() - price.checkedAt < SHOP_PRICE_MAX_AGE),
+    ...(includeLastShopPrices ? { lastShopPrices: [...this.lastShopPrices.values()] } : {}),
     pending: !!this.inFlight, errors: this.errors, refreshSchedule: PUBLIC_REFRESH_SCHEDULE }); }
+
+  private rememberShopPrice(price: ShopPrice) {
+    const key = `${shopPairKey(price)}:${price.edition}`;
+    if ((this.lastShopPrices.get(key)?.checkedAt ?? -1) > price.checkedAt) return;
+    this.lastShopPrices.delete(key);
+    this.lastShopPrices.set(key, price);
+    if (this.lastShopPrices.size > SHOP_CACHE_LIMIT) this.lastShopPrices.delete(this.lastShopPrices.keys().next().value!);
+  }
+
+  private saveShopPrices() {
+    if (!this.shopSave) return;
+    clearTimeout(this.shopSave);
+    this.shopSave = undefined;
+    try { this.write('shop-prices-v1.json', { schemaVersion: 1, prices: [...this.lastShopPrices.values()] }); }
+    catch { /* An unwritable cache leaves the previous on-disk file and in-memory prices available. */ }
+  }
+
+  private runShopQueue() {
+    while (this.shopRunning < 2 && this.shopQueue.length) {
+      const job = this.shopQueue.shift()!;
+      this.shopRunning++;
+      void job().finally(() => { this.shopRunning--; this.runShopQueue(); });
+    }
+  }
+
   async checkShopPrices(pairs: readonly ShopPair[]) {
     const read = this.readShop;
-    if (this.closed || !read || this.shopPending >= 2) return;
+    if (this.closed || !read) return;
     const known = new Set(this.cache.catalogue?.ships.map(ship => ship.id));
-    this.shopPending++;
-    try {
-      for (const pair of pairs) {
-        if (this.closed) return;
-        const key = `${pair.fromId}:${pair.toId}`, now = Date.now();
-        if (!known.has(pair.fromId) || !known.has(pair.toId) || now - (this.shop.get(key)?.startedAt ?? 0) < SHOP_PRICE_MAX_AGE) continue;
-        this.shop.delete(key);
-        if (this.shop.size >= 128) this.shop.delete(this.shop.keys().next().value!);
-        const entry: { startedAt: number; prices: ShopPrice[]; pending?: Promise<void> } = { startedAt: now, prices: [] };
-        this.shop.set(key, entry);
-        entry.pending = Promise.resolve().then(() => read(pair, this.shopController.signal)).then(prices => {
-          entry.prices = prices;
-        }, () => { /* A missing quote leaves the price open. */ });
-        await entry.pending;
-        entry.pending = undefined;
+    const waiting: Promise<void>[] = [];
+    for (const pair of pairs) {
+      if (pair.fromId === pair.toId || !known.has(pair.fromId) || !known.has(pair.toId)) continue;
+      const key = shopPairKey(pair), previous = this.shop.get(key), now = Date.now();
+      if (previous?.pending) { waiting.push(previous.pending); continue; }
+      if (previous && now - previous.startedAt < SHOP_PRICE_MAX_AGE) continue;
+      this.shop.delete(key);
+      if (this.shop.size >= SHOP_CACHE_LIMIT) {
+        const oldest = [...this.shop].find(([, entry]) => !entry.pending);
+        if (!oldest) continue;
+        this.shop.delete(oldest[0]);
       }
-    } finally { this.shopPending--; }
+      const entry: ShopEntry = { startedAt: now, prices: previous?.prices ?? [] };
+      this.shop.set(key, entry);
+      entry.pending = new Promise(resolve => this.shopQueue.push(async () => {
+        try {
+          if (this.closed) return;
+          entry.startedAt = Date.now();
+          const checked = z.array(shopPriceSchema).max(2).parse(await read(pair, this.shopController.signal));
+          if (this.closed) return;
+          entry.prices = checked.filter(price => shopPairKey(price) === key);
+          for (const price of entry.prices) this.rememberShopPrice(price);
+          if (entry.prices.length && !this.shopSave) this.shopSave = setTimeout(() => this.saveShopPrices(), 250);
+        } catch { /* Refresh errors leave the last successful observation available. */ }
+        finally { entry.pending = undefined; resolve(); }
+      }));
+      waiting.push(entry.pending);
+    }
+    this.runShopQueue();
+    await Promise.all(waiting);
   }
   async quoteShopPrice(pair: ShopPair): Promise<ShopPrice[]> {
-    const key = `${pair.fromId}:${pair.toId}`;
+    const key = shopPairKey(pair);
     const previous = this.shop.get(key);
     if (previous && !previous.pending && !previous.prices.length && Date.now() - previous.startedAt >= 3000) {
       this.shop.delete(key);
@@ -175,5 +224,5 @@ export class MarketService {
     if (!saved || next.budget.minor !== saved.minor || next.budget.currency !== saved.currency) this.write(name, next);
     return next.budget;
   }
-  close(): void { this.closed = true; this.schedule.close(); this.controller?.abort(); this.shopController.abort(); }
+  close(): void { this.closed = true; this.schedule.close(); this.controller?.abort(); this.shopController.abort(); this.saveShopPrices(); }
 }

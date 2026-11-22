@@ -18,12 +18,6 @@ public static class SelectableSetup {
   }
   return false;
  }
- static string[] PackagedFileNames(){
-  using(var stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("SarevocsCCUPlaner.ProductFiles")){
-   if(stream==null)throw new IOException("PRODUCT_FILES_MISSING");
-   using(var reader=new StreamReader(stream))return reader.ReadToEnd().Split(new[]{'\n','\r'},StringSplitOptions.RemoveEmptyEntries);
-  }
- }
  static void RemoveEmptyDirectory(string folder){
   if(Directory.Exists(folder)&&Directory.GetFileSystemEntries(folder).Length==0)Directory.Delete(folder,false);
  }
@@ -94,54 +88,123 @@ public static class SelectableSetup {
   foreach(string root in roots){if(full.Equals(Path.Combine(root,SetupBootstrapperCore.ExecutableName),StringComparison.OrdinalIgnoreCase))return true;string parent=Path.GetDirectoryName(full);if(String.Equals(Path.GetDirectoryName(parent),root,StringComparison.OrdinalIgnoreCase)&&System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(parent),@"^app-\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$"))return true;}
   return false;
  }
+ static readonly string ShortcutName="Sarevoc´s CCU Planer.lnk";
+ static string[] InspectShortcuts(string directory,IEnumerable<string> roots,Type shellType,object shell){
+  string desired=Path.Combine(directory,ShortcutName);
+  SetupBootstrapperCore.RejectReparseParents(desired);
+  if(File.Exists(directory)||Directory.Exists(desired))throw new IOException("SHORTCUT_NAME_IN_USE");
+  if(!Directory.Exists(directory))return new string[0];
+  var owned=new List<string>();
+  foreach(string file in Directory.GetFiles(directory,"*CCU*Planer*.lnk")){
+   if(!Path.GetFileName(file).StartsWith("Sarevoc",StringComparison.OrdinalIgnoreCase))continue;
+   bool own=(File.GetAttributes(file)&FileAttributes.ReparsePoint)==0&&OwnTarget(LinkTarget(GetLink(shellType,shell,file)),roots);
+   if(!own&&file.Equals(desired,StringComparison.OrdinalIgnoreCase))throw new IOException("SHORTCUT_NAME_IN_USE");
+   if(own){SetupBootstrapperCore.FileSha256(file);owned.Add(file);}
+  }
+  return owned.ToArray();
+ }
+ static void SaveShortcutForRollback(string file,Action<Action> undo){
+  if(undo==null)return;
+  byte[] previous=File.Exists(file)?File.ReadAllBytes(file):null;
+  undo(delegate{
+   SetupBootstrapperCore.RejectReparseParents(file);
+   if(previous==null){File.Delete(file);return;}
+   if(File.Exists(file))SetupBootstrapperCore.FileSha256(file);
+   if(!File.Exists(file)||!File.ReadAllBytes(file).SequenceEqual(previous))File.WriteAllBytes(file,previous);
+  });
+ }
  // Only links naming this product and pointing to a known product root may be removed.
- public static void CreateShortcuts(string root,string desktop,string menu,IEnumerable<string> previousRoots=null){
+ public static void CreateShortcuts(string root,string desktop,string menu,IEnumerable<string> previousRoots=null,Action<Action> undo=null){
   Type shellType=Type.GetTypeFromProgID("WScript.Shell");object shell=Activator.CreateInstance(shellType);
   var roots=new HashSet<string>(StringComparer.OrdinalIgnoreCase){root};if(previousRoots!=null)foreach(string previous in previousRoots)roots.Add(previous);
   foreach(string directory in new[]{desktop,menu}){
-   Directory.CreateDirectory(directory);string desired=Path.Combine(directory,"Sarevoc´s CCU Planer.lnk");
-   foreach(string file in Directory.GetFiles(directory,"*CCU*Planer*.lnk")){
-    if(!Path.GetFileName(file).StartsWith("Sarevoc",StringComparison.OrdinalIgnoreCase)||(File.GetAttributes(file)&FileAttributes.ReparsePoint)!=0)continue;
-    bool own=OwnTarget(LinkTarget(GetLink(shellType,shell,file)),roots);
-    if(file.Equals(desired,StringComparison.OrdinalIgnoreCase)){if(!own)throw new IOException("SHORTCUT_NAME_IN_USE");}
-    else if(own)File.Delete(file);
+   string[] owned=InspectShortcuts(directory,roots,shellType,shell);
+   Directory.CreateDirectory(directory);string desired=Path.Combine(directory,ShortcutName);
+   foreach(string file in owned){
+    if(file.Equals(desired,StringComparison.OrdinalIgnoreCase))continue;
+    SaveShortcutForRollback(file,undo);
+    File.Delete(file);
    }
+   SetupBootstrapperCore.RejectReparseParents(desired);
+   SaveShortcutForRollback(desired,undo);
    object link=GetLink(shellType,shell,desired);Type type=link.GetType();
    foreach(var value in new Dictionary<string,string>{{"TargetPath",Path.Combine(root,SetupBootstrapperCore.ExecutableName)},{"Arguments",""},{"WorkingDirectory",root},{"IconLocation",Path.Combine(root,SetupBootstrapperCore.ExecutableName)+",0"}})type.InvokeMember(value.Key,BindingFlags.SetProperty,null,link,new object[]{value.Value});
    type.InvokeMember("Save",BindingFlags.InvokeMethod,null,link,null);
   }
  }
- static void Install(string local,string previous,string target,DisplaySetup display,bool acceptedTerms,Action<string,int> report){
+ static bool Install(string local,string previous,string target,DisplaySetup display,bool acceptedTerms,Action<string,int> report){
   SetupTerms.Require(acceptedTerms);
   CheckMove(previous,target);
-  string legacy=Path.Combine(local,"SarevocsCCUPlaner"),temporary=null,extracted=null,progressFile=null;
-  try{
-   using(SetupBootstrapperCore.AcquireInstallLock(legacy)){
+  string legacy=Path.Combine(local,"SarevocsCCUPlaner");
+  using(SetupBootstrapperCore.AcquireInstallLock(legacy)){
     var roots=new HashSet<string>(StringComparer.OrdinalIgnoreCase){legacy,target};if(!String.IsNullOrEmpty(previous))roots.Add(InstallLocation.Validate(previous,local));
-    report("Laufende Vorversion geordnet beenden …",-1);
-    foreach(string root in roots){var result=SetupBootstrapperCore.CloseOwnProcesses(root);if(!result.Success)throw new IOException("CLOSE_"+result.Code);}
-    string inventory=Path.Combine(local,@"SarevocsCCUPlaner-Daten\Daten\inventory.sqlite"),before=File.Exists(inventory)?SetupBootstrapperCore.FileSha256(inventory):null;
-    report("Installationsdateien prüfen …",-1);temporary=Path.Combine(Path.GetTempPath(),"SarevocsCCUPlaner-Setup-"+Guid.NewGuid().ToString("N"));
-    using(var payload=SetupBootstrapperCore.ExtractPayload(temporary)){
-     extracted=payload.Path;foreach(string root in roots)if(SetupBootstrapperCore.VerifyStopped(root)!="SUCCESS")throw new IOException("PROCESS_RESTARTED");
-     progressFile=Path.Combine(temporary,"copy-progress.txt");File.WriteAllText(progressFile,"0");report("Programmdateien kopieren …",0);
-     if(RunChild(payload.Path,"/S /D="+target,temporary,progressFile,p=>report("Programmdateien kopieren · "+p+" %",p))!=0)throw new IOException("INNER_SETUP_FAILED");
-     report("Desktop und Startmenü aktualisieren …",-1);CreateShortcuts(target,Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),"Sarevoc"),roots);
-     report("Bisherige Programmversion bereinigen …",-1);
-     var packagedFiles=PackagedFileNames();
-     if(HasLegacyInstallation(legacy)){CleanLegacyFiles(legacy,packagedFiles);RemoveLegacyRegistration(legacy);}
-     CleanPrevious(previous,local,target,packagedFiles);
+    string desktop=Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+    string menu=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),"Sarevoc");
+    report("Installationsziel und Verknüpfungen prüfen …",-1);
+    Type shellType=Type.GetTypeFromProgID("WScript.Shell");object shell=Activator.CreateInstance(shellType);
+    InspectShortcuts(desktop,roots,shellType,shell);InspectShortcuts(menu,roots,shellType,shell);
+
+    var manifest=InstallTransaction.ReadEmbeddedManifest();
+    var managedNames=manifest.Select(entry=>entry.Name).Concat(new[]{InstallTransaction.UninstallerName}).ToArray();
+    string parent=Path.GetDirectoryName(target);
+    SetupBootstrapperCore.RejectReparseParents(parent);
+    Directory.CreateDirectory(parent);
+    string work=Path.Combine(parent,".ccu-setup-"+Guid.NewGuid().ToString("N").Substring(0,12));
+    string staging=Path.Combine(work,"new"),backup=Path.Combine(work,"old");
+    string temporary=Path.Combine(Path.GetTempPath(),"SarevocsCCUPlaner-Setup-"+Guid.NewGuid().ToString("N"));
+    string extracted=null,progressFile=null;
+    bool ownWork=false,retainBackup=false;
+    try{
+     using(SetupBootstrapperCore.CreatePayloadDirectory(work)){
+      ownWork=true;
+      Directory.CreateDirectory(staging);
+      report("Installationsdateien vorbereiten …",0);
+      using(var payload=SetupBootstrapperCore.ExtractPayload(temporary)){
+       extracted=payload.Path;
+       progressFile=Path.Combine(temporary,"copy-progress.txt");File.WriteAllText(progressFile,"0");
+       if(RunChild(payload.Path,"/S /D="+staging,temporary,progressFile,p=>report("Programmdateien vorbereiten · "+p+" %",p))!=0)throw new IOException("INNER_SETUP_FAILED");
+      }
+      var entries=InstallTransaction.CheckStaging(staging,manifest);
+      InspectShortcuts(desktop,roots,shellType,shell);InspectShortcuts(menu,roots,shellType,shell);
+      InstallLocation.Validate(target,local);
+      report("Laufende Vorversion geordnet beenden …",-1);
+      foreach(string root in roots){var result=SetupBootstrapperCore.CloseOwnProcesses(root);if(!result.Success)throw new IOException("CLOSE_"+result.Code);}
+      string inventory=Path.Combine(local,@"SarevocsCCUPlaner-Daten\Daten\inventory.sqlite");
+      string before=File.Exists(inventory)?SetupBootstrapperCore.FileSha256(inventory):null;
+      foreach(string root in roots)if(SetupBootstrapperCore.VerifyStopped(root)!="SUCCESS")throw new IOException("PROCESS_RESTARTED");
+      report("Programmdateien prüfen und austauschen …",-1);
+      InstallTransaction.PublishVerified(entries,staging,backup,target,undo=>{
+       report("Desktop und Startmenü aktualisieren …",-1);
+       CreateShortcuts(target,desktop,menu,roots,undo);
+       report("Installation abschließen …",-1);
+       string after=File.Exists(inventory)?SetupBootstrapperCore.FileSha256(inventory):null;
+       if(before!=after)throw new IOException("INVENTORY_CHANGED");
+       InstallTransaction.Register(target,acceptedTerms,undo);
+       display.Commit(local);
+      },ref retainBackup);
+     }
+    }finally{
+     if(ownWork){
+      InstallTransaction.RemoveStaging(staging,managedNames);
+      if(!retainBackup)InstallTransaction.RemoveStaging(backup,managedNames);
+      try{SetupBootstrapperCore.RejectReparseParents(work);Directory.Delete(work,false);}catch(IOException){}catch(UnauthorizedAccessException){}
+     }
+     foreach(string file in new[]{progressFile,extracted})if(file!=null)try{File.Delete(file);}catch(IOException){}catch(UnauthorizedAccessException){}
+     try{Directory.Delete(temporary,false);}catch(IOException){}catch(UnauthorizedAccessException){}
     }
-    report("Installation abschließen …",-1);string after=File.Exists(inventory)?SetupBootstrapperCore.FileSha256(inventory):null;if(before!=after)throw new IOException("INVENTORY_CHANGED");display.Commit(local);SetupTerms.Commit(acceptedTerms);
-   }
-  }finally{
-   // Delete only this invocation's known temporary files, never user data.
-   foreach(string file in new[]{progressFile,extracted})if(file!=null)try{File.Delete(file);}catch{}
-   if(temporary!=null)try{Directory.Delete(temporary,false);}catch{}
+    // Only retire old locations after the new registration, files and settings have all succeeded.
+    report("Bisherige Programmversion bereinigen …",-1);
+    try{
+     var programNames=manifest.Select(entry=>entry.Name).Where(name=>!InstallTransaction.IsSetupFile(name)).ToArray();
+     if(HasLegacyInstallation(legacy)){CleanLegacyFiles(legacy,programNames);RemoveLegacyRegistration(legacy);}
+     CleanPrevious(previous,local,target,programNames);
+     return true;
+    }catch(IOException){return false;}catch(UnauthorizedAccessException){return false;}catch(System.Security.SecurityException){return false;}
   }
  }
- static void Success(){Console.WriteLine("{\"code\":\"SUCCESS\",\"installedVersion\":\""+EmbeddedPayload.Version+"\",\"newRsiLogin\":false}");}
- static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":"Bitte Programmordner und Schreibrechte prüfen und erneut versuchen.";}
+ static void Success(bool cleaned){Console.WriteLine("{\"code\":\"SUCCESS\",\"installedVersion\":\""+EmbeddedPayload.Version+"\",\"cleanupComplete\":"+(cleaned?"true":"false")+",\"newRsiLogin\":false}");}
+ static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Die gesicherten Dateien liegen neben dem Installationsordner.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":"Bitte Programmordner und Schreibrechte prüfen und erneut versuchen.";}
+ static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
  [STAThread]public static int Main(string[] args){
   if(args.Length==1&&args[0].StartsWith("--extract-payload=",StringComparison.Ordinal))return SetupBootstrapper.Main(args);
   bool silent=args.Length==1&&args[0]=="--silent";if(args.Length>0&&!silent)return 1;
@@ -155,7 +218,7 @@ public static class SelectableSetup {
    security.AddAccessRule(new System.Security.AccessControl.MutexAccessRule(new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid,null),System.Security.AccessControl.MutexRights.FullControl,System.Security.AccessControl.AccessControlType.Allow));
    bool created;mutex=new Mutex(false,@"Local\SarevocsCCUPlaner.Install."+sid,out created,security);try{owns=mutex.WaitOne(0);}catch(AbandonedMutexException){owns=true;}if(!owns)throw new IOException("INSTALLER_ALREADY_RUNNING");
    string previous=InstallLocation.RegisteredRoot(),initial=InstallLocation.DefaultRoot(local),installed=InstallLocation.InstalledVersion(local,previous);
-   if(silent){string target=InstallLocation.Validate(initial,local);Install(local,previous,target,DisplaySetup.Prepare(local,true),true,(s,p)=>{});Success();return 0;}
+   if(silent){string target=InstallLocation.Validate(initial,local);Success(Install(local,previous,target,DisplaySetup.Prepare(local,true),true,(s,p)=>{}));return 0;}
    int result=0;
    using(var window=new SetupWindow(initial,installed,EmbeddedPayload.Version)){
     window.InstallRequested+=delegate{
@@ -165,13 +228,13 @@ public static class SelectableSetup {
      window.SetBusy("Installation vorbereiten …",-1);
      Action<Action> post=action=>{if(!window.IsDisposed)try{window.BeginInvoke(action);}catch(InvalidOperationException){}};
      Task.Run(delegate{
-      try{Install(local,previous,target,display,true,(phase,percent)=>post(()=>window.SetBusy(phase,percent)));result=0;post(()=>window.SetFinished(true,""));Success();}
-      catch(Exception error){result=1;post(()=>window.SetFinished(false,Failure(error)));Console.WriteLine("{\"code\":\"INSTALLATION_ABORTED\"}");}
+      try{bool cleaned=Install(local,previous,target,display,true,(phase,percent)=>post(()=>window.SetBusy(phase,percent)));result=0;post(()=>window.SetFinished(true,""));Success(cleaned);}
+      catch(Exception error){result=1;post(()=>window.SetFinished(false,Failure(error)));ReportFailure(error);}
      });
     };
     Application.Run(window);
    }return result;
-  }catch(Exception error){Console.WriteLine("{\"code\":\"INSTALLATION_ABORTED\"}");if(!silent){using(var window=new SetupWindow("",null,EmbeddedPayload.Version)){window.SetFinished(false,Failure(error));Application.Run(window);}}return 1;}
+  }catch(Exception error){ReportFailure(error);if(!silent){using(var window=new SetupWindow("",null,EmbeddedPayload.Version)){window.SetFinished(false,Failure(error));Application.Run(window);}}return 1;}
   finally{if(owns)mutex.ReleaseMutex();if(mutex!=null)mutex.Dispose();}
  }
 }

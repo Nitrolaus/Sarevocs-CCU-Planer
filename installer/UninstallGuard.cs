@@ -1,7 +1,8 @@
 using System;using System.Diagnostics;using System.IO;using System.Threading;
 public static class UninstallGuard {
  [STAThread]public static int Main(string[] args){try{
-  if(args.Length<2)return 1;string root=InstallLocation.Validate(args[1],Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+  if(args.Length<2)return 1;string root=InstallLocation.Validate(args[1],Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),args[0]=="--validate-stage"&&args.Length==2);
+  if(args[0]=="--validate-stage"&&args.Length==2)return 0;
   if(args[0]=="--validate")return 0;
   if(args[0]=="--remove-shortcuts"&&args.Length==2){
    if(String.Equals(root,InstallLocation.RegisteredRoot(),StringComparison.OrdinalIgnoreCase))

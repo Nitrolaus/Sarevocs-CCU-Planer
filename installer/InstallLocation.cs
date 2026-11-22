@@ -11,15 +11,16 @@ public static class InstallLocation {
   using(var entry=Registry.CurrentUser.OpenSubKey(key)){string value=entry==null?null:entry.GetValue("DisplayVersion") as string;Version version;if(Version.TryParse(value,out version)&&version.Build>=0)return new Version(version.Major,version.Minor,version.Build).ToString();}return null;
  }
  static bool Within(string value,string parent){return value.Equals(parent,StringComparison.OrdinalIgnoreCase)||value.StartsWith(parent+"\\",StringComparison.OrdinalIgnoreCase);}
- public static string Validate(string value,string local){
+ public static string Validate(string value,string local,bool staging=false){
   if(value!=null)foreach(string part in value.Split('\\','/'))if(part.EndsWith(".")||part.EndsWith(" "))throw new IOException("INVALID_PATH");
-  string root=SetupBootstrapperCore.CanonicalRoot(value);if(root.Length>180)throw new IOException("PATH_TOO_LONG");
+  string root=SetupBootstrapperCore.CanonicalRoot(value);if(!staging&&root.Length>180)throw new IOException("PATH_TOO_LONG");
   foreach(char c in root)if(Char.IsControl(c)||c=='"'||c=='*'||c=='?'||c=='<'||c=='>'||c=='|')throw new IOException("INVALID_PATH");
   foreach(string part in root.Substring(3).Split('\\')){if(part.Length==0||part.EndsWith(".")||part.EndsWith(" ")||part.Contains(":"))throw new IOException("INVALID_PATH");}
   string data=Path.GetFullPath(Path.Combine(local,"SarevocsCCUPlaner-Daten"));
   string legacy=Path.GetFullPath(Path.Combine(local,"SarevocsCCUPlaner"));
   if(Within(root,Environment.GetFolderPath(Environment.SpecialFolder.Windows))||Within(root,data)||Within(data,root)||Within(root,legacy)||Within(legacy,root))throw new IOException("PROTECTED_DIRECTORY");
   SetupBootstrapperCore.ValidateProgramTree(root);if(File.Exists(root))throw new IOException("TARGET_IS_FILE");
+  if(staging&&(!Directory.Exists(root)||Directory.GetFileSystemEntries(root).Length!=0))throw new IOException("STAGING_NOT_EMPTY");
   if(Directory.Exists(root)&&Directory.GetFileSystemEntries(root).Length!=0){string marker=Path.Combine(root,"install-product.txt");SetupBootstrapperCore.RejectReparseParents(marker);if(!File.Exists(marker)||new FileInfo(marker).Length>100||File.ReadAllText(marker).Trim()!=ProductMarker||(!File.Exists(Path.Combine(root,SetupBootstrapperCore.ExecutableName))&&!File.Exists(Path.Combine(root,"SetupGuard.exe"))))throw new IOException("DIRECTORY_NOT_EMPTY");}
   return root;
  }

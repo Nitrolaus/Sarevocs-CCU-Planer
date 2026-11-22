@@ -53,7 +53,7 @@ Function .onInit
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File /oname=SetupGuard.exe "${esc(guard)}"
-  ExecWait '"$PLUGINSDIR\\SetupGuard.exe" --validate "$INSTDIR"' $0
+  ExecWait '"$PLUGINSDIR\\SetupGuard.exe" --validate-stage "$INSTDIR"' $0
   ${If} $0 != 0
     SetErrorLevel 2
     Quit
@@ -83,17 +83,6 @@ Section "Programm"
   WriteUninstaller "$INSTDIR\\Uninstall.exe"
   IfErrors installFailed
   ${copy}
-  WriteRegStr HKCU "Software\\Sarevoc\\SarevocsCCUPlaner" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "DisplayName" "Sarevoc´s CCU Planer"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "DisplayVersion" "${version}"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "Publisher" "Sarevoc"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "DisplayIcon" "$INSTDIR\\Sarevocs-CCU-Planer.exe,0"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "UninstallString" '$\\"$INSTDIR\\Uninstall.exe$\\"'
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "QuietUninstallString" '$\\"$INSTDIR\\Uninstall.exe$\\" /S'
-  WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "NoModify" 1
-  WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable" "NoRepair" 1
-  IfErrors installFailed
   SetErrorLevel 0
   Goto done
  installFailed:

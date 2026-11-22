@@ -17,15 +17,19 @@ const innerSHA = sha(payload);
 if (innerSHA !== sha(innerSetup)) throw new Error('Inner setup changed during copy');
 const constants = path.join(folder, 'BuildPayload.cs');
 const innerManifest = JSON.parse(fs.readFileSync(path.join(path.dirname(innerSetup), 'install-files.json'), 'utf8'));
+const manifestFiles = innerManifest.files.concat(['SetupGuard.exe', 'install-product.txt', 'install-files.json'].map(file => {
+  const fullPath = path.join(path.dirname(innerSetup), file);
+  return { file, size: fs.statSync(fullPath).size, sha256: sha(fullPath) };
+}));
 const productFiles = path.join(folder, 'product-files.txt');
-fs.writeFileSync(productFiles, innerManifest.files.map(entry => entry.file).join('\n'));
+fs.writeFileSync(productFiles, manifestFiles.map(({ file, size, sha256 }) => `${file}\t${size}\t${sha256}`).join('\n'));
 const totalFileBytes = innerManifest.files.reduce((total,entry)=>{if(!Number.isSafeInteger(entry.size)||entry.size<0)throw new Error('Invalid file size in installer manifest');return total+entry.size;},0);
 fs.writeFileSync(constants, `using System.Reflection;\n[assembly: AssemblyVersion("${version}.0")]\n[assembly: AssemblyFileVersion("${version}.0")]\n[assembly: AssemblyTitle("Sarevoc´s CCU Planer Setup")]\n[assembly: AssemblyProduct("Sarevoc´s CCU Planer")]\n[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8")]\npublic static class EmbeddedPayload { public const long TotalFileBytes = ${totalFileBytes}L; public const string ExpectedSha256 = "${innerSHA}"; public const string Version = "${version}"; }\n`);
 const setup = path.join(folder, `Sarevocs-CCU-Planer-Setup-${version}.exe`);
 const source = path.resolve('installer/SetupBootstrapper.cs'), manifest = path.resolve('installer/setup.manifest');
 const compilerArgs = ['/nologo', '/noconfig', '/langversion:5', '/optimize+', '/target:winexe', '/platform:x64', '/main:SelectableSetup',
-  '/out:' + setup, source, ...['DisplaySetup.cs', 'InstallLocation.cs', 'SetupWindow.cs', 'SelectableSetup.cs'].map(file => path.resolve('installer', file)), constants, '/win32manifest:' + manifest, '/win32icon:' + path.resolve('assets/app.ico'),
-  '/resource:' + payload + ',SarevocsCCUPlaner.InnerSetup', '/resource:' + productFiles + ',SarevocsCCUPlaner.ProductFiles', '/reference:System.dll', '/reference:System.Core.dll',
+  '/out:' + setup, source, ...['DisplaySetup.cs', 'InstallLocation.cs', 'InstallTransaction.cs', 'SetupWindow.cs', 'SelectableSetup.cs'].map(file => path.resolve('installer', file)), constants, '/win32manifest:' + manifest, '/win32icon:' + path.resolve('assets/app.ico'),
+  '/resource:' + payload + ',SarevocsCCUPlaner.InnerSetup', '/resource:' + productFiles + ',SarevocsCCUPlaner.PayloadManifest', '/reference:System.dll', '/reference:System.Core.dll',
   '/reference:System.Management.dll', '/reference:System.Security.dll', '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll'];
 await new Promise((resolve, reject) => {
   const child = spawn(compiler, compilerArgs, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -33,6 +37,6 @@ await new Promise((resolve, reject) => {
   child.on('error', reject); child.on('exit', code => code === 0 ? resolve() : reject(new Error('Bootstrapper compiler failed: ' + output.trim())));
 });
 if (innerSHA !== sha(payload) || innerSHA !== sha(innerSetup)) throw new Error('Inner setup changed during compilation');
-const metadata = { setup, innerSetup, innerSHA, version, compiler, sourceSHA: sha(source), displaySourceSHA:sha(path.resolve('installer/DisplaySetup.cs')), locationSourceSHA:sha(path.resolve('installer/InstallLocation.cs')), windowSourceSHA:sha(path.resolve('installer/SetupWindow.cs')), selectableSourceSHA:sha(path.resolve('installer/SelectableSetup.cs')), manifestSHA: sha(manifest) };
+const metadata = { setup, innerSetup, innerSHA, version, compiler, sourceSHA: sha(source), displaySourceSHA:sha(path.resolve('installer/DisplaySetup.cs')), locationSourceSHA:sha(path.resolve('installer/InstallLocation.cs')), windowSourceSHA:sha(path.resolve('installer/SetupWindow.cs')), selectableSourceSHA:sha(path.resolve('installer/SelectableSetup.cs')), transactionSourceSHA:sha(path.resolve('installer/InstallTransaction.cs')), manifestSHA: sha(manifest) };
 fs.writeFileSync(path.resolve('work/temp/bootstrapper-artifacts.json'), JSON.stringify(metadata, null, 2));
 console.log('BOOTSTRAPPER:', setup); console.log('INNER_SHA256:', innerSHA);

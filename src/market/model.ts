@@ -33,7 +33,7 @@ export const marketCacheSchema = z.object({ schemaVersion: z.literal(1),
   offers: z.object({ fetchedAt: at, sourceAt: at, checkedAt: at.nullable(), items: z.array(targetOfferSchema).min(1).max(2000) }).strict().nullable(),
 }).strict();
 export type MarketCache = z.infer<typeof marketCacheSchema>;
-export type MarketSnapshot = MarketCache & { fairNews?: FairNews; images?:ShipImages|null;values?:ShipValues|null;valuesError?:string|null;shopPrices?:ShopPrice[];pending: boolean; errors: Record<'catalogue' | 'offers', string | null>; refreshSchedule: { hour: number; timeZone: string } };
+export type MarketSnapshot = MarketCache & { fairNews?: FairNews; images?:ShipImages|null;values?:ShipValues|null;valuesError?:string|null;shopPrices?:ShopPrice[]; lastShopPrices?:ShopPrice[]; pending: boolean; errors: Record<'catalogue' | 'offers', string | null>; refreshSchedule: { hour: number; timeZone: string } };
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('SOURCE_FORMAT');

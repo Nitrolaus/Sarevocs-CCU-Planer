@@ -29,6 +29,7 @@ try {
   assert.equal(bootstrapper.windowSourceSHA, digest('installer/SetupWindow.cs'));
   assert.equal(bootstrapper.displaySourceSHA, digest('installer/DisplaySetup.cs'));
   assert.equal(bootstrapper.selectableSourceSHA, digest('installer/SelectableSetup.cs'));
+  assert.equal(bootstrapper.transactionSourceSHA, digest('installer/InstallTransaction.cs'));
   assert.equal(bootstrapper.sourceSHA, digest('installer/SetupBootstrapper.cs'));
   results.push('Nativer Installerstarter enthaelt die SHA-256-gepruefte Nutzlast und aktuelle Ordnerwahl; Extraktion installiert nichts.');
   seven(['t', payloadSetup]); seven(['x', '-y', '-o' + path.join(stage, 'setup-payload'), payloadSetup]);
@@ -40,6 +41,8 @@ try {
   assert.equal(digest(path.join(app, 'SetupGuard.exe')), digest(selectable.guard));
   const script = fs.readFileSync(path.join(selectable.stage, 'installer.nsi'), 'utf8');
   assert.equal(digest(path.join(selectable.stage, 'installer.nsi')), selectable.nsiSHA);
+  assert.match(script, /SetupGuard\.exe" --validate-stage/);
+  assert.doesNotMatch(script, /^\s*WriteReg/m);
   const uninstallerInit = script.match(/Function un\.PrepareUninstall\r?\n([\s\S]+?)FunctionEnd/)[1];
   assert.match(uninstallerInit, /File \/oname=SetupGuard\.exe/);
   assert.doesNotMatch(uninstallerInit, /CopyFiles|\$INSTDIR\\SetupGuard\.exe/i);

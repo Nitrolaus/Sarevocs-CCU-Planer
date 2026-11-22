@@ -7,6 +7,7 @@ import { parseCatalogue, parseOffers, mergeOffers, matchingOffer, offersAreStale
 import { MarketService } from '../src/market/service';
 import { commandSchema } from '../src/main/commands';
 import { creditBudgetLimit } from '../src/planner/credit-budget';
+import { SHOP_PRICE_MAX_AGE, shopPairKey, type ShopPrice } from '../src/market/shop-prices';
 
 const now = () => new Date().toISOString();
 const source = () => Date.now() - 60_000;
@@ -39,6 +40,58 @@ test('inventory quote shares the exact pair already being fetched for the planne
     assert.equal(prices[0]?.amount.minor, 1047);
     assert.equal(prices[0]?.edition, 'warbond');
     assert.deepEqual(await service.quoteShopPrice({ fromId: 62, toId: 207 }), []);
+  } finally { service.close(); }
+});
+
+test('last confirmed exact shop quotes survive expiration, failed refreshes and a restart', async (t) => {
+  const dir = directory(), pair = { fromId: 62, toId: 206 };
+  let clock = Date.now(), reject = false;
+  t.mock.method(Date, 'now', () => clock);
+  const quote: ShopPrice = { ...pair, edition: 'standard', checkedAt: clock,
+    amount: { minor: 1320, currency: 'EUR', taxMode: 'gross', vatBasisPoints: 1900 } };
+  const read = async (source: string) => source === 'catalogue' ? catalogue() : feed();
+  const service = new MarketService(dir, read, undefined, undefined, async () => {
+    if (reject) throw new Error('offline');
+    return [quote];
+  });
+  try {
+    await service.refresh();
+    await service.checkShopPrices([pair]);
+    assert.deepEqual(service.snapshot().shopPrices, [quote]);
+    assert.equal(service.snapshot().lastShopPrices, undefined);
+    clock += SHOP_PRICE_MAX_AGE + 1;
+    reject = true;
+    await service.checkShopPrices([pair]);
+    assert.deepEqual(service.snapshot().shopPrices, []);
+    assert.deepEqual(service.snapshot(true).lastShopPrices, [quote]);
+  } finally { service.close(); }
+
+  const restored = new MarketService(dir, read, undefined, undefined, async () => []);
+  try {
+    assert.deepEqual(restored.snapshot(true).lastShopPrices, [quote]);
+    await restored.checkShopPrices([pair]);
+    assert.deepEqual(restored.snapshot().shopPrices, []);
+    assert.deepEqual(restored.snapshot(true).lastShopPrices, [quote]);
+  } finally { restored.close(); }
+});
+
+test('automatic inventory batches are deduplicated and run at most two exact-pair reads at once', async () => {
+  const pairs = [{ fromId: 62, toId: 206 }, { fromId: 206, toId: 62 }, { fromId: 62, toId: 207 }];
+  const seen: string[] = [];
+  let active = 0, maxActive = 0;
+  const service = new MarketService(directory(), async source => source === 'catalogue'
+    ? { ...catalogue(), data: [...catalogue().data, ship(207, 'Synthetic Testbed')] } : feed(), undefined, undefined, async pair => {
+    seen.push(shopPairKey(pair));
+    maxActive = Math.max(maxActive, ++active);
+    await new Promise(resolve => setImmediate(resolve));
+    active--;
+    return [];
+  });
+  try {
+    await service.refresh();
+    await Promise.all([...pairs.map(pair => service.checkShopPrices([pair])), service.checkShopPrices(pairs)]);
+    assert.deepEqual(seen, pairs.map(shopPairKey));
+    assert.equal(maxActive, 2);
   } finally { service.close(); }
 });
 

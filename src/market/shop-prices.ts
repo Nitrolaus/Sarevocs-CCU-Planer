@@ -7,10 +7,16 @@ export const shopPairSchema = z.object({ fromId: id, toId: id }).strict().refine
 export type ShopPair = z.infer<typeof shopPairSchema>;
 export type ShopEdition = 'standard' | 'warbond';
 export type ShopAmount = { minor: number; currency: 'USD' | 'EUR'; taxMode: 'gross' | 'net'; vatBasisPoints: number };
-export type ShopPrice = ShopPair & { edition: ShopEdition; amount: ShopAmount; checkedAt: number };
+export const shopPriceSchema = z.object({ fromId: id, toId: id, edition: z.enum(['standard', 'warbond']),
+  amount: z.object({ minor: cents, currency: z.enum(['USD', 'EUR']), taxMode: z.enum(['gross', 'net']),
+    vatBasisPoints: z.number().int().min(0).max(10_000) }).strict(),
+  checkedAt: z.number().int().nonnegative().max(8.64e15),
+}).strict().refine(price => price.fromId !== price.toId);
+export type ShopPrice = z.infer<typeof shopPriceSchema>;
 export type ReadShopPrices = (pair: ShopPair, signal: AbortSignal) => Promise<ShopPrice[]>;
 export const SHOP_PRICE_MAX_AGE = 5 * 60_000;
 export const MAX_SHOP_PAIRS = 24;
+export const shopPairKey = ({ fromId, toId }: ShopPair) => `${fromId}:${toId}`;
 
 export function shopPairs(steps: readonly ChainStep[]): ShopPair[] {
   const pairs = new Map<string, ShopPair>();

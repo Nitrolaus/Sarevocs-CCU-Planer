@@ -24,7 +24,7 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({action:z.literal('report.selection'),accountId:z.uuid(),kinds:reportSelectionSchema,chain:reportChainSchema.optional(),filters:reportFiltersSchema.optional()}).strict()
     .refine(command=>Object.keys(command.filters??{}).every(key=>command.kinds.some(kind=>kind===key))),
   z.object({action:z.literal('report.save'),accountId:z.uuid(),token:z.uuid(),format:z.enum(['xlsx','pdf'])}).strict(),
-  z.object({ action: z.literal('market.status') }).strict(),
+  z.object({ action: z.literal('market.status'), includeLastShopPrices: z.literal(true).optional() }).strict(),
   z.object({ action: z.literal('market.fairSeen'), noticeId: fairNoticeIdSchema }).strict(),
   z.object({action:z.literal('paints.status')}).strict(),
   z.object({action:z.literal('paints.refresh')}).strict(),

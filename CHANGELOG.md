@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.94 · Alpha
+
+- Der Bestand ruft RSI-Shoppreise für erkannte CCU-Schiffspaare automatisch ab. Bestätigte Standard- und Warbond-Preise bleiben lokal mit Prüfdatum verfügbar.
+- Der Installer prüft Verknüpfungen vor dem Dateiaustausch, verifiziert die bereitgestellten Programmdateien und kann das Update bei einem Fehler rücksichern.
+- Die eigenen nativen Windows-DLL-Aufrufe des Installers beschränken die Suche auf den Systemordner.
+
 ## 0.3.92 · Alpha
 
 - Unter der Profilzeile zeigt ein Fortschrittsbalken mit drehendem Kreis, wie viele RSI-Hangarseiten und Einträge gelesen wurden. Ist die Gesamtseitenzahl bekannt, erscheint auch der Prozentwert.

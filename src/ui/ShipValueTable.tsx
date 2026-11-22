@@ -2,6 +2,7 @@ import React, {useEffect, useMemo, useState} from 'react';
 import type {Pledge} from '../domain/model';
 import type {GiveawayOriginsSnapshot} from '../storage/giveaway-origins';
 import type {MarketSnapshot} from '../market/model';
+import {shopPairKey, type ShopPair} from '../market/shop-prices';
 import type {PricingSnapshot} from '../pricing/model';
 import {gameAccessEvidence} from '../domain/game-access';
 import {gameContentKind} from '../domain/game-content';
@@ -19,9 +20,11 @@ import './ship-values.css';
 import {ResizableTable} from './ResizableTable';
 import {GiveawayOriginDialog} from './GiveawayOriginDialog';
 import {giveawayShip} from '../domain/giveaway';
-import { CcuShopPrice, ccuShopPair } from './CcuShopPrice';
+import { CcuShopPrice, ccuShopPair, type DisplayShopPrice } from './CcuShopPrice';
+import { useShopPricePairs } from './useShopPrices';
 
 type Row = {pledge:Pledge; source:string};
+const ccuModelKey = (from:string,to:string) => JSON.stringify([from,to]);
 type DisplayRow = CurrentShipValue & {ccu?:Pledge['ccus'][number]; ship:boolean};
 type Props = {
   accountId:string; rows:readonly Row[]; display:PricingSnapshot; demo:boolean; view?:'ships'|'all'|'ccus'|'packages'|'access';emptyText?:string;
@@ -54,12 +57,35 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
   useEffect(()=>{
     let active=true,timer:ReturnType<typeof setTimeout>;
     const poll=async()=>{
-      try {const r=await window.ccu.request({action:'market.status'});if(active&&r.ok)setMarket(previous=>JSON.stringify(previous)===JSON.stringify(r.data)?previous:r.data as MarketSnapshot);}
+      try {const r=await window.ccu.request({action:'market.status',...(view!=='ships'&&!demo?{includeLastShopPrices:true}: {})});if(active&&r.ok)setMarket(previous=>JSON.stringify(previous)===JSON.stringify(r.data)?previous:r.data as MarketSnapshot);}
       catch {/* Public cache only; never initiate a connection or authentication. */}
       if(active)timer=setTimeout(()=>void poll(),1500);
     };
     void poll();return()=>{active=false;clearTimeout(timer);};
-  },[]);
+  },[view,demo]);
+  const pairsByModel=useMemo(()=>{
+    const pairs=new Map<string,ShopPair|null>(),catalogue=market?.catalogue?.ships;
+    if (!catalogue||demo||view==='ships') return pairs;
+    for(const {pledge} of rows) for(const {from,to} of pledge.ccus){
+      const key=ccuModelKey(from,to);
+      if(!pairs.has(key)) pairs.set(key,ccuShopPair(from,to,catalogue));
+    }
+    return pairs;
+  },[rows,market?.catalogue?.ships,view,demo]);
+  const wantedPairs=new Map<string,ShopPair>();
+  for(const pair of pairsByModel.values()) if(pair) wantedPairs.set(shopPairKey(pair),pair);
+  useShopPricePairs([...wantedPairs.values()]);
+  const quotesByPair=useMemo(()=>{
+    const grouped=new Map<string,Map<string,DisplayShopPrice>>();
+    for(const [prices,current] of [[market?.lastShopPrices,false],[market?.shopPrices,true]] as const){
+      for(const price of prices??[]){
+        const key=shopPairKey(price),entries=grouped.get(key)??new Map<string,DisplayShopPrice>();
+        entries.set(price.edition,{...price,current});
+        grouped.set(key,entries);
+      }
+    }
+    return new Map([...grouped].map(([key,entries])=>[key,[...entries.values()].sort((a,b)=>a.edition.localeCompare(b.edition))]));
+  },[market?.lastShopPrices,market?.shopPrices]);
   const fx=display.rate&&!euroRateIsStale(display.rate)?display.rate:null;
   const comparisonSettings={...display.settings,taxMode:'net' as const};
   const money=(n:number,currency:'USD'|'EUR',approximate=false)=>(approximate?'≈ ':'')+formatMinor(n,currency,display.settings.language);
@@ -103,7 +129,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
           value.observedAt?t('Datenstand')+': '+new Intl.DateTimeFormat(display.settings.language==='de'?'de-DE':'en-GB',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Berlin'}).format(new Date(value.observedAt)):null,
         ].filter(Boolean).join('\n'):undefined;
         const ccuInsurance=value.ccu||unresolved?ccuInsuranceDisplay(p):null;
-        const pair=value.ccu&&!demo?ccuShopPair(value.ccu.from,value.ccu.to,market?.catalogue?.ships??[]):null;
+        const pair=value.ccu?pairsByModel.get(ccuModelKey(value.ccu.from,value.ccu.to)):null;
         const type=gameKind?t(gameKind==='package'?'Spielpaket':'Spielkopie')+' · '+gameCopyLabel(access)
           :value.ccu?'CCU · '+t(value.ccu.status==='unused'?'unbenutzt':value.ccu.status==='applied'?'angewendet':'ungeprüft')
           :unresolved?'CCU':value.ship?t('Schiff / Fahrzeug'):t('Gegenstand');
@@ -127,7 +153,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
           </td>}
           <td className="ship-price ship-current-value" title={currentTitle}>
             {value.ship?<strong>{currentPrice??t('Nicht verfügbar')}</strong>:pair
-              ? <CcuShopPrice key={pair.fromId+':'+pair.toId} pair={pair} language={display.settings.language} />
+              ? <CcuShopPrice prices={quotesByPair.get(shopPairKey(pair))??[]} language={display.settings.language} />
               : value.ccu&&!demo?t('Paar ungeklärt'):'—'}
           </td>
           <td className="ship-source" title={originTitle}>

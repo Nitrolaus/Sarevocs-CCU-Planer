@@ -15,6 +15,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
 
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 public sealed class CloseResult
 {
     public string Code { get; internal set; }
@@ -354,9 +356,20 @@ public static class SetupBootstrapperCore
     public static PayloadLease ExtractPayload(string destinationDirectory)
     {
         string directory = AbsolutePath(destinationDirectory);
+        SafeFileHandle directoryHandle = CreatePayloadDirectory(directory);
+        try
+        {
+            PayloadLease lease = ExtractPayloadFile(System.IO.Path.Combine(directory, "SquirrelSetup.exe"), directoryHandle);
+            directoryHandle = null;
+            return lease;
+        }
+        finally { if (directoryHandle != null) directoryHandle.Dispose(); }
+    }
+
+    internal static SafeFileHandle CreatePayloadDirectory(string directory)
+    {
         RejectReparseParents(System.IO.Path.GetDirectoryName(directory));
         IntPtr descriptor = IntPtr.Zero;
-        SafeFileHandle directoryHandle = null;
         try
         {
             string sid = WindowsIdentity.GetCurrent().User.Value;
@@ -364,12 +377,12 @@ public static class SetupBootstrapperCore
             if (!ConvertStringSecurityDescriptorToSecurityDescriptor("D:P(A;OICI;FA;;;" + sid + ")(A;OICI;FA;;;SY)", 1, out descriptor, out size)) throw new IOException("PAYLOAD_DIRECTORY_SECURITY_FAILED");
             var security = new SecurityAttributes { Length = Marshal.SizeOf(typeof(SecurityAttributes)), Descriptor = descriptor, Inherit = false };
             if (!CreateDirectory(directory, ref security)) throw new IOException("PAYLOAD_DIRECTORY_NOT_NEW");
-            directoryHandle = CreateFile(directory, 0x80, 3, IntPtr.Zero, 3, 0x02000000 | 0x00200000, IntPtr.Zero);
-            if (directoryHandle.IsInvalid) throw new IOException("PAYLOAD_DIRECTORY_LOCK_FAILED");
-            PayloadLease lease = ExtractPayloadFile(System.IO.Path.Combine(directory, "SquirrelSetup.exe"), directoryHandle);
-            directoryHandle = null; return lease;
+            SafeFileHandle directoryHandle = CreateFile(directory, 0x80, 3, IntPtr.Zero, 3, 0x02000000 | 0x00200000, IntPtr.Zero);
+            if (!directoryHandle.IsInvalid) return directoryHandle;
+            directoryHandle.Dispose();
+            throw new IOException("PAYLOAD_DIRECTORY_LOCK_FAILED");
         }
-        finally { if (directoryHandle != null) directoryHandle.Dispose(); if (descriptor != IntPtr.Zero) LocalFree(descriptor); }
+        finally { if (descriptor != IntPtr.Zero) LocalFree(descriptor); }
     }
 
     public static PayloadLease ExtractPayloadFile(string outputFile) { return ExtractPayloadFile(outputFile, null); }

@@ -217,7 +217,7 @@ async function start() {
             save(buffer);reports.remove(cmd.token);data={exported:true};
           }finally{reportSaving=false;}break;
         }
-        case 'market.status': data = market.snapshot(); break;
+        case 'market.status': data = market.snapshot(cmd.includeLastShopPrices); break;
         case 'market.fairSeen': market.markFairNoticeSeen(cmd.noticeId); data = market.snapshot(); break;
         case 'paints.status':data=paints.snapshot();break;
         case 'paints.refresh':void paints.refresh();data=paints.snapshot();break;
