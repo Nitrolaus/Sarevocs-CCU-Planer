@@ -27,12 +27,12 @@ import type {DraftEditor} from './usePlannerDrafts';import {useText} from './i18
 import './chain.css';import './workbench.css';
 type Drag={scope:string;signature:string;anchor:DraftAnchor;step:ChainStep;index?:number};
 type DropTarget={token:string;index:number;replace:boolean};
-export function ChainWorkbench({accountId,inventory,target,market,display,editor,onShopError,onExportContext,blockedResources=[],reservationsReady=true,exclusions,advisors,fairOffer}:{accountId:string|null;inventory:PlannerInventory|null;
-  target?:CatalogueShip;market?:MarketSnapshot;display:PricingSnapshot;editor:DraftEditor;onShopError?:(message:string)=>void;onExportContext?:(context:ExportContext)=>void;blockedResources?:readonly ResourceClaim[];reservationsReady?:boolean;exclusions:ReturnType<typeof useCcuExclusions>;advisors?:AdvisorContext;fairOffer?:FairOfferRequest|null}){
+export function ChainWorkbench({accountId,inventory,target,market,display,editor,onShopError,onExportContext,blockedResources=[],reservationsReady=true,pendingHigher=[],exclusions,advisors,fairOffer}:{accountId:string|null;inventory:PlannerInventory|null;
+  target?:CatalogueShip;market?:MarketSnapshot;display:PricingSnapshot;editor:DraftEditor;onShopError?:(message:string)=>void;onExportContext?:(context:ExportContext)=>void;blockedResources?:readonly ResourceClaim[];reservationsReady?:boolean;pendingHigher?:readonly string[];exclusions:ReturnType<typeof useCcuExclusions>;advisors?:AdvisorContext;fairOffer?:FairOfferRequest|null}){
   const t=useText(),rail=useRef<HTMLDivElement>(null),drag=useRef<Drag|null>(null),[query,setQuery]=useState(''),[detail,setDetail]=useState<string|null>(null),[notice,setNotice]=useState(''),[opening,setOpening]=useState(false);
   const [stockView,setStockView]=useState<'grid'|'band'>('grid'),[stockColumns,setStockColumns]=useState(5);
-  const [includeHigher,setIncludeHigher]=useState(false);
-  const [advisorTab,setAdvisorTab]=useState<'chain'|'conflicts'|'purchase'>('chain');
+  const [includeHigher,setIncludeHigher]=useState(false),[showLocked,setShowLocked]=useState(false);
+  const [advisorTab,setAdvisorTab]=useState<'chain'|'priority'|'purchase'>('chain');
   const advisorPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!fairOffer) return;
@@ -57,16 +57,19 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   const excluded=new Set(exclusions.keys);
   const pool=useMemo(()=>withoutExcludedCcus(stockPool,exclusions.keys),[stockPool,exclusions.keys]);
   const chosenBase=selectedStartBase(pool,editor.value),planPool=useMemo(()=>withStartBase(pool,chosenBase?.key),[pool,chosenBase?.key]);
-  useEffect(()=>setIncludeHigher(false),[scope]);
-  const baseChoices=startBaseChoices(pool,display,includeHigher,chosenBase?.key);
-  const searchPool=useMemo(()=>availableForTarget(planPool,blockedResources),[planPool,JSON.stringify(blockedResources)]);
+  useEffect(()=>{setIncludeHigher(false);setShowLocked(false);},[scope]);
+  const freePool=useMemo(()=>availableForTarget(pool,blockedResources),[pool,blockedResources]);
+  const blockedBase=blockedResources.find(claim=>claim.kind==='base'&&claim.key===chosenBase?.key);
+  const blockedCcus=new Set(blockedResources.filter(claim=>claim.kind==='ccu').map(claim=>claim.key));
+  const baseChoices=startBaseChoices(freePool,display,includeHigher,chosenBase?.key);
+  const searchPool=useMemo(()=>withStartBase(freePool,chosenBase?.key),[freePool,chosenBase?.key]);
   const variants = useMemo(() => target && chosenBase && reservationsReady
     ? chainVariants(searchPool, target, market?.offers?.items ?? [], current, chosenBase.key, display) : [],
     [searchPool, target, market?.offers, current, chosenBase?.key, reservationsReady, display]);
   const automatic=variants[0]??null,savedManual=editor.value.mode==='manual';
   const searchSignature=JSON.stringify([scope,ready,reservationsReady,searchPool,target?.id,current,market?.offers?.items,editor.value.baseKey,display.settings,display.rate,display.shopPrices]);
-  const scan=useChainSearch(ready&&target&&reservationsReady&&chosenBase?{pool:searchPool,target,offers:market?.offers?.items??[],current,baseKey:chosenBase.key,display}:null,searchSignature);
-  const compared=comparison?.signature===searchSignature?scan.result?.plans[comparison.index]?.plan:null,editing=editor.ready&&exclusions.ready&&!exclusions.saving&&!!chosenBase;
+  const scan=useChainSearch(ready&&target&&reservationsReady&&chosenBase&&!blockedBase?{pool:searchPool,target,offers:market?.offers?.items??[],current,baseKey:chosenBase.key,display}:null,searchSignature);
+  const compared=comparison?.signature===searchSignature?scan.result?.plans[comparison.index]?.plan:null,editing=editor.ready&&reservationsReady&&exclusions.ready&&!exclusions.saving&&!!chosenBase&&!blockedBase;
   const testDraft=compared&&working?.signature===searchSignature&&working.index===comparison?.index?working:null;
   const manual=!!testDraft||savedManual&&!compared;
   const ownPlan=useMemo(()=>!chosenBase?null:savedManual&&target?manualChain(planPool,target,market?.catalogue?.ships??[],market?.offers?.items??[],current,editor.value,blockedResources):automatic,[savedManual,target,planPool,market,editor.value,automatic,current,chosenBase?.key,JSON.stringify(blockedResources)]);
@@ -88,17 +91,18 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   const used=new Set(steps.filter(s=>s.kind==='owned').map(s=>s.ccu!.key));
   const autoAnchors=(variant=automatic):DraftAnchor[]=>variant?.steps.filter(s=>s.kind==='owned').map(anchorFromStep)??[];
   function activeDraft():PlannerDraft{return testDraft?.draft??(compared?{...editor.value,mode:'manual',initialized:true,baseKey:compared.base.key,anchors:compared.steps.map(anchorFromStep)}:savedManual?editor.value:{...editor.value,mode:'manual',initialized:true,baseKey:automatic?.base.key??editor.value.baseKey,anchors:autoAnchors()});}
-  const active=activeDraft(),signature=JSON.stringify([plan?.base?.key,steps.map(s=>[s.key,s.anchorIndex]),active]);
+  const active=activeDraft(),signature=JSON.stringify([plan?.base?.key,steps.map(s=>[s.key,s.anchorIndex]),active,[...blockedCcus]]);
   let exportValue:ExportContext=null;
-  if(accountId&&target&&plan?.base&&editing&&reservationsReady&&!editor.saving&&!editor.error){
+  if(accountId&&target&&plan?.base&&editing&&!resourceConflicts.length&&!editor.saving&&!editor.error){
     try{const anchors=steps.map(anchorFromStep);exportValue={accountId,chain:{targetId:target.id,draft:{...active,mode:'manual',initialized:true,baseKey:plan.base.key,anchors},preview:!!compared}};}catch{/* A hypothetical advisor quote is not a serializable owned-stock chain. */}
   }
   const exportSignature=JSON.stringify(exportValue);
   useEffect(()=>{onExportContext?.(JSON.parse(exportSignature) as ExportContext);},[exportSignature,onExportContext]);
   useEffect(()=>()=>onExportContext?.(null),[onExportContext]);
   const hasLockedAnchors=active.anchors.some(a=>a.kind==='owned'&&excluded.has(a.key)&&stockPool.ccus.some(c=>c.key===a.key));
-  const ownedTiles:ChainStep[]=pool.limited?[]:stockPool.ccus.map(ccu=>({key:ccu.key,kind:'owned',from:ccu.from,to:ccu.to,ccu}));
-  const gapTiles=[...new Map([...(automatic?.steps??[]),...steps].filter(s=>s.kind==='purchase'&&s.validity!=='invalid').map(s=>[s.from.key+'\0'+s.to.key,s])).values()];
+  const lockedStock=stockPool.ccus.filter(ccu=>excluded.has(ccu.key)&&!blockedCcus.has(ccu.key));
+  const ownedTiles:ChainStep[]=!reservationsReady||pool.limited?[]:(showLocked?lockedStock:freePool.ccus).map(ccu=>({key:ccu.key,kind:'owned',from:ccu.from,to:ccu.to,ccu}));
+  const gapTiles=advisorTab==='chain'&&editing&&!showLocked?[...new Map([...(automatic?.steps??[]),...steps].filter(s=>s.kind==='purchase'&&s.validity!=='invalid').map(s=>[s.from.key+'\0'+s.to.key,s])).values()]:[];
   const tilePledges=new Map((ready?inventory!.pledges:[]).map(p=>[p.pledgeId,p]));
   const tiles=[...ownedTiles.sort((a,b)=>comparePledgeDates(tilePledges.get(a.ccu?.pledgeId??''),tilePledges.get(b.ccu?.pledgeId??''))),...gapTiles];
   const matches=query.trim()?new Set(searchShips(tiles.map((s,i)=>({id:i+1,name:s.from.name+' '+s.to.name,chassisId:null,manufacturer:'',manufacturerCode:'',status:'unknown',focus:'',length:null})),query).map(s=>s.id)):null;
@@ -110,9 +114,10 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     if(compared){setWorking({signature:searchSignature,index:comparison!.index,draft,history:[...(testDraft?.history??[]),active].slice(-20)});return;}editor.change(draft);}
   function chooseComparison(index:number|null){endDrag();setWorking(null);setComparison(index===null?null:{signature:searchSignature,index});setNotice('');setDetail(null);}
   function undo(){endDrag();if(testDraft?.history.length){const history=[...testDraft.history],draft=history.pop()!;setWorking({...testDraft,draft,history});}else if(!compared)editor.undo();}
-  function start(event:React.DragEvent,step:ChainStep,index?:number){if(!editing||excluded.has(step.key)||step.kind==='missing'||step.kind==='conflict'){event.preventDefault();return;}
+  function start(event:React.DragEvent,step:ChainStep,index?:number){if(!editing||excluded.has(step.key)||blockedCcus.has(step.key)||step.kind==='missing'||step.kind==='conflict'){event.preventDefault();return;}
     drag.current={scope,signature,anchor:index!==undefined?active.anchors[index]??anchorFromStep(step):anchorFromStep(step),step,...(index!==undefined?{index}:{})};setDragVisual(drag.current);setSnapped(null);setNotice('');event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain','Sarevoc CCU');}
   function place(anchor:DraftAnchor,index:number,replace=false,sourceIndex?:number){
+    if(!editing||anchor.kind==='owned'&&blockedCcus.has(anchor.key))return;
     if(anchor.kind==='owned'&&excluded.has(anchor.key)){setNotice('Dieses CCU-Exemplar ist für die Planung gesperrt.');return;}
     const next=[...active.anchors];let to=index;
     if(sourceIndex!==undefined){next.splice(sourceIndex,1);if(sourceIndex<to)to--;replace=false;}
@@ -121,8 +126,8 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     commit({...active,anchors:next});
   }
   function candidate(index:number,replace=false):Placement{
-    const source=drag.current;if(!source||!target||!editor.ready||source.scope!==scope||source.signature!==signature)return {status:'blocked',reason:'changed'};
-    return previewPlacement(pool,target,market?.catalogue?.ships??[],market?.offers?.items??[],current,active,source.anchor,index,replace,source.index);
+    const source=drag.current;if(!source||!target||!editing||source.scope!==scope||source.signature!==signature)return {status:'blocked',reason:'changed'};
+    return previewPlacement(freePool,target,market?.catalogue?.ships??[],market?.offers?.items??[],current,active,source.anchor,index,replace,source.index);
   }
   function fitLabel(p:Placement){return t(p.status==='blocked'?p.reason==='duplicate'?'Dieses CCU-Exemplar ist bereits eingeplant.':p.reason==='changed'?'Bestand oder Entwurf hat sich geändert. Bitte erneut ziehen.':'Passt hier nicht':p.status==='direct'?'Beide Anschlüsse passen':p.status==='gap'?'Passt mit Restlücke':'Anschluss ungeprüft');}
   function drop(event:React.DragEvent,index:number,replace=false){if(!drag.current)return;event.preventDefault();const result=candidate(index,replace),key=drag.current.step.key;endDrag();
@@ -230,40 +235,38 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
           {display.settings.currency==='EUR'&&<> · {planningRateLabel(display)}</>}</p></div>
         <button aria-label={t('CCU-Details schließen')} onClick={()=>{setDetail(null);costToggle.current?.focus();}}>×</button></>}
     </div>
-    {advisors&&<div className="advisor-tabs" role="tablist" aria-label={t('Planungsbereich')}>{([['chain','Kette bauen'],['conflicts','Konflikte lösen'],['purchase','CCU-Kaufoptimierer']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={advisorTab===key} onClick={()=>{endDrag();setAdvisorTab(key);}}>{t(label)}{key==='conflicts'&&advisors.conflicts>0&&<span className="advisor-count">{advisors.conflicts}</span>}</button>)}</div>}
+    {advisors&&<div className="advisor-tabs" role="tablist" aria-label={t('Planungsbereich')}>{([['chain','Kette bauen'],['priority','Vorrang & freie CCUs'],['purchase','CCU-Kaufoptimierer']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={advisorTab===key} onClick={()=>{endDrag();setAdvisorTab(key);}}>{t(label)}</button>)}</div>}
     <div>
-    <div className="ccu-start-base"><label><strong>{t('LTI-Startbasis selbst wählen')}</strong><small>{t('Günstige Tokens zuerst. Keine automatische Vorauswahl.')}</small></label><select aria-label={t('Startbasis für die Kette')} disabled={!editor.ready||exclusions.saving||!target||!ready} value={chosenBase?.key??''} onChange={event=>{const base=pool.bases.find(b=>b.key===event.target.value);if(!base)return;chooseComparison(null);editor.change(approveStartBase(pool,editor.value,base.key));}}>
+    <div className="ccu-start-base"><label><strong>{t('LTI-Startbasis selbst wählen')}</strong><small>{t('Günstige Tokens zuerst. Keine automatische Vorauswahl.')}</small></label><select aria-label={t('Startbasis für die Kette')} aria-describedby={blockedBase?'ccu-start-base-reserved':undefined} disabled={!editor.ready||!reservationsReady||!target||!ready} value={blockedBase?'':chosenBase?.key??''} onChange={event=>{const base=freePool.bases.find(b=>b.key===event.target.value);if(!base)return;chooseComparison(null);editor.change(approveStartBase(freePool,editor.value,base.key));}}>
       <option value="" disabled>{t('Bitte LTI-Startbasis auswählen …')}</option>{baseChoices.map(b=><option key={b.key} value={b.key}>{b.model.name} · LTI · {money(b.model.nominalUsd===null?null:estimatePlanningMinor(b.model.nominalUsd,{...display.settings,taxMode:'net'},display.rate&&!euroRateIsStale(display.rate)?display.rate:null),true)} · {b.pledgeName}</option>)}</select>
       <label className="ccu-higher"><input type="checkbox" checked={includeHigher} onChange={e=>setIncludeHigher(e.target.checked)}/>{t('Auch höherwertige eigene LTI-Schiffe zur Auswahl anbieten')}</label>
       <small>{t('Bis etwa 50 € Richtwert vor Steuer zuerst. Höhere oder unbekannte Werte nur bewusst auswählen.')}</small>
+      {blockedBase&&<p id="ccu-start-base-reserved" className="ccu-base-required" role="status">{t('{base} ist bereits für {target} eingeplant. Bitte eine freie LTI-Basis wählen.').replace('{base}',()=>blockedBase.label).replace('{target}',()=>blockedBase.winner.name)}</p>}
       {!chosenBase&&<div className="ccu-base-required" role="status"><strong>{t(editor.ready?'Wähle zuerst deine Startbasis':'Entwurf wird geladen …')}</strong><p>{t('Vorher werden weder Varianten noch Kaufempfehlungen berechnet.')}</p>{editor.value.baseKey&&<p>{t('Alte Entwürfe bleiben gespeichert; ihre bisherige Basis muss einmal bewusst bestätigt werden.')}</p>}</div>}
     </div>
-    <div hidden={!chosenBase}>
+    {!reservationsReady&&target&&<p className="ccu-priority-warning" role="status">{t('Planungsdaten prüfen')}</p>}
+    {reservationsReady&&!!pendingHigher.length&&<p className="ccu-priority-warning" role="status">{t('Der freie Bestand ist vorläufig. Diese vorrangigen Ketten sind noch offen')}{' · '}{pendingHigher.join(', ')}</p>}
+    {reservationsReady&&target&&(advisorTab==='priority'||reservationsByTarget.length>0)&&<div className="ccu-priority-warning ccu-priority-info" role="status">
+      <div className="ccu-priority-owners">{reservationsByTarget.map(({name,slot,ccus})=><strong key={slot}>
+        {t('Ziel')} {slot+1} · {name} · {ccus} {t(ccus===1?'CCU eingeplant':'CCUs eingeplant')}
+      </strong>)}</div>
+      <span>{t('{count} freie CCU-Exemplare für {name}').replace('{count}',()=>String(freePool.ccus.length)).replace('{name}',()=>target.name)}</span>
+    </div>}
+    <div hidden={!chosenBase||!!blockedBase&&!savedManual}>
     <div className="ccu-builder-tools"><div className="ccu-views" role="group" aria-label={t('Kettenansicht')}>
       <button disabled={!editor.ready} aria-pressed={!savedManual&&!compared} onClick={()=>{chooseComparison(null);editor.change({...editor.value,mode:'auto'});}}>{t('Vorschlag')}</button>
       <button disabled={!editor.ready} aria-pressed={manual} onClick={()=>commit(compared?active:editor.value.initialized?{...editor.value,mode:'manual'}:active)}>{t('Selbst bauen')}</button></div>
-      <div className="ccu-search-actions"><button disabled={!editor.ready||!ready||!target||!reservationsReady||pool.limited||scan.pending} onClick={()=>inspectVariants()}>{t('Varianten prüfen')}</button><button aria-pressed={!!compared&&!testDraft&&comparison?.index===0} disabled={!editor.ready||!ready||!target||!reservationsReady||pool.limited||scan.pending} onClick={()=>inspectVariants(true)}>{t('Bester bekannter Weg')}</button></div>
+      <div className="ccu-search-actions"><button disabled={!editing||!ready||!target||pool.limited||scan.pending} onClick={()=>inspectVariants()}>{t('Varianten prüfen')}</button><button aria-pressed={!!compared&&!testDraft&&comparison?.index===0} disabled={!editing||!ready||!target||pool.limited||scan.pending} onClick={()=>inspectVariants(true)}>{t('Bester bekannter Weg')}</button></div>
       <label className="ccu-variant">{t('Variante')}<select aria-label={t('Kettenvariante')} disabled={!editor.ready||!shownVariants.length} value={selectedVariant} onChange={event=>{
         if(scan.result){chooseComparison(event.target.value==='own'?null:Number(event.target.value));return;}const v=variants[Number(event.target.value)];if(v)commit({...editor.value,mode:'manual',initialized:true,baseKey:v.base.key,anchors:autoAnchors(v)});
       }}><option value="own" disabled={!scan.result}>{t('Eigener Entwurf')}</option>{shownVariants.map((v,i)=>{const different=v.steps.find(s=>s.kind==='owned'&&!automatic?.steps.some(a=>a.kind==='owned'&&a.from.key===s.from.key&&a.to.key===s.to.key));
         return <option key={i} value={i}>{i+1}: {scan.result?total(chainCosts(v,pledges,display,current,priceFor).additional)+' · '+v.ownedCount+' '+t('Bestand')+' · '+v.gapCount+' '+t('Lücken'):different?t('über')+' '+different.to.name:v.ownedCount+' '+t('Bestand')+' · '+v.gapCount+' '+t('Lücken')}</option>;})}</select></label>
     </div>
     {exclusions.error&&<p className="ccu-priority-warning" role="alert">{t(exclusions.error)}</p>}
-    {!reservationsReady&&target&&<p className="ccu-priority-warning" role="status">{t('Planungsdaten prüfen')}</p>}
-    {reservationsReady && target && reservationsByTarget.length > 0 &&
-      <div className={'ccu-priority-warning' + (resourceConflicts.length ? '' : ' ccu-priority-info')} role="status">
-        {resourceConflicts.length > 0 && <strong>{t('Ressourcenkonflikt')}</strong>}
-        <div className="ccu-priority-owners">{reservationsByTarget.map(({ name, slot, ccus }) =>
-          <strong key={slot}>{ccus ? ccus + ' ' + t(ccus === 1 ? 'CCU' : 'CCUs') : t('Startbasis')}{' '}
-            {t('für {name} eingeplant').replace('{name}', () => name)} · {t('Ziel')} {slot + 1}</strong>
-        )}</div>
-        <span>{t('Der Vorschlag für {name} nutzt die übrigen CCU-Exemplare.').replace('{name}', () => target.name)}</span>
-        {resourceConflicts.length > 0 && <ul>{resourceConflicts.map(claim => <li key={claim.kind + ':' + claim.key}>
-          {t(claim.kind === 'base' ? 'Basis' : 'CCU')}: {claim.label} — {t('Vorrang')}: {claim.winner.name}
-        </li>)}</ul>}
-        {scan.result && !scan.result.plans.length &&
-          <small>{t('Keine vollständig berechenbare Kette mit den übrigen Exemplaren.')}</small>}
-      </div>}
+    {resourceConflicts.some(claim=>claim.kind==='ccu')&&<div className="ccu-priority-warning" role="status">
+      <strong>{t('Im Entwurf stehen bereits belegte CCUs.')}</strong>
+      <ul>{resourceConflicts.filter(claim=>claim.kind==='ccu').map(claim=><li key={claim.key}>{claim.label} · {t('Vorrang')} {claim.winner.name}</li>)}</ul>
+    </div>}
     {(scan.pending||scan.result||scan.error)&&<div className="ccu-comparison" aria-label={t('Preisvergleich')} aria-busy={scan.pending}>
       <div className="ccu-comparison-head"><div role="status">{scan.pending?t('Varianten werden geprüft …'):scan.error?t('Variantenprüfung fehlgeschlagen. Eigener Entwurf bleibt erhalten.'):testDraft?t('Freier Testentwurf · eigener Entwurf bleibt erhalten'):compared?t('Vorschau · eigener Entwurf bleibt erhalten'):t('Preisvergleich · eigener Entwurf bleibt erhalten')}
         {scan.result&&<small>{scan.result.plans.length} {t('Wege angezeigt')} · {scan.result.basesChecked} {t(scan.result.bestProven?'Basen geprüft':'Basen im Suchraum')} · {scan.result.ccusChecked} {t('CCUs geprüft')} · {t('Reihenfolge: geringster Zukauf')}</small>}</div>
@@ -285,21 +288,22 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
         {!!scan.result.plans.length&&<table className="ccu-price-comparison"><thead><tr><th>{t('Variante')}</th><th>{t('Bereits bezahlt')}</th><th>{t('Noch zu kaufen')}</th><th>{t('Gesamtkosten')}</th><th>{t('Preisbeleg')}</th></tr></thead><tbody>{ownPlan&&priceRow(ownPlan,t('Eigener Entwurf'))}{testDraft&&plan&&priceRow(plan,t('Testentwurf'))}{scan.result.plans.map((p,i)=>priceRow(p.plan,String(i+1),i))}</tbody></table>}
         {compared&&costs&&<p className="ccu-price-equation">{resourceConflicts.length?t('Ressourcenkonflikt'):costs.paid.missing||costs.additional.missing?<>{t('Gesamtkosten')}: {t('Preis offen')} · {t('Fehlende Preisbelege')}: {costs.paid.missing+costs.additional.missing}</>:<>{total(costs.paid,true)} {t('bereits bezahlt')} + {total(costs.additional)} {t('Zukauf')} = {money(costs.investment,costs.paid.approximate||costs.additional.approximate)} {t('Gesamtkosten')}</>}</p>}</>}
     </details>}
-    <div className="ccu-stock" hidden={advisorTab!=='chain'}><div className="ccu-stock-head"><strong>{t('Dein CCU-Vorrat')} ({stockPool.ccus.length}) · {t('Fehlende Verbindungen')} ({gapTiles.length})</strong>
+    </div>
+    <div className="ccu-stock" hidden={!target||advisorTab==='purchase'||!reservationsReady}><div className="ccu-stock-head"><strong>{t(showLocked?'Gesperrte CCUs':'Freie CCUs')} ({ownedTiles.length}){advisorTab==='chain'&&!showLocked&&' · '+t('Fehlende Verbindungen')+' ('+gapTiles.length+')'}</strong>
+      {(lockedStock.length>0||showLocked)&&<button type="button" aria-pressed={showLocked} onClick={()=>{endDrag();setShowLocked(!showLocked);}}>{t(showLocked?'Freie CCUs anzeigen':'Gesperrte CCUs anzeigen')}</button>}
       <div className="ccu-stock-tools" role="group" aria-label={t('Vorratsansicht')}><button aria-pressed={stockView==='band'} onClick={()=>setStockView('band')}>{t('Kartenband')}</button><button aria-pressed={stockView==='grid'} onClick={()=>setStockView('grid')}>{t('Raster')}</button><label>{t('Spalten')}<select aria-label={t('Spalten im Vorratsraster')} disabled={stockView!=='grid'} value={stockColumns} onChange={event=>setStockColumns(Number(event.target.value))}>{[3,4,5].map(n=><option key={n} value={n}>{n}</option>)}</select></label></div>
-      <small>{t('Ziehen oder mit + einfügen')}</small><input aria-label={t('CCU suchen')} placeholder={t('CCU suchen …')} value={query} maxLength={160} onChange={event=>setQuery(event.target.value)}/></div>
-      <div className={'ccu-stock-row'+(stockView==='grid'?' ccu-stock-grid':'')} data-columns={stockColumns}>{shownTiles.map(({step,index})=>{const locked=step.kind==='owned'&&excluded.has(step.key),assigned=step.kind==='owned'&&used.has(step.key),reserved=step.kind==='owned'?blockedResources.find(r=>r.kind==='ccu'&&r.key===step.key):undefined;
+      {editing&&!showLocked&&<small>{t('Ziehen oder mit + einfügen')}</small>}<input aria-label={t('CCU suchen')} placeholder={t('CCU suchen …')} value={query} maxLength={160} onChange={event=>setQuery(event.target.value)}/></div>
+      <div className={'ccu-stock-row'+(stockView==='grid'?' ccu-stock-grid':'')} data-columns={stockColumns}>{shownTiles.map(({step,index})=>{const locked=step.kind==='owned'&&excluded.has(step.key),assigned=step.kind==='owned'&&used.has(step.key);
         const cost=step.kind==='owned'?paidFor(step):additionalCost(step,display,current,priceFor);return <article key={step.key+':'+index} className={'ccu-stock-tile '+step.kind+(assigned?' assigned':'')+(locked?' is-locked':'')}
         data-resource-key={step.kind==='owned'?step.key:undefined} draggable={editing&&!assigned&&!locked} onDragStart={event=>start(event,step)} onDragEnd={endDrag}>
         <span className="ccu-ownership">{t(locked?'Gesperrt':assigned?'Bereits eingeplant':step.kind==='owned'?'Im Bestand':'Fehlende Verbindung')}{step.kind==='owned'&&dateBadge(step.ccu?.pledgeId)}</span><span className="ccu-route"><span className="ccu-model"><small>{t('Von')}</small><strong>{step.from.name}</strong></span><span className="ccu-model"><small>{t('Nach')}</small><strong>{step.to.name}</strong></span></span>
-        {reserved&&<small className="ccu-reserved">{t('Vorrang')}: {reserved.winner.name}</small>}{step.kind==='owned'&&<CcuLock locked={locked} disabled={!exclusions.ready||exclusions.saving} label={step.from.name+' → '+step.to.name} onToggle={()=>exclusions.toggle(step.key)}/>}<small>{t(step.kind==='owned'?(cost.rsiOrder?'RSI-Bestellpreis':'Bereits bezahlt'):'Preisvorschau')}: {money(cost.minor,step.kind!=='owned'||cost.approximate)}</small><button aria-label={t('CCU einfügen')+': '+step.from.name+' → '+step.to.name} disabled={!editing||assigned||locked} onClick={()=>place(anchorFromStep(step),active.anchors.length)}>+</button></article>;})}
+        {step.kind==='owned'&&<CcuLock locked={locked} disabled={!exclusions.ready||exclusions.saving} label={step.from.name+' → '+step.to.name} onToggle={()=>exclusions.toggle(step.key)}/>}<small>{t(step.kind==='owned'?(cost.rsiOrder?'RSI-Bestellpreis':'Bereits bezahlt'):'Preisvorschau')}: {money(cost.minor,step.kind!=='owned'||cost.approximate)}</small><button aria-label={t('CCU einfügen')+': '+step.from.name+' → '+step.to.name} disabled={!editing||assigned||locked} onClick={()=>place(anchorFromStep(step),active.anchors.length)}>+</button></article>;})}
       {!shownTiles.length&&<span>{t(query?'Keine passenden Treffer':'Noch keine CCUs verfügbar.')}</span>}</div>
     </div>
     {selected&&<div className="ccu-detail"><div><strong>{selected.from.name} → {selected.to.name}</strong><p>{t(selected.kind==='owned'?'Unbenutztes CCU-Exemplar; Anwendbarkeit und Modellzuordnung müssen noch geprüft werden.':selected.kind==='missing'?'Das gespeicherte Exemplar ist im aktuellen Bestand nicht verfügbar.':'Vorgeschlagener Lückenfüller. Preis und Kaufbarkeit im RSI-Shop prüfen.')}</p>{selected.ccu&&<p>{t('Pledge')}: {selected.ccu.pledgeId} · {t('Exemplar')}: {selected.ccu.instanceId}{selected.ccu.protected?' · '+t('Geschützt'):''}</p>}</div><button aria-label={t('CCU-Details schließen')} onClick={()=>setDetail(null)}>×</button></div>}
     <details className="ccu-evidence"><summary>{t('Planungsgrundlagen')}</summary><p>{t('Anwendbarkeit ungeprüft. Eigene Entwürfe ändern weder Bestand noch Schutzwerte. Vorrang gilt lokal für die ausgewählten Ziele. Varianten eines Ziels bleiben Alternativen.')}</p>
       <p>{t('Fehlende Werte bleiben ungeprüft. Rot markierte Anschlüsse sind kein gültiger Vorwärtsweg. Bei manuellen Entwürfen bleiben deine gewählten Schritte erhalten.')}</p></details>
     </div>
-    </div>
-    {advisors&&<div ref={advisorPanel} tabIndex={-1} className="ccu-advisor-context" hidden={advisorTab==='chain'}><PlanningAdvisors context={advisors} tab={advisorTab==='purchase'?'purchase':'conflicts'} fairOffer={fairOffer}/></div>}
+    {advisors&&<div ref={advisorPanel} tabIndex={-1} className="ccu-advisor-context" hidden={advisorTab!=='purchase'}><PlanningAdvisors context={advisors} active={advisorTab==='purchase'} fairOffer={fairOffer}/></div>}
   </section>;
 }

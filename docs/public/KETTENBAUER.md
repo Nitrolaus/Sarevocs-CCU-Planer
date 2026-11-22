@@ -54,7 +54,7 @@ Auch ein berechneter Weg lässt sich jetzt ziehen und bearbeiten. Diese Änderun
 
 Jede Zielkarte hat Vorrang 1, 2 oder 3. Eine Änderung verschiebt die übrigen Ränge eindeutig und bleibt lokal pro Profil gespeichert. Kettenentwürfe werden dadurch nicht umgeschrieben. Ein Hinweis nennt gemeinsam eingeplante konkrete CCUs oder Startbasen, die betroffenen Schiffe und das vorrangige Ziel. Zwei gleichartige, aber tatsächlich getrennte Exemplare sind kein Konflikt.
 
-**Varianten prüfen** und **Bester bekannter Weg** lassen bei nachrangigen Zielen alle von vorrangigen Plänen beanspruchten Exemplare weg. Eine fest ausgewählte, bereits belegte Basis wird nicht heimlich ausgetauscht: Die Suche meldet keinen freien Weg. Dann eine andere Basis wählen oder die Zielplätze umstellen; Ziel 1 hat ab 0.3.39 festen Vorrang. Eigene manuelle Schritte bleiben sichtbar, auch bei Konflikten. Im Vorrat steht bei den betreffenden CCUs das vorrangige Schiff. Konfliktbehaftete Entwürfe werden nicht mit gültigen Gesamtkosten ausgegeben.
+**Varianten prüfen**, **Bester bekannter Weg** und der Baukasten verwenden für nachrangige Ziele nur freie Exemplare. Bei einer bereits belegten Basis nennt die Auswahl das vorrangige Ziel. Wähle für den neuen Vorschlag eine freie LTI-Basis. Eigene manuelle Schritte bleiben sichtbar. Gesamtkosten bleiben offen, wenn der Entwurf belegte Exemplare benötigt.
 
 Eine Suchvorschau zählt erst nach **Übernehmen** als gespeicherter Entwurf. Prioritäts-, Profil- oder Datenwechsel verwerfen veraltete Suchvorschauen. Eine für diesen Weg erforderliche Kaufposition wird bei der Übernahme nicht durch ein bereits vorrangig verplantes CCU ersetzt. Kauft der Nutzer ein weiteres freies Exemplar und wird es eingelesen, kann es anschließend genutzt werden.
 
@@ -75,6 +75,6 @@ Die drei Umschalter und ihre Beleggrenzen sind in [BERATER.md](BERATER.md) besch
 
 Vor der Kettenberechnung ist die Startbasis selbst zu wählen. Höhere eigene LTI-Schiffe werden nur nach bewusstem Einblenden angeboten. Frühere automatische Vorschläge sind keine Freigabe. Die Einzelheiten und der verständlichere Konfliktberater stehen in [BERATER.md](BERATER.md).
 
-Die begonnene Kette samt Startbasis und Kosten bleibt auch beim Wechsel zu „Konflikte lösen“ oder „CCU-Kaufoptimierer“ sichtbar. Die Beratung steht darunter; nur der Vorrat wird vorübergehend ausgeblendet. Der Wechsel ändert den Entwurf nicht.
+Die begonnene Kette samt Startbasis und Kosten bleibt beim Wechsel zu **Vorrang & freie CCUs** oder **CCU-Kaufoptimierer** sichtbar. Unter **Vorrang & freie CCUs** siehst du die Zuteilung und den freien Vorrat für das ausgewählte Ziel.
 
 Der Vorrat startet als Raster mit fünf Spalten; drei/vier Spalten und das Kartenband bleiben wählbar. Nur die Zielkarte der angezeigten Kette hat den leuchtenden türkisen Rahmen und „Aktuell bearbeitet“. Ziel 1 wird nicht zusätzlich markiert; die Auswahl ändert den Vorrang nicht.

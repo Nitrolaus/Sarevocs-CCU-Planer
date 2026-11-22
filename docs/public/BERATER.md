@@ -1,6 +1,6 @@
-# Konfliktberater und heutiger CCU-Kaufoptimierer
+# Vorrang, freie CCUs und heutiger CCU-Kaufoptimierer
 
-Im Kettenbauer bleiben die gewählte Startbasis, die begonnene Kette und ihre Kosten bei allen drei Umschaltern sichtbar. **Konflikte lösen** und **CCU-Kaufoptimierer** zeigen ihre Ergebnisse darunter. Nur der CCU-Vorrat wird während der Beratung ausgeblendet und erscheint unter **Kette bauen** wieder. Der Wechsel verändert weder den Entwurf noch den horizontalen Stand des Kartenbands.
+Im Kettenbauer bleiben die Startbasis, die begonnene Kette und ihre Kosten beim Wechsel der Ansichten sichtbar. **Vorrang & freie CCUs** zeigt die Zuteilung und die freien Exemplare für das aktive Ziel. Der **CCU-Kaufoptimierer** steht unterhalb der Kette.
 
 ## Startbasis bewusst wählen
 
@@ -8,15 +8,13 @@ Für jedes Ziel ist zuerst ein eigenes Schiff oder Fahrzeug mit belegtem LTI als
 
 Die Auswahl selbst bestätigt genau dieses Exemplar für dieses Ziel. Ein höherwertiges LTI-Schiff wie die Hull B darf nur durch diese ausdrückliche Auswahl zur Basis werden. Bereits gespeicherte alte Entwürfe bleiben erhalten, benötigen aber einmal eine bewusste Bestätigung oder neue Auswahl. Ein früher automatisch gespeicherter Basisname reicht nicht. Ist die Basis entfernt oder LTI nicht mehr belegt, pausiert die Planung. Neue Bestätigungen werden zusammen mit dem lokalen Entwurf gespeichert; ältere Programmversionen können dieses zusätzliche Feld nicht lesen.
 
-## Konflikte lösen
+## Vorrang & freie CCUs
 
-**Ketten prüfen** berechnet Alternativen mit festem Vorrang **Ziel 1 → 2 → 3** und den von dir gewählten Basen. Kein Berater darf dafür stillschweigend einen anderen eigenen Rumpf verwenden. Haben zwei Ziele denselben Starttoken, ist für das nachrangige Ziel zuerst bewusst ein anderer Token zu wählen.
+Der Planer teilt konkrete LTI-Basen und CCU-Exemplare in der Reihenfolge **Ziel 1 → 2 → 3** zu. Der Baukasten bietet die Exemplare an, die nach den vorrangigen Ketten frei sind. Zwei physisch getrennte Exemplare desselben Modells oder CCUs bleiben einzeln verfügbar.
 
-Bei einem doppelt eingeplanten CCU steht konkret, welches Exemplar betroffen ist, welches Ziel es im Vorschlag erhält und welcher Ersatzweg für die anderen Ziele vorgesehen ist. Türkis kennzeichnet Bestand, Orange noch nötige Käufe. Mehrkosten beziehen sich auf den zusätzlichen Zukauf gegenüber dem bisherigen Einzelentwurf. Der vollständige Preisvergleich und die Ersatzketten bleiben aufklappbar. Wenn ein Exemplar im besseren Vorschlag gar nicht benötigt wird, wird auch keine falsche Zuweisung behauptet.
+Wenn die gespeicherte Startbasis bereits zu einem früheren Ziel gehört, steht das direkt an der Auswahl. Wähle dann bewusst eines der freien LTI-Exemplare. Besetzte CCUs in einem bestehenden Entwurf bleiben dort sichtbar, damit du sie entfernen oder einen Vorschlag aus dem freien Bestand prüfen kannst.
 
-Erst **Ersatzketten übernehmen** speichert die betroffenen Entwürfe gemeinsam. Veraltete Vorschauen und fehlgeschlagene Dateioperationen ersetzen keinen alten Entwurf. Rückgängig ist danach beim jeweiligen Ziel möglich. Ein physisches CCU und eine Startbasis dürfen nur einmal verwendet werden; gleiche getrennte Exemplare bleiben getrennte Ressourcen. Gesperrte CCUs sind ausgeschlossen.
-
-Das Verfahren beachtet die feste Priorität und deine Basiswahl; es garantiert kein Minimum der gemeinsamen Flottenausgaben und führt keine RSI-Aktion aus.
+Mit **Bester bekannter Weg** kannst du einen Ersatzvorschlag für das aktive Ziel prüfen und anschließend übernehmen. Die Zuteilung gilt lokal im Planer. Solange vorrangige Ketten offen sind, ist die Anzeige der freien Exemplare vorläufig.
 
 ## Heutiger CCU-Kaufoptimierer
 

@@ -121,8 +121,10 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
   useShopPrices([...planTargets, ...fleetComparison.cases.flatMap(scenario => scenario.routes)].flatMap(route => route.plan?.steps ?? []));
   const reservations = useMemo(() => analyseReservations(planTargets, order), [planTargets, order]);
   const advisorInput=accountId&&inventory?.accountId===accountId?{pool,targets:targets.flatMap((id,slot)=>{const target=ships.find(s=>s.id===id),draft=id?drafts.entries[id]?.value:undefined;return target?[{slot,target,baseKey:draft?selectedStartBase(pool,draft)?.key??null:null,existing:plans[slot]??null,manual:draft?.mode==='manual'}]:[];}),offers,current:!!snapshot&&!offersAreStale(snapshot),display}:null;
-  const advisors={input:advisorInput,signature:JSON.stringify([accountId,reservationsReady,advisorInput]),ready:reservationsReady&&!!advisorInput?.targets.length&&advisorInput.targets.every(t=>!!t.baseKey),conflicts:reservations.conflicts.length,pledges:inventory?.accountId===accountId?inventory.pledges:[],apply:drafts.applyBatch};
-  const blocked=activeShip&&reservationsReady?blockedForTarget(reservations,activeShip.id):[];
+  const advisors={input:advisorInput,signature:JSON.stringify([accountId,reservationsReady,advisorInput]),ready:reservationsReady&&!!advisorInput?.targets.length&&advisorInput.targets.every(t=>!!t.baseKey),pledges:inventory?.accountId===accountId?inventory.pledges:[]};
+  const blocked=useMemo(()=>activeShip&&reservationsReady?blockedForTarget(reservations,activeShip.id):[],[activeShip?.id,reservationsReady,reservations]);
+  const pendingHigher=planTargets.filter(route=>route.slot<selected&&(!route.plan||'invalid' in route.plan&&route.plan.invalid||
+    conflictsForTarget(reservations,route.targetId).some(claim=>claim.winner.targetId!==route.targetId))).map(route=>route.name);
   const chosenOffer = activeShip ? matchingOffer(activeShip, offers) : undefined;
   const detailOffer = offers.find(o => o.key === detail);
   async function saveTargets(ids: (number | null)[], index: number, afterSave?: () => void) {
@@ -187,8 +189,8 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
         <div className="market-priority">
           <span className={index === 0 ? 'market-priority-label first' : 'market-priority-label'}>{t(priority)}</span>
           {index === selected && <span className="market-current-target">{t('In Bearbeitung')}</span>}
-          {ship && reservationsReady && conflictsForTarget(reservations, ship.id).length > 0 &&
-            <span className="badge unknown">{t('Ressourcenkonflikt')}</span>}
+          {ship && reservationsReady && conflictsForTarget(reservations, ship.id).some(claim=>claim.winner.targetId!==ship.id) &&
+            <span className="badge unknown">{t('Entwurf prüfen')}</span>}
         </div>
         <label className="market-target-select">{t('Schiff suchen')}<input aria-label={t('Schiff suchen') + ' ' + (index + 1)} placeholder={t('Name, Hersteller oder Tippfehler …')} maxLength={160} value={queries[index]} disabled={!ships.length || saving} onChange={e => setQueries(q => q.map((v, i) => i === index ? e.target.value : v))} /></label>
         <label className="market-target-select">{t("Zielschiff auswählen")}<select aria-label={t('Zielschiff') + ' ' + (index + 1)} disabled={!accountId || !ships.length || saving} value={targets[index] ?? ''} onChange={e => void choose(index, e.target.value)}>
@@ -212,7 +214,7 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
       <div className="market-target-grid">{targets.map((id, index) => card(ships.find(s => s.id === id), index))}</div>
     </section>
     <ChainBuilder accountId={accountId} inventory={inventory} target={activeShip} market={snapshot} display={display} onShopError={setError} onExportContext={onExportContext}
-      editor={drafts.editor(activeShip?.id)} blockedResources={blocked} reservationsReady={reservationsReady} exclusions={exclusions} advisors={advisors} fairOffer={fairOffer} />
+      editor={drafts.editor(activeShip?.id)} blockedResources={blocked} reservationsReady={reservationsReady} pendingHigher={pendingHigher} exclusions={exclusions} advisors={advisors} fairOffer={fairOffer} />
     {activeShip && snapshot && <StartBasisComparison key={`${accountId}:${activeShip.id}`} target={activeShip} pool={pool}
       base={drafts.entries[activeShip.id]?.value ? selectedStartBase(pool,drafts.entries[activeShip.id]!.value!) : null}
       market={snapshot} display={display} blocked={blocked} entries={buybacks} observation={buybackObservation}

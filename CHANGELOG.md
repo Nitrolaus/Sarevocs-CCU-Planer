@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.96 · Alpha
+
+- „Vorrang & freie CCUs“ zeigt die Zuteilung in der Reihenfolge Ziel 1, 2 und 3. Der Kettenbauer bietet für das aktive Ziel nur die übrigen LTI-Basen und CCU-Exemplare an.
+- Eine bereits für ein vorrangiges Ziel eingeplante Startbasis wird direkt an der Auswahl erklärt. Änderungen am aktiven Ziel lassen die vorrangigen Entwürfe unangetastet.
+
 ## 0.3.95 · Alpha
 
 - Der CCU-Bestand zeigt Standard- und Warbond-Preise in der eingestellten Währung. Liegt nur ein RSI-Preis in einer anderen Währung vor, kennzeichnet der Planer die Umrechnung als EZB-Richtwert. Ohne Wechselkurs bleibt der Betrag offen.

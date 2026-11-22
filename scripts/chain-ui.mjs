@@ -655,8 +655,8 @@ try{
     await selectedTarget.getByText('Ziel 2 · nach Ziel 1',{exact:true}).waitFor();
     await selectedTarget.getByText('In Bearbeitung',{exact:true}).waitFor();
     assert.equal(await selectedTarget.locator('.market-priority-label.first').count(),0);
-    await chain.locator('.ccu-priority-info').getByText('2 CCUs für Galaxy eingeplant · Ziel 1',{exact:true}).waitFor();
-    await chain.locator('.ccu-priority-info').getByText('Der Vorschlag für Liberator nutzt die übrigen CCU-Exemplare.',{exact:true}).waitFor();
+    await chain.locator('.ccu-priority-info').getByText('Ziel 1 · Galaxy · 2 CCUs eingeplant',{exact:true}).waitFor();
+    await chain.locator('.ccu-priority-info').getByText('0 freie CCU-Exemplare für Liberator',{exact:true}).waitFor();
     const viewport = await page.evaluate(() => ({width:innerWidth,height:innerHeight}));
     for (const width of [1440, 1024]) {
       await page.setViewportSize({width,height:850});
@@ -680,9 +680,7 @@ try{
     await hullCard.click();
     await chain.locator('.ccu-detail').getByText(/Pledge: hull-b ·/).waitFor();
     const stockHull=chain.locator('.ccu-stock-tile.owned').filter({hasText:'Hull B'}).filter({hasText:'Guardian'});
-    assert.equal(await stockHull.count(),2);
-    assert.equal(await stockHull.filter({hasText:'Vorrang: Galaxy'}).count(),1);
-    assert.equal(await stockHull.filter({hasText:'Vorrang: Galaxy'}).locator('.ccu-ownership').innerText(),'Im Bestand');
+    assert.equal(await stockHull.count(),1);
     assert.equal(await chain.getByText('Ressourcenkonflikt',{exact:true}).count(),0);
     assert.equal(await app.evaluate(()=>JSON.stringify(globalThis.fixture.drafts)),draftsBefore);
     const cart=page.getByRole('region',{name:'Einkaufsliste fürs Messefinale',exact:true});
