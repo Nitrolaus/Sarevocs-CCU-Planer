@@ -113,6 +113,13 @@ try {
   await page.mouse.move(0, 0);
   await importTooltip.waitFor({ state: 'hidden' });
   results.push('Kompakte Suche steht über der Bestandstabelle. Der Import-Tooltip erklärt die JSON-Formate und die Bestätigung der Vorschau.');
+  const searchInput = page.getByRole('textbox', { name: 'Bestand durchsuchen', exact: true });
+  await searchInput.focus();
+  assert.equal(await searchInput.getAttribute('autocomplete'), 'off');
+  assert.equal(await searchInput.evaluate(input => getComputedStyle(input).outlineStyle), 'none');
+  assert.equal(await searchInput.evaluate(input => getComputedStyle(input.parentElement).outlineStyle), 'solid');
+  await searchInput.blur();
+  results.push('Bestandssuche mit einem äußeren Fokusrahmen und ohne automatische Eingabevorschläge.');
   const pledgeLayout = await page.locator('.concierge-private').evaluate(controls => ({
     button: controls.querySelector('button').getBoundingClientRect().left,
     hint: controls.querySelector('p').getBoundingClientRect().left,

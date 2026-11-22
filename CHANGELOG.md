@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.103 · Alpha
+
+- Die Bestandssuche hebt beim Fokussieren das gesamte Suchfeld mit einem einzigen Rahmen hervor. Automatische Eingabevorschläge sind für das Feld deaktiviert.
+
 ## 0.3.102 · Alpha
 
 - „Datei importieren“ zeigt eine dunkle Tooltip-Karte mit Zeilenumbruch.

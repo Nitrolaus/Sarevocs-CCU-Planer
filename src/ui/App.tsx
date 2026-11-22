@@ -406,7 +406,7 @@ function App() {
         <div className="inventory-search-row">
           <div className="inventory-search">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
-            <input id="inventory-search-input" ref={inventorySearchInput} aria-label={t('Bestand durchsuchen')} placeholder={t('Bestand durchsuchen …')} value={inventoryQuery}
+            <input id="inventory-search-input" ref={inventorySearchInput} autoComplete="off" aria-label={t('Bestand durchsuchen')} placeholder={t('Bestand durchsuchen …')} value={inventoryQuery}
               maxLength={160} onChange={event=>setInventoryQuery(event.currentTarget.value)}
               onKeyDown={event=>{if(event.key==='Escape'&&inventoryQuery){event.preventDefault();clearInventorySearch();}}}/>
             <button type="button" className="inventory-search-clear" aria-label={t('Suche löschen')} disabled={!inventoryQuery} onClick={clearInventorySearch}>×</button>
