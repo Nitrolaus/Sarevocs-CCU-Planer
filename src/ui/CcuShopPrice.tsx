@@ -41,10 +41,10 @@ export function CcuShopPrice({ prices, settings, rate }: {
       const original = formatMinor(price.amount.minor, price.amount.currency, language);
       const source = t(price.current ? 'Geprüfter RSI-Shoppreis' : 'Zuletzt bestätigter RSI-Shoppreis');
       const rateNote = minor === null ? t('EZB-Kurs nicht verfügbar') : t('EZB-Richtwert');
-      return <div key={edition} title={`${source} · ${original} · ${checkedAt}${converted ? ' · ' + rateNote : ''}`}>
+      return <div key={edition} data-ecb-estimate={converted && minor !== null ? '' : undefined}
+        title={`${source} · ${original} · ${checkedAt}${converted ? ' · ' + rateNote : ''}`}>
         <strong>{minor === null ? t('Preis offen') : (converted ? '≈ ' : '') + formatMinor(minor, currency, language)}</strong>
         <span>{edition === 'warbond' ? 'Warbond' : t('Standard')}</span>
-        {converted && <small>{rateNote}</small>}
         {!price.current && <small>{t('Letzter Stand')} · {checkedAt}</small>}
       </div>;
     })}

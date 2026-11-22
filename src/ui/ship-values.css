@@ -16,3 +16,5 @@
 .ccu-shop-price > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px; }
 .ccu-shop-price span { font-size: 0.78rem; color: #a9c2ce; }
 .ccu-shop-price small { flex-basis: 100%; font-size: 0.72rem; color: #a9c2ce; white-space: normal; }
+.ccu-price-legend { display: none; margin: 0; padding: 4px 10px; color: #a9c2ce; font-size: 0.72rem; }
+.ship-value-section:has(.ccu-shop-price [data-ecb-estimate]) > .ccu-price-legend { display: block; }

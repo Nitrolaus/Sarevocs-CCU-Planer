@@ -3,7 +3,7 @@ import type {ExportContext} from '../export/model';
 import type {PlannerInventory} from './ChainBuilder';
 import {prepareChains,type ChainStep} from '../planner/chain';
 import {chainVariants,manualChain} from '../planner/manual';
-import {additionalCost,chainCosts,chainSavings,paidCcuCost,type CostTotal} from '../planner/costs';
+import {additionalCost,chainCosts,chainSavings,paidBaseCost,paidCcuCost,type CostTotal} from '../planner/costs';
 import {purchasePriceReader} from '../planner/shopping-list';
 import {anchorFromStep,type DraftAnchor,type PlannerDraft} from '../planner/draft';
 import {previewPlacement,type Placement} from '../planner/placement';
@@ -159,6 +159,9 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
   const investmentEstimate=!!costs&&(costs.paid.approximate||costs.additional.approximate);
   const standardUsd=target?nominalValue(target,market?.offers?.items??[],current,currentValues):null;
   const savings=chainSavings(investment,standardUsd,display);
+  const knownInvestment=pricedTotal&&costs?costs.paid.knownMinor+costs.additional.knownMinor:0;
+  const partialInvestment=investment===null&&knownInvestment>0&&Number.isSafeInteger(knownInvestment);
+  const packageBasisOpen=!!plan?.base?.multiShip&&paidBaseCost(plan.base,pledges,display,observation).minor===null;
   const partialTotal=!!pricedTotal?.missing;
   const amountLabel=partialTotal&&pricedTotal.knownMinor?t('Bekannte Teilsumme'):t('Summe');
   const amountText=partialTotal?(pricedTotal.knownMinor?money(pricedTotal.knownMinor,pricedTotal.approximate):t('offen')):additional;
@@ -215,8 +218,11 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
       <div className="ccu-price-cards">
         <div className="ccu-total ccu-savings" title={t('Vergleich mit dem aktuellen Standard-Schiffswert. Kosten der Basis, gekaufter CCUs und geplanter Zukäufe zählen zusammen.')+' '+t('In der Bruttoansicht zählen belegte RSI-Bestellpreise in ihrer ursprünglichen Höhe. Historischer Steueranteil und Zahlungsmittel sind darin nicht aufgeschlüsselt.')}>
           <span>{t(savings!==null&&savings<0?'Mehrkosten der CCU-Kette':'Gespart durch CCU-Kette')}</span>
-          <strong aria-live="polite" aria-atomic="true">{money(savings===null?null:Math.abs(savings),true)}</strong>
-          <small>{t('Schiff kostet dich')} {money(investment,investmentEstimate)}</small>
+          <strong aria-live="polite" aria-atomic="true">{savings===null?t('Ersparnis offen'):money(Math.abs(savings),true)}</strong>
+          <small title={packageBasisOpen?t('Der Paketpreis gilt für mehrere Schiffe. Ein Einzelpreis für die Startbasis ist nicht belegt.'):undefined}>
+            {partialInvestment?`${t('Bekannte Teilsumme')} ${money(knownInvestment,investmentEstimate)} · ${t(packageBasisOpen?'Basispreis im Paket offen':'Preise offen')}`
+              :packageBasisOpen?t('Basispreis im Paket offen'):`${t('Schiff kostet dich')} ${money(investment,investmentEstimate)}`}
+          </small>
         </div>
       <button className="ccu-total" type="button" ref={costToggle} aria-expanded={detail==='cost'} aria-controls={costDetailId}
         onClick={()=>setDetail(detail==='cost'?null:'cost')}>

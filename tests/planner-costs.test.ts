@@ -87,6 +87,11 @@ test('verified RSI order amounts are used once without adding VAT to past purcha
  const recorded={minor:0,currency:'EUR' as const,taxBasis:'gross' as const,evidence:'Synthetic receipt'};
  assert.equal(paidCcuCost(upgrade,[{...p,acquisitionCost:recorded}],gross,observation).minor,0);
  assert.equal(paidBaseCost(base,[{...b,name:'Package - from'}],gross,observation).minor,null);
+ const withPaint={...b,name:'Standalone Ships - from plus Icefront Camo Paint',sourceValues:{pledgeConfigurationValue:'$0.00 USD'}};
+ assert.equal(paidBaseCost(base,[withPaint],gross,observation).minor,2500);
+ assert.equal(paidBaseCost(base,[{...withPaint,ships:[...b.ships,{...b.ships[0]!,childId:'second'}]}],gross,observation).minor,null);
+ assert.equal(paidBaseCost(base,[{...withPaint,name:'Standalone Ships - Other Model plus Icefront Camo Paint'}],gross,observation).minor,null);
+ assert.equal(paidBaseCost(base,[{...withPaint,sourceValues:{pledgeConfigurationValue:'$25.00 USD'}}],gross,observation).minor,null);
  assert.equal(paidBaseCost(base,[{...b,sourceValues:{pledgeConfigurationValue:'$25.00 USD'}}],gross,observation).minor,null);
  assert.equal(paidBaseCost(base,[{...b,ships:[{...b.ships[0]!,modelName:'Upgraded model'}]}],gross,observation).minor,null);
 });

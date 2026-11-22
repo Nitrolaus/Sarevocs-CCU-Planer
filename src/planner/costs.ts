@@ -42,7 +42,11 @@ export function paidBaseCost(base:ChainBase|null,pledges:readonly Pledge[],displ
   if(pledge?.ships.length!==1||pledge.ccus.length||pledge.ships[0]!.childId!==base?.childId)return unknown();
   // An RSI order for the original pledge does not include any applied CCUs.
   const configuration=pledge.sourceValues.pledgeConfigurationValue;
-  if(!pledge.acquisitionCost&&(!sameStandaloneShip(pledge)||(configuration&&parseRsiPledgeValue(configuration)?.minor!==0)))return unknown();
+  if(!pledge.acquisitionCost){
+    // A single ship sold together with a paint uses the full price of that order line.
+    const name=pledge.name.replace(/\s+plus\s+[^+\r\n]+\s+Paint$/i,'');
+    if(!sameStandaloneShip({...pledge,name})||(configuration&&parseRsiPledgeValue(configuration)?.minor!==0))return unknown();
+  }
   return recordedCost(pledge,display,observation);
 }
 export function paidCcuCost(step:ChainStep,pledges:readonly Pledge[],display:PricingSnapshot,observation?:ChainObservation):CostPosition{

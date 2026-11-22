@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.97 · Alpha
+
+- Die CCU-Bestandstabelle erklärt „≈“ für umgerechnete Shoppreise einmal über der Tabelle.
+- Bei einem einzelnen Schiff mit Paint berücksichtigt die Kettenrechnung den belegten Kaufpreis der zugehörigen RSI-Bestellposition.
+- Bei offenem Einzelpreis der Startbasis aus einem Mehrschiffpaket zeigt die Kette die bekannte Teilsumme. Die Ersparnis bleibt offen.
+
 ## 0.3.96 · Alpha
 
 - „Vorrang & freie CCUs“ zeigt die Zuteilung in der Reihenfolge Ziel 1, 2 und 3. Der Kettenbauer bietet für das aktive Ziel nur die übrigen LTI-Basen und CCU-Exemplare an.

@@ -94,7 +94,9 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
 
   const labels=[t(view==='ships'?'Schiff / Fahrzeug':isGameView?'Paket / Zugang':'Gegenstand / Upgrade'),t('Hersteller'),t('Versicherung'),t('Art / Hinweise'),t('Kaufpreis beim Erwerb'),t(view==='ccus'?'RSI-Shoppreis':'Aktueller Kaufpreis'),t('Herkunft / Datum')];
   const columns=labels.map((label,i)=>({label,min:[160,90,70,90,135,125,90][i]!,preferred:[310,160,100,170,150,145,135][i]!,autoLimit:[920,680,240,680,420,480,420][i]!}));
-  return <><ResizableTable columns={columns} storageKey="inventory" className="inventory-table ship-value-table compact-inventory" label={t(view==='ships'?'Schiffswerte':'Bestand')}><tbody>
+  return <><div className="ship-value-section">
+  <p className="ccu-price-legend">{t('≈ bei CCU-Shoppreisen steht für einen EZB-Richtwert.')}</p>
+  <ResizableTable columns={columns} storageKey="inventory" className="inventory-table ship-value-table compact-inventory" label={t(view==='ships'?'Schiffswerte':'Bestand')}><tbody>
     {rows.flatMap(({pledge:p,source})=>{
       const cost=inventoryAcquisitionPrice(p,source,market?.catalogue?.ships),converted=convertPurchaseValue(cost.value,display),status=statusFor(p);
       const access=gameAccessEvidence(p),gameKind=gameContentKind(p),assignment=gameAccessAssignment(p,source),issue=hasInventoryReadIssue(p),unresolved=p.sourceValues.upgradeState==='unresolved';
@@ -167,7 +169,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
       });
     })}
     {!rows.length&&<tr><td colSpan={7} className="empty">{emptyText??t('Keine Gegenstände für diesen Filter.')}</td></tr>}
-  </tbody></ResizableTable>
+  </tbody></ResizableTable></div>
   {editing&&<GiveawayOriginDialog key={editing} initial={organizerByPledge.get(editing)??''}
     onSave={name=>saveOrigin(editing,name)} onClose={()=>setEditing(undefined)}/>}
   </>;
