@@ -47,6 +47,7 @@ const revision='33333333-3333-4333-8333-333333333333';
 const observedDocument={type:'sarevocs-ccu-inventory',schemaVersion:1,appVersion:testVersion,createdAt:at,dataMode:'real',account:{reference:'synthetic-account',identityKind:'manual-reference'},scope:{kind:'partial',exportComplete:false,expectedPledges:null,pagesExpected:null,pagesRead:null},pledges:entries,buybacks:[]};
 const fixture={state:{accounts:[account,other],selectedAccountId:a,dataDir:'SYNTHETISCH',version:testVersion,packaged:false,electron:'fixture',node:'fixture'},inventories:{[a]:{account,items:[{pledge:removed,availability:'removed',source:'fixture',importedAt:old}],buybacks:[]},[b]:{account:other,items:[],buybacks:[]}},views:{[a]:{accountId:a,revision,observedAt:at,document:observedDocument}},targets:{[a]:[5,null,null]},pricing:{settings:{schemaVersion:1,language:'de',currency:'EUR',taxMode:'gross',vatBasisPoints:1900},configured:true,settingsError:false,rate:{source:"ECB",sourceDate:at.slice(0,10),usdPerEurMicros:1100000,fetchedAt:at},pending:false,rateError:false},market:{schemaVersion:1,catalogue:{fetchedAt:at,ships},offers:{fetchedAt:at,sourceAt:at,checkedAt:at,items:offers},pending:false,errors:{catalogue:null,offers:null},refreshSchedule: { hour: 17, timeZone: 'Europe/Berlin' }}};
 fixture.drafts=Object.fromEntries([5,6,7].map(id=>[a+':'+id,{mode:'auto',initialized:false,baseKey:JSON.stringify(['base','current']),baseApprovedKey:JSON.stringify(['base','current']),anchors:[]}]));
+fixture.releaseUpdate={tag:'v0.4.0-alpha',version:'0.4.0 Alpha',notes:{de:['Synthetische Neuerung für diesen Test.'],en:['Synthetic change for this test.']}};
 fs.writeFileSync(path.join(folder,'fixture.json'),JSON.stringify(fixture));fs.writeFileSync(path.join(folder,'index.html'),'<!doctype html><html lang="de"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'self\'; worker-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\'; font-src \'self\'; connect-src \'none\'"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="brand.css"><div id="root"></div><script src="app.js"></script></html>');
 const env={...process.env,TEMP:path.join(folder,'tmp'),TMP:path.join(folder,'tmp')};fs.mkdirSync(env.TEMP,{recursive:true});delete env.ELECTRON_RUN_AS_NODE;delete env.NODE_OPTIONS;
 const checks=[],errors=[];let app;const check=async(name,fn)=>{await fn();checks.push(name);console.log('PASS: '+name)};
@@ -233,30 +234,29 @@ try{
     const commands=await app.evaluate(({},start)=>globalThis.fixture.commands.slice(start),firstCommand);
     assert.equal(commands.some(command=>/^rsi\.(open|connect|authorize|refresh)$/.test(command.action)),false);
   });
-  await check('HELP_UPDATE_NOTICE_ONLY_IN_SECURITY_TAB_AND_NO_AUTOMATIC_DIALOG_OR_DOWNLOAD',async()=>{
+  await check('STARTUP_UPDATE_NOTICE_ONLY_ON_INVENTORY_WITH_ONE_CHECK',async()=>{
     const help=page.locator('.help-view');
     const nav=page.getByRole('navigation',{name:'Hauptbereiche'});
+    const update=page.locator('.inventory-header-actions').getByRole('button',{name:'Update verfügbar · 0.4.0 Alpha',exact:true});
+    const notice=page.getByRole('dialog',{name:'Update verfügbar'});
+    await nav.getByRole('button',{name:/Bestand/}).click();
+    await update.waitFor();
+    assert.equal(await notice.count(),0);
+    assert.equal(await page.locator('.connection-actions').getByRole('button',{name:'Daten aktualisieren',exact:true}).count(),1);
+    assert.deepEqual(await app.evaluate(()=>globalThis.fixture.commands.filter(c=>/^help\.(checkUpdate|openUpdate)$/.test(c.action))),[{action:'help.checkUpdate'}]);
     await nav.getByRole('button',{name:/Hilfe & Einstieg/}).click();
     await help.getByRole('button',{name:'Sicherheit & Download',exact:true}).click();
-    const update=help.getByRole('button',{name:'Update verfügbar · 0.3.76 Alpha',exact:true});
-    const notice=help.getByRole('dialog',{name:'Update verfügbar'});
     assert.equal(await update.count(),0);
     assert.equal(await notice.count(),0);
     const firstCommand=await app.evaluate(()=>globalThis.fixture.commands.length);
-    await app.evaluate(()=>{
-      globalThis.fixture.releaseUpdate={tag:'v0.3.76-alpha',version:'0.3.76 Alpha',
-        notes:{de:['Synthetische Neuerung für diesen Test.'],en:['Synthetic change for this test.']}};
-    });
-    await help.getByRole('button',{name:'Einstieg',exact:true}).click();
-    assert.equal(await update.count(),0);
-    await help.getByRole('button',{name:'Sicherheit & Download',exact:true}).click();
+    await nav.getByRole('button',{name:/Bestand/}).click();
     await update.waitFor();
     assert.equal(await notice.count(),0);
     assert.deepEqual(await app.evaluate(({},start)=>globalThis.fixture.commands.slice(start).filter(c=>c.action.startsWith('help.')),firstCommand),
-      [{action:'help.checkUpdate'}]);
+      []);
     const viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));
     await page.setViewportSize({width:1024,height:700});
-    assert.equal(await help.evaluate(el=>el.scrollWidth<=el.clientWidth&&document.documentElement.scrollWidth<=innerWidth),true);
+    assert.equal(await page.locator('.inventory-header-actions').evaluate(el=>el.scrollWidth<=el.clientWidth&&el.getBoundingClientRect().right<=innerWidth),true);
     await update.click();
     await notice.getByRole('heading',{name:'Was ist neu?'}).waitFor();
     await notice.getByText('Synthetische Neuerung für diesen Test.',{exact:true}).waitFor();
@@ -272,15 +272,14 @@ try{
     await download.click();
     await notice.waitFor({state:'hidden'});
     assert.deepEqual(await app.evaluate(({},start)=>globalThis.fixture.commands.slice(start).filter(c=>c.action==='help.openUpdate'),firstCommand),
-      Array(2).fill({action:'help.openUpdate',tag:'v0.3.76-alpha'}));
+      Array(2).fill({action:'help.openUpdate',tag:'v0.4.0-alpha'}));
     await nav.getByRole('button',{name:/Daten & Einstellungen/}).click();
     await page.getByRole('combobox',{name:'Sprache',exact:true}).selectOption('en');
     await page.getByRole('button',{name:'Speichern',exact:true}).click();
     const navEn=page.getByRole('navigation',{name:'Main sections'});
-    await navEn.getByRole('button',{name:/Help & Getting Started/}).click();
-    await help.getByRole('button',{name:'Security & Downloads',exact:true}).click();
-    await help.getByRole('button',{name:'Update available · 0.3.76 Alpha',exact:true}).click();
-    const noticeEn=help.getByRole('dialog',{name:'Update available'});
+    await navEn.getByRole('button',{name:'Inventory',exact:true}).click();
+    await page.getByRole('button',{name:'Update available · 0.4.0 Alpha',exact:true}).click();
+    const noticeEn=page.getByRole('dialog',{name:'Update available'});
     await noticeEn.getByText('Synthetic change for this test.',{exact:true}).waitFor();
     await noticeEn.getByRole('button',{name:'Download on GitHub',exact:true}).waitFor();
     await page.keyboard.press('Escape');
@@ -313,7 +312,7 @@ try{
         {id:yesterday+':openh:4:104',day:yesterday,targetName:'Abgelaufenes Testangebot',offerKey:'test:4',usdMinor:4500,currentUsdMinor:null},
       ]};
     });
-    const refresh=page.locator('.connection-actions').getByRole('button',{name:'Aktualisieren',exact:true});
+    const refresh=page.locator('.connection-actions').getByRole('button',{name:'Daten aktualisieren',exact:true});
     await refresh.click();
     const news=page.getByRole('region',{name:'Messe-Info · Neue Warbond-CCUs'});
     const expired=news.locator('.fair-news-row').filter({hasText:'Abgelaufenes Testangebot'});
@@ -405,7 +404,7 @@ try{
     assert.equal(await nav.getByRole('button',{name:/Zielschiffe & Ketten|Kettenbauer|Angebote & Aktionen/}).count(),0);
     assert.equal(await nav.locator('button.active').count(),1);
     const before=await app.evaluate(()=>globalThis.fixture.commands.length);
-    await page.locator('.connection-actions').getByRole('button',{name:'Aktualisieren',exact:true}).click();
+    await page.locator('.connection-actions').getByRole('button',{name:'Daten aktualisieren',exact:true}).click();
     const commands=await app.evaluate(({},before)=>globalThis.fixture.commands.slice(before),before);
     assert.equal(commands.filter(c=>c.action==='rsi.refresh').length,1);assert.equal(commands.filter(c=>c.action==='market.refresh').length,1);
     assert.equal(commands.some(c=>/^rsi\.(authorize|connect|open)$/.test(c.action)),false);
@@ -640,7 +639,7 @@ try{
       }
     },{account:a,at:new Date().toISOString(),shipsForCase,prices,currentOffers,stock});
     await navigation.getByRole('button',{name:/CCU-Planer/}).click();
-    const refresh=page.locator('.connection-actions').getByRole('button',{name:'Aktualisieren',exact:true});
+    const refresh=page.locator('.connection-actions').getByRole('button',{name:'Daten aktualisieren',exact:true});
     await refresh.click();
     const hullCard=chain.getByRole('button',{name:'CCU-Details: Guardian → Hull B',exact:true});
     await hullCard.click();
@@ -757,7 +756,7 @@ try{
       view.observedAt=new Date().toISOString();
     },a);
     await navigation.getByRole('button',{name:/CCU-Planer/}).click();
-    await page.locator('.connection-actions').getByRole('button',{name:'Aktualisieren',exact:true}).click();
+    await page.locator('.connection-actions').getByRole('button',{name:'Daten aktualisieren',exact:true}).click();
     await chain.getByRole('heading',{name:'CCU-Kette → Liberator',exact:true}).waitFor();
     await page.locator('.market-target').first().getByText(/Selbst gewählte LTI-Basis: MDC/).waitFor();
     assert.match(await page.locator('.market-target').first().evaluate(card=>getComputedStyle(card).backgroundImage),/^linear-gradient\(/);
@@ -855,7 +854,7 @@ try{
         view.document.buybacks=data.buybacks;
         view.document.buybackObservation={observedAt:view.observedAt,token:data.token,current:true};
       },{account:a,revision,buybacks,token});
-      await page.locator('.connection-actions').getByRole('button',{name:'Aktualisieren',exact:true}).click();
+      await page.locator('.connection-actions').getByRole('button',{name:'Daten aktualisieren',exact:true}).click();
     };
     await publish('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',[],'unknown');
     await panel.getByText('Keine Rückkaufeinträge gefunden',{exact:true}).waitFor();

@@ -48,10 +48,9 @@
 .help-resource-panel{padding:clamp(15px,2.4vw,27px);background:linear-gradient(150deg,#182831,#131c26 65%)}
 .help-resource-panel h2{font-size:23px;margin:0 0 7px}
 .help-resource-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:0 16px}
-.help-resource-heading .help-update-button{margin:0 0 7px;padding:7px 11px;font-size:13px}
 .help-update-dialog{width:min(530px,calc(100% - 48px));background:linear-gradient(145deg,#1c3038,#15212b 65%)}
-.help-resource-panel .help-update-dialog h2{margin:8px 0 16px}
-.help-resource-panel .help-update-dialog h3{margin:20px 0 8px;font-size:17px}
+.help-update-dialog h2{margin:8px 0 16px}
+.help-update-dialog h3{margin:20px 0 8px;font-size:17px}
 .help-update-notes{padding:14px 16px;background:#101b24;border:1px solid #304955;border-radius:8px;overflow-wrap:anywhere}
 .help-update-notes p+p{margin-top:6px}
 .help-resource-panel h3{font-size:16px;margin:0 0 6px}

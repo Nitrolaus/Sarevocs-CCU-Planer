@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.88 · Alpha
+
+- Der Planer prüft einmal beim Programmstart auf eine neue Version. Wenn eine verfügbar ist, erscheint der Update-Button auf der Bestandsseite neben „Exportieren“.
+- Die Schaltfläche für den Datenabruf heißt „Daten aktualisieren“.
+
 ## 0.3.87 · Alpha
 
 - Eindeutig zugeordnete RSI-Bestellbeträge zählen in der Bruttoansicht zu den Gesamtkosten der CCU-Kette. Der Planer übernimmt sie in ihrer ursprünglichen Höhe. Fehlen Belege, bleiben Gesamtkosten und Ersparnis offen.

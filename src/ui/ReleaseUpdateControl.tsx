@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useContext, useRef, useState } from 'react';
 import type { ReleaseUpdate } from '../main/release-updates';
 import { LanguageContext } from './i18n';
 
@@ -15,52 +15,35 @@ const copy = {
   },
 };
 
-export function ReleaseUpdateControl() {
+export function ReleaseUpdateControl({ update }: { update: ReleaseUpdate }) {
   const language = useContext(LanguageContext);
   const label = copy[language];
-  const [update, setUpdate] = useState<ReleaseUpdate | null>(null);
-  const [displayed, setDisplayed] = useState<ReleaseUpdate | null>(null);
   const [opening, setOpening] = useState(false);
   const [failed, setFailed] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
 
-  useEffect(() => {
-    let active = true;
-    async function readUpdate() {
-      try {
-        const result = await window.ccu.request({ action: 'help.checkUpdate' });
-        if (active && result.ok) setUpdate(result.data as ReleaseUpdate | null);
-      } catch { /* The help page is usable when GitHub is offline. */ }
-    }
-    void readUpdate();
-    const timer = window.setInterval(() => void readUpdate(), 15 * 60 * 1000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
-
   function showUpdate() {
-    if (!update || !dialog.current) return;
     setFailed(false);
-    setDisplayed(update);
-    dialog.current.showModal();
+    dialog.current?.showModal();
   }
 
   async function openRelease() {
-    if (!displayed || opening) return;
+    if (opening) return;
     setOpening(true);
     setFailed(false);
     try {
-      const result = await window.ccu.request({ action: 'help.openUpdate', tag: displayed.tag });
+      const result = await window.ccu.request({ action: 'help.openUpdate', tag: update.tag });
       if (result.ok) dialog.current?.close();
       else setFailed(true);
     } catch { setFailed(true); }
     finally { setOpening(false); }
   }
 
-  const notes = displayed?.notes[language];
+  const notes = update.notes[language];
   return <>
-    {update && <button className="help-update-button" type="button" onClick={showUpdate}>{label.title} · {update.version}</button>}
+    <button className="help-update-button primary" type="button" onClick={showUpdate}>{label.title} · {update.version}</button>
     <dialog ref={dialog} className="help-update-dialog" aria-labelledby="help-update-title">
-      <span className="eyebrow">Version {displayed?.version}</span>
+      <span className="eyebrow">Version {update.version}</span>
       <h2 id="help-update-title">{label.title}</h2>
       <h3>{label.notes}</h3>
       <div className="help-update-notes">

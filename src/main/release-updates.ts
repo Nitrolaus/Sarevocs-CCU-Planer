@@ -72,36 +72,24 @@ export function findReleaseUpdate(raw: unknown, installedVersion: string): Relea
   return { tag: latest.tag_name, version, notes: releaseNotes(latest.body ?? '') };
 }
 
-const refreshInterval = 60 * 60 * 1000;
-const retryInterval = 5 * 60 * 1000;
-
 export class ReleaseUpdates {
   private current: ReleaseUpdate | null = null;
-  private pending?: Promise<ReleaseUpdate | null>;
-  private nextCheckAt = 0;
+  private startupCheck?: Promise<ReleaseUpdate | null>;
   private readonly controller = new AbortController();
 
   constructor(
     private readonly installedVersion: string,
     private readonly read: (signal: AbortSignal) => Promise<unknown>,
-    private readonly now = Date.now,
   ) {}
 
   check(): Promise<ReleaseUpdate | null> {
     if (this.controller.signal.aborted) return Promise.resolve(null);
-    if (this.pending) return this.pending;
-    if (this.now() < this.nextCheckAt) return Promise.resolve(this.current);
-    this.pending = Promise.resolve().then(() => this.read(this.controller.signal)).then(raw => {
+    this.startupCheck ??= Promise.resolve().then(() => this.read(this.controller.signal)).then(raw => {
       if (this.controller.signal.aborted) return null;
-      if (!Array.isArray(raw)) throw new Error('INVALID_RELEASE_LIST');
       this.current = findReleaseUpdate(raw, this.installedVersion);
-      this.nextCheckAt = this.now() + refreshInterval;
       return this.current;
-    }).catch(() => {
-      this.nextCheckAt = this.now() + retryInterval;
-      return this.controller.signal.aborted ? null : this.current;
-    }).finally(() => { this.pending = undefined; });
-    return this.pending;
+    }).catch(() => null);
+    return this.startupCheck;
   }
 
   async open(tag: string, openExternal: (url: string) => Promise<void>): Promise<{ opened: true } | null> {

@@ -2,7 +2,6 @@ import React, { useContext, useState } from 'react';
 import type { HelpDocument, HelpResource } from '../main/help-resources';
 import { LanguageContext } from './i18n';
 import { APP_VERSION } from '../domain/model';
-import { ReleaseUpdateControl } from './ReleaseUpdateControl';
 
 export type HelpSection = 'guide' | 'security' | 'guardian' | 'community';
 type InfoCard = { title: string; body: string };
@@ -132,7 +131,6 @@ export function HelpResources({ section }: { section: Exclude<HelpSection, 'guid
   return <section className="panel help-resource-panel" aria-labelledby="help-resource-title">
     <div className="help-resource-heading">
       <h2 id="help-resource-title">{labels[section]}</h2>
-      {section === 'security' && <ReleaseUpdateControl />}
     </div>
     {section === 'security' && <>
       <p>{info.securityIntro}</p>

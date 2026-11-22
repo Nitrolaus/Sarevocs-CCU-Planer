@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { APP_VERSION, type Account, type AccountInventory, type Insurance, type Pledge, type Preview } from '../domain/model';
 import {hasInventoryReadIssue} from '../domain/inventory-issues';
 import type { BridgeResult, Command } from '../main/commands';
+import type { ReleaseUpdate } from '../main/release-updates';
 import type { BackgroundSnapshot } from '../main/background-inventory';
 import type { LastSeen } from '../storage/last-seen';
 import type { UpgradeHistoryResult } from '../domain/upgrade-history';
@@ -20,6 +21,7 @@ import './brand-layout.css';
 import { MarketView } from './MarketView';
 import { SettingsView } from './SettingsView';
 import { HelpView } from './HelpView';
+import { ReleaseUpdateControl } from './ReleaseUpdateControl';
 import { SupportButtons } from './SupportButtons';
 import { MenuIcon } from './MenuIcon';
 import { DEFAULT_DISPLAY_SETTINGS, type PricingSnapshot, type DisplaySettings } from '../pricing/model';
@@ -73,6 +75,14 @@ function observedLabel(value?: string) {
 }
 function App() {
   const [page, setPage] = useState<'inventory' | 'market' | 'fleet' | 'paints' | 'settings' | 'help'>('inventory');
+  const [releaseUpdate, setReleaseUpdate] = useState<ReleaseUpdate | null>(null);
+  useEffect(() => {
+    let active = true;
+    void call<ReleaseUpdate | null>({ action: 'help.checkUpdate' }).then(update => {
+      if (active) setReleaseUpdate(update);
+    }).catch(() => { /* The inventory remains usable when GitHub is offline. */ });
+    return () => { active = false; };
+  }, []);
   const [state, setState] = useState<State>();
   const [display, setDisplay] = useState<PricingSnapshot>({ settings: { ...DEFAULT_DISPLAY_SETTINGS }, configured: true, settingsError: false, rate: null, pending: false, rateError: false });
   const t = (text: string) => translate(display.settings.language, text);
@@ -321,7 +331,7 @@ function App() {
         <button type="button" className="secondary add-profile" disabled={busy||!state} onClick={() => addProfile()}>{t('Benutzer anlegen')}</button>
       </div>
       <div className="connection-actions"><button className="primary" disabled={busy || (page === 'market' && connectionBusy) || (page === 'inventory' && (filter === 'Loaner & Beiboote' ? loanerSnapshot.pending : !account || account.mode !== 'real' || connectionBusy))}
-        onClick={() => page === 'paints' ? void call({action:'paints.refresh'}).catch(()=>setError('Paint-Preise konnten nicht gelesen werden.')) : page === 'inventory' && filter === 'Loaner & Beiboote' ? void call<LoanerSnapshot>({ action: 'loaners.refresh' }).then(setLoanerSnapshot).catch(() => setLoanerSnapshot(s => ({ ...s, error: true }))) : page === 'market' ? void updatePlanner() : page !== 'inventory' ? void call({ action: 'market.refresh' }).catch(() => setError('Marktdaten konnten nicht aktualisiert werden.')) : void updateBackground(!viewingBuybacks && backgroundStatus === 'auth-required')}>{t(page === 'inventory' && !viewingBuybacks && filter !== 'Loaner & Beiboote' && backgroundStatus === 'auth-required' && !connectionBusy ? 'Anmelden' : 'Aktualisieren')}</button>
+        onClick={() => page === 'paints' ? void call({action:'paints.refresh'}).catch(()=>setError('Paint-Preise konnten nicht gelesen werden.')) : page === 'inventory' && filter === 'Loaner & Beiboote' ? void call<LoanerSnapshot>({ action: 'loaners.refresh' }).then(setLoanerSnapshot).catch(() => setLoanerSnapshot(s => ({ ...s, error: true }))) : page === 'market' ? void updatePlanner() : page !== 'inventory' ? void call({ action: 'market.refresh' }).catch(() => setError('Marktdaten konnten nicht aktualisiert werden.')) : void updateBackground(!viewingBuybacks && backgroundStatus === 'auth-required')}>{t(page === 'inventory' && !viewingBuybacks && filter !== 'Loaner & Beiboote' && backgroundStatus === 'auth-required' && !connectionBusy ? 'Anmelden' : 'Daten aktualisieren')}</button>
       </div>
     </section>}
       {page === 'help' && <HelpView />}
@@ -336,6 +346,7 @@ function App() {
         <div><div className="eyebrow">{t("DEIN HANGAR. DEINE ENTSCHEIDUNG.")}</div><h1>{t("Bestand")}</h1><p>{t("Schiffe, Fahrzeuge und CCUs pro Konto – mit nachvollziehbarer Herkunft.")}</p></div>
         <div className="inventory-header-actions">
           {account?.mode==='real'&&<StoreCreditBadge credit={storeCredit} language={display.settings.language}/>}
+          {releaseUpdate && <ReleaseUpdateControl update={releaseUpdate} />}
           <button className="export-open" disabled={!accountId} onClick={()=>setExportKind(
             filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':filter==='Buy Back'?'buyback':filter==='Loaner & Beiboote'?'loaners':'ships'
           )}>{t('Exportieren …')}</button>

@@ -42,7 +42,7 @@ fs.copyFileSync('assets/app.png', path.join(run, 'app.png')); fs.copyFileSync('t
   application = await _electron.launch({ executablePath: require('electron'), args: [path.join(run, 'fixture-main.cjs'), '--disable-gpu', '--disable-background-networking', '--host-resolver-rules=MAP * ~NOTFOUND', '--proxy-server=http://127.0.0.1:9'], cwd: project, env });
   page = await application.firstWindow(); await page.emulateMedia({ reducedMotion: 'no-preference' }); await page.locator('.connection-status.pending').waitFor();
   assert.equal(await page.locator('.connection-status').innerText(), 'Wird aktualisiert …');
-  assert.equal(await page.getByRole('button', { name: 'Aktualisieren', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Daten aktualisieren', exact: true }).isDisabled(), true);
   return run;
 }
 async function close() { if (application) { const child = application.process(); await application.close(); assert.equal(child.exitCode, 0); application = undefined; } }
@@ -81,7 +81,7 @@ try {
   await check('BUSY_STARTS_REAL_CSS_ANIMATION_AND_DISABLING_EXISTING_REFRESH_BUTTON', async () => {
   const liveAnimation = await page.locator('.status-dot').evaluate(dot => ({ count: dot.getAnimations().length, state: dot.getAnimations()[0]?.playState }));
   assert.equal(liveAnimation.count, 1); assert.equal(liveAnimation.state, 'running');
-  assert.equal(await page.getByRole('button', { name: 'Aktualisieren', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Daten aktualisieren', exact: true }).isDisabled(), true);
   });
   await check('PRODUCT_RING_AND_HEADER_MATCH_APPROVED_1440_1024_AND_125_GEOMETRY', async () => {
   for (const [width, scale] of [[1440, 1], [1024, 1], [1024, 1.25]]) {
@@ -105,13 +105,13 @@ try {
   });
   await check('SUCCESS_AND_UNAVAILABLE_ERROR_STOP_SPINNER_AND_RETAIN_ORIGINAL_DOT', async () => {
     await status('connected'); await noSpinner('Verbunden');
-    assert.equal(await page.getByRole('button', { name: 'Aktualisieren', exact: true }).isEnabled(), true);
-    await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await page.locator('.connection-status.pending').waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Daten aktualisieren', exact: true }).isEnabled(), true);
+    await page.getByRole('button', { name: 'Daten aktualisieren', exact: true }).click(); await page.locator('.connection-status.pending').waitFor();
     assert.equal(await page.locator('.status-dot').evaluate(dot => dot.getAnimations().length), 1);
     await status('unavailable'); await noSpinner('Nicht erreichbar');
   });
   await check('PROFILE_CHANGE_STOPS_OLD_LOADING_INDICATOR_AND_RESTORES_SELECTED_STATUS', async () => {
-    await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await page.locator('.connection-status.pending').waitFor();
+    await page.getByRole('button', { name: 'Daten aktualisieren', exact: true }).click(); await page.locator('.connection-status.pending').waitFor();
     const combo = page.getByRole('combobox', { name: 'Lokales Kontoprofil', exact: true });
     await combo.selectOption(otherId); await noSpinner('Verbunden');
     await combo.selectOption(id); await page.locator('.connection-status.pending').waitFor();

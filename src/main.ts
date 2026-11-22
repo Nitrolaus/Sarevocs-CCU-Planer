@@ -135,6 +135,7 @@ async function start() {
   const publicReader = publicMarketReader();
   const readReleases = publicClient(1024 * 1024);
   const releases = new ReleaseUpdates(APP_VERSION, signal => readReleases(RELEASES_API_URL, signal, false));
+  void releases.check();
   app.once('before-quit', () => releases.close());
   const marketDirectory = path.join(dataDir, 'Marktdaten');
   const installedAt = fairInstallationTime(app.isPackaged ? process.execPath : null, Date.now());

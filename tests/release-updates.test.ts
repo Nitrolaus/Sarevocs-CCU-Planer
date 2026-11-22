@@ -30,28 +30,19 @@ test('only a higher published version is offered; localized notes are plain text
   assert.equal(findReleaseUpdate([release('v0.4.0', 'a'.repeat(1_000))], '0.3.75')?.notes.de[0]?.length, 238);
 });
 
-test('the release check shares requests, retains results offline and opens only the known GitHub release', async () => {
+test('startup reads releases once and opens only the known GitHub release', async () => {
   let requests = 0;
-  let now = 0;
-  let offline = false;
   const entry = { ...release('v0.3.76-alpha'), html_url: 'https://example.invalid', assets: [{ browser_download_url: 'file:///test.exe' }] };
   const checker = new ReleaseUpdates('0.3.75', async signal => {
     assert.equal(signal.aborted, false);
     requests++;
-    if (offline) throw new Error('offline');
     return [entry];
-  }, () => now);
+  });
   const [result, same] = await Promise.all([checker.check(), checker.check()]);
   assert.equal(result, same);
   assert.equal(await checker.check(), result);
   assert.equal(requests, 1);
   assert.equal(result?.tag, entry.tag_name);
-
-  offline = true;
-  now += 60 * 60 * 1000;
-  assert.equal(await checker.check(), result);
-  assert.equal(await checker.check(), result);
-  assert.equal(requests, 2);
 
   const opened: string[] = [];
   const open = async (url: string) => { opened.push(url); };
@@ -61,6 +52,22 @@ test('the release check shares requests, retains results offline and opens only 
   checker.close();
   assert.equal(await checker.check(), null);
   assert.equal(await checker.open(entry.tag_name, open), null);
+});
+
+test('an offline startup is not retried before a new program run', async () => {
+  let requests = 0;
+  const read = async () => {
+    if (++requests === 1) throw new Error('offline');
+    return [release('v0.3.76-alpha')];
+  };
+  const firstRun = new ReleaseUpdates('0.3.75', read);
+  assert.equal(await firstRun.check(), null);
+  assert.equal(await firstRun.check(), null);
+  assert.equal(requests, 1);
+  firstRun.close();
+  const nextRun = new ReleaseUpdates('0.3.75', read);
+  assert.equal((await nextRun.check())?.tag, 'v0.3.76-alpha');
+  assert.equal(requests, 2);
 });
 
 test('update IPC accepts a tag but no renderer-supplied URL or additional request data', () => {

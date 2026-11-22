@@ -58,7 +58,7 @@ try {
     await page.getByRole('button', { name: 'Details zu Synthetic Explorer' }).click(); await page.locator('.market-detail').waitFor(); assert.match(await page.locator('.market-detail').innerText(), /Kein Ausgangsschiff/); assert.match(await page.locator('.market-detail').innerText(), /Angebotsende unbekannt/);
   });
   await check('MARKET_REFRESH_NEVER_STARTS_RSI_AUTH', async () => {
-    await page.getByRole('button', { name: 'Aktualisieren', exact: true }).click(); await page.locator('.market-spinner').waitFor();
+    await page.getByRole('button', { name: 'Daten aktualisieren', exact: true }).click(); await page.locator('.market-spinner').waitFor();
     assert.equal(await application.evaluate(() => globalThis.fixture.commands.some(c => ['rsi.authorize','rsi.open','rsi.connect'].includes(c.action))), false);
     await page.emulateMedia({ reducedMotion: 'reduce' }); assert.equal(await page.locator('.market-spinner').evaluate(e => getComputedStyle(e).animationName), 'none');
     await application.evaluate(() => { globalThis.fixture.market.pending = false; globalThis.fixture.market.errors.offers = 'Synthetisch offline'; });
