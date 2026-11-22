@@ -91,6 +91,7 @@ function App() {
   const [state, setState] = useState<State>();
   const [display, setDisplay] = useState<PricingSnapshot>({ settings: { ...DEFAULT_DISPLAY_SETTINGS }, configured: true, settingsError: false, rate: null, pending: false, rateError: false });
   const t = (text: string) => translate(display.settings.language, text);
+  const importTooltip = t('Planer-JSON v1 oder HangarLink-JSON v2 auswählen. Dein lokaler Bestand wird erst geändert, wenn du die Übernahme in der Vorschau bestätigst.');
   useEffect(() => { let active = true, first = true, timer: ReturnType<typeof setTimeout>;
     const poll = async () => { try { const data = await call<PricingSnapshot>({ action: 'pricing.status' }); if (active) { setDisplay(previous=>JSON.stringify(previous)===JSON.stringify(data)?previous:data); if (first && !data.configured) setPage('settings'); first = false; } } catch { /* A failed preferences read never starts RSI authentication. */ }
       if (active) timer = setTimeout(() => void poll(), 1500); };
@@ -380,28 +381,30 @@ function App() {
       <section className="panel inventory-panel"><div className="inventory-panel-head">
         <div className="inventory-panel-line"><h2>{t("Schiffe, Fahrzeuge & CCUs")}</h2>
           <div className="actions inventory-actions">
-            <div className="inventory-search">
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
-              <input ref={inventorySearchInput} aria-label={t('Bestand durchsuchen')} placeholder={t('Bestand durchsuchen …')} value={inventoryQuery}
-                maxLength={160} onChange={event=>setInventoryQuery(event.currentTarget.value)}
-                onKeyDown={event=>{if(event.key==='Escape'&&inventoryQuery){event.preventDefault();clearInventorySearch();}}}/>
-              <button type="button" className="inventory-search-clear" aria-label={t('Suche löschen')} disabled={!inventoryQuery} onClick={clearInventorySearch}>×</button>
-            </div>
-            <button className="secondary" disabled={busy||!state} onClick={() => accountId?void run(()=>chooseImport(accountId)):addProfile('import')}>{t("Datei importieren")}</button>
+            <button className="secondary" title={importTooltip} aria-description={importTooltip} disabled={busy||!state} onClick={() => accountId?void run(()=>chooseImport(accountId)):addProfile('import')}>{t("Datei importieren")}</button>
           </div>
         </div>
         <div className="inventory-panel-line inventory-panel-tabs">
           <div className="filters" aria-label={t("Bestandsfilter")}>
             {['Alle Gegenstände', 'Schiffe & Fahrzeuge', 'CCUs', 'Spielpakete', 'Spielzugänge', 'Buy Back', 'Loaner & Beiboote'].map(f => <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>{t(f)}</button>)}
           </div>
-          <output aria-live="polite" className="inventory-search-count">{t(inventoryCount.total===1?'{shown} von {total} Eintrag':'{shown} von {total} Einträgen')
-            .replace('{shown}', inventoryCount.shown.toLocaleString(display.settings.language))
-            .replace('{total}', inventoryCount.total.toLocaleString(display.settings.language))}</output>
         </div>
       </div>
         <ConciergeCard key={'concierge:' + accountId} accountId={account?.mode === 'real' ? accountId : undefined}
           revision={lastSeen?.revision} connected={backgroundStatus === 'connected'} busy={connectionBusy}
           language={display.settings.language} request={call} />
+        <div className="inventory-search-row">
+          <div className="inventory-search">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
+            <input id="inventory-search-input" ref={inventorySearchInput} aria-label={t('Bestand durchsuchen')} placeholder={t('Bestand durchsuchen …')} value={inventoryQuery}
+              maxLength={160} onChange={event=>setInventoryQuery(event.currentTarget.value)}
+              onKeyDown={event=>{if(event.key==='Escape'&&inventoryQuery){event.preventDefault();clearInventorySearch();}}}/>
+            <button type="button" className="inventory-search-clear" aria-label={t('Suche löschen')} disabled={!inventoryQuery} onClick={clearInventorySearch}>×</button>
+          </div>
+          <output htmlFor="inventory-search-input" aria-live="polite" className="inventory-search-count">{t(inventoryCount.total===1?'{shown} von {total} Eintrag':'{shown} von {total} Einträgen')
+            .replace('{shown}', inventoryCount.shown.toLocaleString(display.settings.language))
+            .replace('{total}', inventoryCount.total.toLocaleString(display.settings.language))}</output>
+        </div>
         {viewingBuybacks ? <BuybackTable {...inventorySearchProps} entries={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} observation={liveBuybacks?.buybackObservation} display={display} balance={storeCredit} />
           : filter === 'Loaner & Beiboote' ? <LoanerTable {...inventorySearchProps} accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable {...inventorySearchProps} key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} onHistory={p=>void loadUpgradeHistory(p)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={p=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,key?historyTooltips.current.get(key):undefined),gameAccessEvidence(p));}}/>}</section>
       <div className="bottom" id="data-location"><span>Letzter vollständiger Import: {account?.lastComplete ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(account.lastComplete)) : 'noch keiner'}<br />Datenordner: {state?.dataDir ?? 'wird geladen'}</span>

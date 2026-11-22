@@ -447,6 +447,7 @@ Object.assign(english, {
   'Bestand durchsuchen': 'Search inventory',
   'Bestand durchsuchen …': 'Search inventory …',
   'Suche löschen': 'Clear search',
+  'Planer-JSON v1 oder HangarLink-JSON v2 auswählen. Dein lokaler Bestand wird erst geändert, wenn du die Übernahme in der Vorschau bestätigst.': 'Select a Planner JSON v1 or HangarLink JSON v2 file. Your local inventory is updated after you confirm the import in the preview.',
   '{shown} von {total} Einträgen': '{shown} of {total} entries',
   '{shown} von {total} Eintrag': '{shown} of {total} entries',
   'Keine passenden Einträge gefunden.': 'No matching entries found.',

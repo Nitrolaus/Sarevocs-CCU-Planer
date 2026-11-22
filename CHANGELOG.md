@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.101 · Alpha
+
+- Die kompakte Bestandssuche und die Trefferzahl stehen direkt über der Tabelle.
+- „Datei importieren“ erklärt im Tooltip die unterstützten JSON-Formate und die Bestätigung in der Vorschau.
+
 ## 0.3.100 · Alpha
 
 - Die kompakte Bestandssuche filtert den geöffneten Reiter nach Schiff, Hersteller oder Paket. Die Trefferzahl steht neben den Reitern.

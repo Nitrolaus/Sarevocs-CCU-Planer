@@ -96,12 +96,18 @@ try {
   assert.ok(await page.locator('.inventory-panel').evaluate(panel => {
     const header = panel.querySelector(':scope > .inventory-panel-head');
     const card = panel.querySelector(':scope > .concierge-card');
+    const search = panel.querySelector(':scope > .inventory-search-row');
     const table = panel.querySelector('.ship-value-table');
-    return !!header?.querySelector('.inventory-search input') && !!header.querySelector('.inventory-search-count') &&
-      !!card && !!table && header.nextElementSibling === card &&
-      !!(card.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING);
-  }), 'Concierge card must be between the inventory filters and table');
-  results.push('Concierge-Karte steht in der verpackten Anwendung zwischen Filtern und Bestandstabelle.');
+    return !!header && !!card && !!search?.querySelector('input') && !!search.querySelector('.inventory-search-count') &&
+      !!table && header.nextElementSibling === card && card.nextElementSibling === search &&
+      !!(search.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+      search.getBoundingClientRect().bottom <= table.getBoundingClientRect().top + 1;
+  }), 'Concierge card and inventory search must fit between the filters and table');
+  const importButton = page.getByRole('button', { name: 'Datei importieren', exact: true });
+  const importTooltip = await importButton.getAttribute('title');
+  assert.match(importTooltip, /Planer-JSON v1.*HangarLink-JSON v2.*in der Vorschau bestätigst/);
+  assert.equal(await importButton.getAttribute('aria-description'), importTooltip);
+  results.push('Kompakte Suche steht über der Bestandstabelle. Der Import-Tooltip erklärt die JSON-Formate und die Bestätigung der Vorschau.');
   const pledgeLayout = await page.locator('.concierge-private').evaluate(controls => ({
     button: controls.querySelector('button').getBoundingClientRect().left,
     hint: controls.querySelector('p').getBoundingClientRect().left,
