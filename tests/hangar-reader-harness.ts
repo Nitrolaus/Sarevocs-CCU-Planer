@@ -326,6 +326,55 @@ app.whenReady().then(async () => {
       },{'1':{html:batch(1,10)},'2':{html:batch(1,10)}});
     });
 
+    await check('FULL_LAST_PAGE_WITH_VALIDATED_RSI_PAGER_STOPS_WITHOUT_AN_EXTRA_GET', async () => {
+      const pages = {
+        '1': { html: batch(1, 10) + '<a class="raquo" href="/account/pledges?page=2">&raquo;</a>' },
+        '2': { html: batch(11, 10) + '<a href="?page=1&amp;pagesize=10"><span class="laquo">&laquo;</span></a>' },
+      };
+      await withPage(batch(1, 10), async (value, id, win) => {
+        const candidate = await probe(value, id);
+        expect(candidate.document.pledges.length === 20 && candidate.document.scope.pagesRead === 2, 'FULL_LAST_PAGE_LOST');
+        expect((await calls(win)).map(request => request.page).join(',') === '1,2', 'READ_PAST_VERIFIED_LAST_PAGE');
+        await noNetworkViolation(win);
+      }, pages);
+      const invalidPagers = [
+        '<a href="https://example.invalid/en/account/pledges?page=1&amp;pagesize=10" rel="prev">Previous</a>',
+        '<a href="?page=1&amp;pagesize=50" rel="prev">Previous</a>',
+        '<a href="?page=1&amp;pagesize=10" rel="prev">Previous</a><a href="?page=3&amp;pagesize=10" rel="next">Next</a>',
+      ];
+      for (const pager of invalidPagers) {
+        await withPage(batch(1, 10), async (value, id, win) => {
+          const candidate = await probe(value, id);
+          expect(candidate.document.pledges.length === 21, 'INVALID_END_MARKER_TRUNCATED_READ');
+          expect((await calls(win)).map(request => request.page).join(',') === '1,2,3', 'INVALID_END_MARKER_USED');
+          await noNetworkViolation(win);
+        }, { ...pages, '2': { html: batch(11, 10) + pager }, '3': { html: batch(21, 1) } });
+      }
+    });
+
+    await check('RSI_ACTIVE_PAGER_STOPS_BEFORE_OUT_OF_RANGE_PAGE_REPEATS_LAST_PAGE', async () => {
+      const pager = (shown: number, last: number) => '<div class="options-selector pager-wrapper"><div class="pager js-pager">' +
+        [shown - 1, shown, shown + 1].filter(number => number >= 1 && number <= last)
+          .map(number => `<a class="${number === shown ? 'active' : ''}" href="/en/account/pledges?page=${number}&amp;pagesize=10">${number}</a>`)
+          .join('') + '</div></div>';
+      const last = 28;
+      const pages = Object.fromEntries(Array.from({ length: last + 1 }, (_, index) => {
+        const shown = Math.min(index + 1, last);
+        return [String(index + 1), { html: batch((shown - 1) * 10 + 1, 10) + pager(shown, last) }];
+      }));
+      await withPage(batch(1, 10), async (value, id, win) => {
+        const candidate = await probe(value, id);
+        expect(candidate.document.pledges.length === 280 && candidate.document.scope.pagesRead === 28, 'RSI_PAGER_DROPPED_HANGAR_ROWS');
+        expect((await calls(win)).map(request => request.page).join(',') === Array.from({ length: last }, (_, index) => index + 1).join(','), 'RSI_PAGER_FETCHED_OUT_OF_RANGE');
+        await noNetworkViolation(win);
+      }, pages);
+      await withPage(batch(1, 10), async (value, id, win) => {
+        await rejected(value, id, 'MID_HANGAR_WRONG_PAGE_ACCEPTED');
+        expect((await calls(win)).map(request => request.page).join(',') === '1,2', 'RSI_PAGER_ACCEPTED_WRONG_ACTIVE_PAGE');
+        await noNetworkViolation(win);
+      }, { '1': pages['1']!, '2': { html: batch(11, 2) + pager(1, 3) } });
+    });
+
     await check('MULTIPAGE_OVERLAP_LOGIN_REDIRECT_AND_BAD_FIELDS_REJECTED', async () => {
       const endings: PagePlan[] = [{ html: batch(10, 2) }, { html: '<input type="password"><p>Synthetic login</p>' },
         { html: batch(11, 2), redirected: true }, { html: list(pledge('', 'SYNTHETIC INVALID')) },

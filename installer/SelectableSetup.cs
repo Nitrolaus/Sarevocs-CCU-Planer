@@ -161,8 +161,12 @@ public static class SelectableSetup {
       report("Installationsdateien vorbereiten …",0);
       using(var payload=SetupBootstrapperCore.ExtractPayload(temporary)){
        extracted=payload.Path;
+#if CAB_PAYLOAD
+       CabinetPayload.Extract(payload.Path,staging,manifest,p=>report("Programmdateien vorbereiten · "+p+" %",p));
+#else
        progressFile=Path.Combine(temporary,"copy-progress.txt");File.WriteAllText(progressFile,"0");
        if(RunChild(payload.Path,"/S /D="+staging,temporary,progressFile,p=>report("Programmdateien vorbereiten · "+p+" %",p))!=0)throw new IOException("INNER_SETUP_FAILED");
+#endif
       }
       var entries=InstallTransaction.CheckStaging(staging,manifest);
       InspectShortcuts(desktop,roots,shellType,shell);InspectShortcuts(menu,roots,shellType,shell);
@@ -204,7 +208,7 @@ public static class SelectableSetup {
  }
  static void Success(bool cleaned){Console.WriteLine("{\"code\":\"SUCCESS\",\"installedVersion\":\""+EmbeddedPayload.Version+"\",\"cleanupComplete\":"+(cleaned?"true":"false")+",\"newRsiLogin\":false}");}
  static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Die gesicherten Dateien liegen neben dem Installationsordner.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":"Bitte Programmordner und Schreibrechte prüfen und erneut versuchen.";}
- static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
+ static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"||error.Message=="PAYLOAD_HASH_MISMATCH"?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
  [STAThread]public static int Main(string[] args){
   if(args.Length==1&&args[0].StartsWith("--extract-payload=",StringComparison.Ordinal))return SetupBootstrapper.Main(args);
   bool silent=args.Length==1&&args[0]=="--silent";if(args.Length>0&&!silent)return 1;

@@ -18,24 +18,62 @@ const extractPage = String.raw`(root, live, pageUrl) => {
   const txt = (n, selector) => n.querySelector(selector)?.textContent?.trim() ?? '';
   const empty = rows.length === 1 && !!rows[0].querySelector('.empty-list') && !rows[0].querySelector('.js-pledge-id');
   const handle = root.querySelector('.c-account-sidebar__profile-info-handle')?.textContent?.trim() || null;
-  const totals = new Set();
+  const totals = new Set(), activePages = new Set();
   const current = new URL(pageUrl);
+  const pageNumber = Number(current.searchParams.get('page') || 1);
+  let next = false, previous = false, unknownNext = false;
+  let pagerHasEarlierPage = false, invalidPagerLink = false;
   if (current.searchParams.get('pagesize') === '10') {
-    for (const link of root.querySelectorAll('a[rel~="last"], .pagination a[aria-label="Last page"], .pagination a[title="Last page"]')) {
-      const href = link.getAttribute('href');
-      if (!href || href.length > 1000) continue;
+    const lastLink = 'a[rel~="last"], .pagination a[aria-label="Last page"], .pagination a[title="Last page"]';
+    const nextLink = 'a[rel~="next"], a.raquo, .raquo a, a:has(.raquo)';
+    const previousLink = 'a[rel~="prev"], a.laquo, .laquo a, a:has(.laquo)';
+    const rsiPagerLink = '.pager a, .pager-wrapper a';
+    const linkedPage = href => {
+      if (!href || href.length > 1000) return null;
       try {
         const url = new URL(href, current);
-        if (url.origin !== current.origin || url.pathname.replace(/\/$/, '') !== current.pathname.replace(/\/$/, '') ||
-            url.username || url.password || url.hash || url.searchParams.getAll('pagesize').length !== 1 || url.searchParams.get('pagesize') !== '10' ||
-            url.searchParams.getAll('page').length !== 1 || [...url.searchParams.keys()].some(key => key !== 'page' && key !== 'pagesize')) continue;
-        const last = url.searchParams.get('page') || '';
-        if (/^[1-9]\d{0,3}$/.test(last) && Number(last) <= 5000 && Number(last) >= Number(current.searchParams.get('page') || 1)) totals.add(Number(last));
-      } catch { /* Pagination is optional display metadata. */ }
+        const path = url.pathname.replace(/\/$/, '');
+        const size = url.searchParams.getAll('pagesize');
+        if (url.origin !== current.origin || (path !== current.pathname.replace(/\/$/, '') && path !== '/account/pledges') ||
+            url.username || url.password || url.hash || size.length > 1 || (size.length === 1 && size[0] !== '10') ||
+            url.searchParams.getAll('page').length !== 1 || [...url.searchParams.keys()].some(key => key !== 'page' && key !== 'pagesize')) return null;
+        const number = url.searchParams.get('page') || '';
+        return /^[1-9]\d{0,3}$/.test(number) && Number(number) <= 5000 ? Number(number) : null;
+      } catch { return null; }
+    };
+    for (const link of root.querySelectorAll([lastLink, nextLink, previousLink, '.pagination a', rsiPagerLink].join(','))) {
+      if (list.contains(link)) continue;
+      const isNext = link.matches(nextLink);
+      const inRsiPager = link.matches(rsiPagerLink);
+      const isActive = inRsiPager && link.matches('.active, [aria-current="page"]');
+      const href = link.getAttribute('href');
+      const target = linkedPage(href);
+      if (isNext && (target === null || target <= pageNumber)) unknownNext = true;
+      if (target === null) {
+        // A malformed page control cannot prove the end of the list.
+        if (inRsiPager && (isActive || /[?&]page=/i.test(href || '') || /^\d+$/.test(link.textContent.trim()))) invalidPagerLink = true;
+        continue;
+      }
+      if (isActive) activePages.add(target);
+      if (target > pageNumber) next = true;
+      if (inRsiPager && target < pageNumber) pagerHasEarlierPage = true;
+      if (target === pageNumber - 1 && link.matches(previousLink)) previous = true;
+      if (target >= pageNumber && link.matches(lastLink)) totals.add(target);
     }
   }
+  if (activePages.size > 1) return { ok: false, reason: 'pagination-conflict' };
+  const activePage = activePages.size === 1 ? [...activePages][0] : null;
+  // RSI can return its last page again when asked for a higher number. Stop at the
+  // active page when the same pager links backwards and offers no forward page.
+  if (activePage === pageNumber && pagerHasEarlierPage && !next && !unknownNext && !invalidPagerLink) totals.add(pageNumber);
   const totalPages = totals.size === 1 ? [...totals][0] : null;
-  if (empty) return { ok: true, type: 'hangarexport', version: 2, handle, pledges: [] };
+  // The legacy RSI pager drops the forward arrow at the end. Require a verified back link
+  // here and a verified forward link from the preceding page in the reader.
+  const navigation = next ? 'next' : !unknownNext && totals.size <= 1 &&
+    (totalPages === pageNumber || previous && totalPages === null) ? 'last' : undefined;
+  const pagination = { ...(activePage !== null ? { activePage } : {}), ...(totalPages !== null ? { totalPages } : {}),
+    ...(navigation ? { navigation } : {}) };
+  if (empty) return { ok: true, type: 'hangarexport', version: 2, handle, pledges: [], ...pagination };
   if (rows.some(n => {
     const id = value(n, '.js-pledge-id'), name = value(n, '.js-pledge-name').split(':')[0].trim();
     return !id || id.length > 160 || !name || name.length > 500;
@@ -111,7 +149,7 @@ const extractPage = String.raw`(root, live, pageUrl) => {
     }
     pledges.push(pledge);
   }
-  return { ok: true, type: 'hangarexport', version: 2, handle, pledges, ...(totalPages !== null ? { totalPages } : {}) };
+  return { ok: true, type: 'hangarexport', version: 2, handle, pledges, ...pagination };
 }`;
 
 export const RSI_PAGE_PROBE = `(() => { const extract = ${extractPage}; return extract(document, true, location.href); })()`;
@@ -137,10 +175,10 @@ export function rsiFetchPageProbe(page: number, hangarUrl: string): string {
       const response = await fetch(${JSON.stringify(pageUrl)}, {
         method: 'GET', credentials: 'same-origin', redirect: 'error', cache: 'no-store', signal: controller.signal
       });
-      if (!response.ok) { const retryable = [429,502,503,504].includes(response.status); const retry = response.headers.get('retry-after') || ''; return { ok: false, reason: 'page-read-failed', retryable, retryAfterMs: retryable && /^\\d{1,5}$/.test(retry) ? Math.min(60000, Number(retry)*1000) : 0 }; }
-      if (response.redirected || !/^(?:text\\/html|application\\/xhtml\\+xml)(?:;|$)/i.test(response.headers.get('content-type') || '')) return { ok: false, reason: 'page-read-failed' };
+      if (!response.ok) { const retryable = [429,502,503,504].includes(response.status); const retry = response.headers.get('retry-after') || ''; return { ok: false, reason: 'page-read-failed', failure: 'http-error', httpStatus: response.status, retryable, retryAfterMs: retryable && /^\\d{1,5}$/.test(retry) ? Math.min(60000, Number(retry)*1000) : 0 }; }
+      if (response.redirected || !/^(?:text\\/html|application\\/xhtml\\+xml)(?:;|$)/i.test(response.headers.get('content-type') || '')) return { ok: false, reason: 'page-read-failed', failure: 'unexpected-response' };
       const reader = response.body?.getReader();
-      if (!reader) return { ok: false, reason: 'page-read-failed' };
+      if (!reader) return { ok: false, reason: 'page-read-failed', failure: 'unexpected-response' };
       const decoder = new TextDecoder(), chunks = [];
       let bytes = 0;
       try {
@@ -150,7 +188,7 @@ export function rsiFetchPageProbe(page: number, hangarUrl: string): string {
           bytes += value.byteLength;
           if (bytes > 8 * 1024 * 1024) {
             controller.abort();
-            return { ok: false, reason: 'page-read-failed' };
+            return { ok: false, reason: 'page-read-failed', failure: 'response-too-large' };
           }
           chunks.push(decoder.decode(value, { stream: true }));
         }
@@ -160,7 +198,7 @@ export function rsiFetchPageProbe(page: number, hangarUrl: string): string {
       template.innerHTML = chunks.join('');
       const extract = ${extractPage};
       return extract(template.content, false, ${JSON.stringify(pageUrl)});
-    } catch { return { ok: false, reason: 'page-read-failed', retryable: true }; }
+    } catch { return { ok: false, reason: 'page-read-failed', failure: controller.signal.aborted ? 'request-timeout' : 'request-failed', retryable: true }; }
     finally { clearTimeout(timer); }
   })()`;
 }

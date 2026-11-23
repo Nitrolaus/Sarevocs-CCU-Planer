@@ -2,7 +2,7 @@ import { BrowserWindow, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { allowedRsiNavigation, evaluateRsiSessionRequest, insecureRsiTransport, isPledgesPage, isRsiLoginPage, rsiCaptchaFrame, rsiReturnCandidate, RSI_HANGAR_URL, RSI_LOGIN_URL, RSI_ORIGIN } from '../main/policy';
 import { UserError, type ImportCandidate } from '../domain/model';
-import {readHangarPages,type HangarRefreshProgress} from './hangar-read';
+import { HangarPageError, readHangarPages, type HangarRefreshProgress } from './hangar-read';
 import { SessionVault, type StoredCookie } from '../security/session-vault';
 import { captureRsiCookie, hasAuthenticationCookie, isAuthenticationCookieName } from '../security/rsi-cookies';
 import { isDeepStrictEqual } from 'node:util';
@@ -494,7 +494,15 @@ export class RsiLogin {
       onProgress:progress=>this.statuses.set(accountId,{state:'page-ready',progress:{...progress,phase:'reading'},message:progress.waiting
         ? 'RSI benötigt eine Pause. Hangarlesen wird begrenzt erneut versucht.'
         : 'Lese Hangar: '+progress.pledgesRead+' Einträge auf '+progress.pagesRead+' Seiten.'})})
-      .catch(error=>{this.record({event:'hangar-observation',target:'hangar',resource:'xhr',observation:'page-read-failed'});this.statuses.set(accountId,{state:'error',message:error instanceof UserError?error.message:'Hangar konnte nicht vollständig gelesen werden.'});throw error;});
+      .catch(error => {
+        const detail = error instanceof HangarPageError
+          ? { hangarPage: error.page, hangarFailure: error.failure, httpStatus: error.httpStatus }
+          : {};
+        this.record({ event: 'hangar-observation', target: 'hangar', resource: 'xhr', observation: 'page-read-failed', ...detail });
+        this.statuses.set(accountId, { state: 'error', message: error instanceof UserError
+          ? error.message : 'Hangar konnte nicht vollständig gelesen werden.' });
+        throw error;
+      });
     const pageProgress = this.status(accountId).progress;
     const finishing = pageProgress ? { ...pageProgress, phase: 'finishing' as const } : undefined;
     this.statuses.set(accountId, {state:'page-ready',message:'Hangar gelesen. Prüfe ergänzende Daten.',progress:finishing});
