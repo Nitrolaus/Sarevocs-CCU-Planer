@@ -36,6 +36,12 @@ aside nav button[data-menu]{
 }
 /* The frame sits inside the control so compact buttons and borderless tabs keep their geometry. */
 :where(button, summary, .help-topics a){position:relative}
+:where(#root) summary{
+  padding:4px 10px;
+  list-style-position:inside;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
 #root :is(button, summary, .help-topics a){
   --edge-start:#3a606b;
   --edge-end:#615043;
@@ -101,7 +107,7 @@ aside nav button[data-menu]{
 }
 #root button.ccu-step-details{
   --control-fill:linear-gradient(145deg,#08131c1f,#08131c6b);
-  padding-inline:5px;
+  padding:5px 8px;
 }
 #root :is(button.ccu-ownership, .ccu-stock-tile.purchase button:not(.ccu-lock)){
   --edge-start:#ffd391;

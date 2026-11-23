@@ -15,6 +15,9 @@ const normalized=(s:string)=>s.normalize('NFC').trim().replace(/\s+/g,' ').toLoc
 const aliases:Record<string,{id:number;name:string}>={};
 for(const [variant,id]of [['C2',162],['M2',163],['A2',164]] as const)for(const name of ['Hercules Starlifter '+variant,variant+' Hercules Starlifter'])aliases[normalized(name)]={id,name:variant+' Hercules'};
 aliases[normalized('ROC DS')]={id:219,name:'ROC-DS'};
+// RSI Hangar labels for the same models in the public ship matrix.
+aliases[normalized('350r Racer')]={id:10,name:'350r'};
+aliases[normalized('Nova Tank')]={id:154,name:'Nova'};
 export function catalogueIdentity(name:string,catalogue:readonly CatalogueShip[]):CatalogueShip|undefined{
  const exact=catalogue.filter(s=>normalized(s.name)===normalized(name));if(exact.length)return exact.length===1?exact[0]:undefined;
  const alias=aliases[normalized(name)];if(!alias)return;const matches=catalogue.filter(s=>s.id===alias.id&&normalized(s.name)===normalized(alias.name));return matches.length===1?matches[0]:undefined;

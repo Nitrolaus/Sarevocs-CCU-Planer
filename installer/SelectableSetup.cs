@@ -36,15 +36,27 @@ public static class SelectableSetup {
   RemoveEmptyDirectory(root);
  }
  public static void CheckMove(string previous,string target){
-  if(String.IsNullOrEmpty(previous)||previous.Equals(target,StringComparison.OrdinalIgnoreCase))return;
-  if(previous.StartsWith(target+"\\",StringComparison.OrdinalIgnoreCase)||target.StartsWith(previous+"\\",StringComparison.OrdinalIgnoreCase))throw new IOException("OVERLAPPING_INSTALL_LOCATIONS");
+  if(String.IsNullOrEmpty(previous))return;
+  previous=SetupBootstrapperCore.PhysicalDirectoryPath(previous);
+  target=SetupBootstrapperCore.PhysicalDirectoryPath(target);
+  if(previous.Equals(target,StringComparison.OrdinalIgnoreCase))return;
+  if(previous.StartsWith(target+"\\",StringComparison.OrdinalIgnoreCase)||target.StartsWith(previous+"\\",StringComparison.OrdinalIgnoreCase)||
+     IsPhysicalAncestor(previous,target)||IsPhysicalAncestor(target,previous))throw new IOException("OVERLAPPING_INSTALL_LOCATIONS");
  }
- public static void CleanPrevious(string previous,string local,string target,string[] packagedFiles){
-  if(String.IsNullOrEmpty(previous)||previous.Equals(target,StringComparison.OrdinalIgnoreCase)||!Directory.Exists(previous))return;
+ static bool IsPhysicalAncestor(string candidate,string child){
+  if(!Directory.Exists(candidate))return false;
+  for(string parent=Path.GetDirectoryName(child);!String.IsNullOrEmpty(parent);parent=Path.GetDirectoryName(parent))
+   if(Directory.Exists(parent)&&SetupBootstrapperCore.SameDirectory(candidate,parent))return true;
+  return false;
+ }
+ public static bool CleanPrevious(string previous,string local,string target,string[] packagedFiles){
+  if(String.IsNullOrEmpty(previous)||!Directory.Exists(previous))return true;
   previous=InstallLocation.Validate(previous,local);
   CheckMove(previous,target);
+  if(SetupBootstrapperCore.SameDirectory(previous,target))return true;
   // Only names from the new installer's embedded file list can select old files.
   RemoveProductFiles(previous,packagedFiles.Concat(new[]{"SetupGuard.exe","Uninstall.exe","install-files.json","install-product.txt"}));
+  return true;
  }
  public static void CleanLegacyFiles(string root,string[] packagedFiles){
   if(!HasLegacyInstallation(root))return;
@@ -134,10 +146,13 @@ public static class SelectableSetup {
  }
  static bool Install(string local,string previous,string target,DisplaySetup display,bool acceptedTerms,Action<string,int> report){
   SetupTerms.Require(acceptedTerms);
-  CheckMove(previous,target);
+  target=InstallLocation.Validate(target,local);
+  string previousLocation=InstallLocation.FindPrevious(previous,local);
+  CheckMove(previousLocation,target);
   string legacy=Path.Combine(local,"SarevocsCCUPlaner");
   using(SetupBootstrapperCore.AcquireInstallLock(legacy)){
-    var roots=new HashSet<string>(StringComparer.OrdinalIgnoreCase){legacy,target};if(!String.IsNullOrEmpty(previous))roots.Add(InstallLocation.Validate(previous,local));
+    var roots=new HashSet<string>(StringComparer.OrdinalIgnoreCase){legacy,target};
+    if(previousLocation!=null){roots.Add(previous);roots.Add(previousLocation);}
     string desktop=Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
     string menu=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),"Sarevoc");
     report("Installationsziel und Verknüpfungen prüfen …",-1);
@@ -149,6 +164,7 @@ public static class SelectableSetup {
     string parent=Path.GetDirectoryName(target);
     SetupBootstrapperCore.RejectReparseParents(parent);
     Directory.CreateDirectory(parent);
+    InstallLocation.Validate(target,local);
     string work=Path.Combine(parent,".ccu-setup-"+Guid.NewGuid().ToString("N").Substring(0,12));
     string staging=Path.Combine(work,"new"),backup=Path.Combine(work,"old");
     string temporary=Path.Combine(Path.GetTempPath(),"SarevocsCCUPlaner-Setup-"+Guid.NewGuid().ToString("N"));
@@ -161,8 +177,12 @@ public static class SelectableSetup {
       report("Installationsdateien vorbereiten …",0);
       using(var payload=SetupBootstrapperCore.ExtractPayload(temporary)){
        extracted=payload.Path;
+#if CAB_PAYLOAD
+       CabinetPayload.Extract(payload.Path,staging,manifest,p=>report("Programmdateien vorbereiten · "+p+" %",p));
+#else
        progressFile=Path.Combine(temporary,"copy-progress.txt");File.WriteAllText(progressFile,"0");
        if(RunChild(payload.Path,"/S /D="+staging,temporary,progressFile,p=>report("Programmdateien vorbereiten · "+p+" %",p))!=0)throw new IOException("INNER_SETUP_FAILED");
+#endif
       }
       var entries=InstallTransaction.CheckStaging(staging,manifest);
       InspectShortcuts(desktop,roots,shellType,shell);InspectShortcuts(menu,roots,shellType,shell);
@@ -196,15 +216,14 @@ public static class SelectableSetup {
     report("Bisherige Programmversion bereinigen …",-1);
     try{
      var programNames=manifest.Select(entry=>entry.Name).Where(name=>!InstallTransaction.IsSetupFile(name)).ToArray();
-     if(HasLegacyInstallation(legacy)){CleanLegacyFiles(legacy,programNames);RemoveLegacyRegistration(legacy);}
-     CleanPrevious(previous,local,target,programNames);
-     return true;
+     if(HasLegacyInstallation(legacy)){InstallLocation.ValidateTargetAccess(legacy);CleanLegacyFiles(legacy,programNames);RemoveLegacyRegistration(legacy);}
+     return String.IsNullOrEmpty(previous)||previousLocation!=null&&CleanPrevious(previousLocation,local,target,programNames);
     }catch(IOException){return false;}catch(UnauthorizedAccessException){return false;}catch(System.Security.SecurityException){return false;}
   }
  }
  static void Success(bool cleaned){Console.WriteLine("{\"code\":\"SUCCESS\",\"installedVersion\":\""+EmbeddedPayload.Version+"\",\"cleanupComplete\":"+(cleaned?"true":"false")+",\"newRsiLogin\":false}");}
- static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Die gesicherten Dateien liegen neben dem Installationsordner.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":"Bitte Programmordner und Schreibrechte prüfen und erneut versuchen.";}
- static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
+ static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Die gesicherten Dateien liegen neben dem Installationsordner.";if(error.Message==InstallLocation.UnsafePermissions)return "Andere Windows-Konten können diesen Programmordner oder einen übergeordneten Ordner ändern. Bitte einen privaten Ordner wählen.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":"Bitte Programmordner und Schreibrechte prüfen und erneut versuchen.";}
+ static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"||error.Message=="PAYLOAD_HASH_MISMATCH"||error.Message==InstallLocation.UnsafePermissions?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
  [STAThread]public static int Main(string[] args){
   if(args.Length==1&&args[0].StartsWith("--extract-payload=",StringComparison.Ordinal))return SetupBootstrapper.Main(args);
   bool silent=args.Length==1&&args[0]=="--silent";if(args.Length>0&&!silent)return 1;
@@ -223,12 +242,12 @@ public static class SelectableSetup {
    using(var window=new SetupWindow(initial,installed,EmbeddedPayload.Version)){
     window.InstallRequested+=delegate{
      if(!window.AcceptTerms.Checked)return;
-     string target;try{target=InstallLocation.Validate(window.Folder.Text,local);}catch{window.ShowPathError();return;}
+     string target;try{target=InstallLocation.Validate(window.Folder.Text,local);}catch(Exception error){window.ShowPathError(error.Message==InstallLocation.UnsafePermissions?Failure(error):null);return;}
      DisplaySetup display=DisplaySetup.Prepare(local,false);if(display.Cancelled)return;
      window.SetBusy("Installation vorbereiten …",-1);
      Action<Action> post=action=>{if(!window.IsDisposed)try{window.BeginInvoke(action);}catch(InvalidOperationException){}};
      Task.Run(delegate{
-      try{bool cleaned=Install(local,previous,target,display,true,(phase,percent)=>post(()=>window.SetBusy(phase,percent)));result=0;post(()=>window.SetFinished(true,""));Success(cleaned);}
+      try{bool cleaned=Install(local,previous,target,display,true,(phase,percent)=>post(()=>window.SetBusy(phase,percent)));result=0;post(()=>window.SetFinished(true,cleaned?"":"Der bisherige Programmordner konnte nicht sicher bereinigt werden."));Success(cleaned);}
       catch(Exception error){result=1;post(()=>window.SetFinished(false,Failure(error)));ReportFailure(error);}
      });
     };

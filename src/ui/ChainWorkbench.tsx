@@ -212,7 +212,8 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     const held=physicalKey?stockPool.ccus.find(c=>c.key===physicalKey):undefined,locked=!!held&&excluded.has(held.key);
     const token='card:'+step.key,highlight=dropTarget?.token===token?candidate(step.boardIndex??at(index),step.boardIndex!==undefined).status:null;
     const lockedCost=locked?paidFor({...step,kind:'owned',ccu:held}):null;
-    const warbond=purchase&&priceFor(step).kind==='warbond';
+    const warbond=purchase?priceFor(step).kind==='warbond':(held??step.ccu)?.warbond===true;
+    const edition=warbond?'Warbond-CCU':purchase?'Standard-CCU':'CCU';
     const unpaid=additionalCost(step,display,current,priceFor);
     const paid=step.kind==='owned'?paidFor(step):null;
     const saving=locked?null:advantageFor(step,paid??unpaid,warbond);
@@ -220,7 +221,7 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     return <article key={step.key+':'+index} className={'ccu-step '+(locked?'owned is-locked':step.kind)+(step.validity==='invalid'&&!locked?' invalid':'')+(snapped===step.key?' snapped':'')+(highlight?' drop-'+highlight:'')} draggable={editing&&!missing&&!locked}
       data-resource-key={physicalKey} data-anchor-index={step.boardIndex} data-step-index={index} data-drop-fit={highlight} onDragStart={event=>start(event,step,step.boardIndex)} onDragEnd={endDrag}
       onDragOver={event=>over(event,step.boardIndex??at(index),step.boardIndex!==undefined,token)} onDragLeave={event=>leave(event,token)} onDrop={event=>drop(event,step.boardIndex??at(index),step.boardIndex!==undefined)}>
-      <div className="ccu-kind"><span>{t(locked?(held?.warbond?'Warbond-CCU':'CCU'):missing?'Nicht mehr im Bestand':purchase?(warbond?'Warbond-CCU':'Standard-CCU'):step.ccu?.warbond?'Warbond-CCU':'CCU')}</span>
+      <div className="ccu-kind"><span className={warbond?'ccu-warbond-tag':undefined}>{t(missing&&!locked?'Nicht mehr im Bestand':edition)}</span>
         {purchase?<button className="ccu-ownership" disabled={opening} aria-label={t('RSI-Upgrades öffnen')+': '+step.from.name+' → '+step.to.name} onClick={()=>void openShop()}>{t('Noch kaufen')}</button>:<span className="ccu-ownership">{t(locked?'Gesperrt':missing?'Prüfen':'Im Bestand')}{dateBadge((held??step.ccu)?.pledgeId)}</span>}</div>
       <button className="ccu-step-details" aria-label={t('CCU-Details')+': '+step.from.name+' → '+step.to.name} aria-describedby={savingId} aria-expanded={detail===step.key} onClick={()=>setDetail(detail===step.key?null:step.key)}>
         {routeInfo(step,saving,savingId)}

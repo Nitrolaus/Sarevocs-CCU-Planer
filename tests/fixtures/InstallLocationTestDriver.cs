@@ -4,7 +4,9 @@ public static class InstallLocationTestDriver {
  static void Refuses(string value,string local){bool refused=false;try{InstallLocation.Validate(value,local);}catch{refused=true;}Check(refused,"ACCEPTED_UNSAFE_PATH: "+value);}
  [STAThread]public static int Main(string[] args){try{
   string area=Path.GetFullPath(args[0]),local=Path.Combine(area,"Local"),target=Path.Combine(area,"Meine Programme","Planer Test");Directory.CreateDirectory(local);
-  Check(InstallLocation.InitialRoot(null)==""&&InstallLocation.InitialRoot("")=="","FRESH_PATH_MUST_BE_EMPTY");Check(InstallLocation.InitialRoot(target)==target,"UPDATE_USES_ONLY_REGISTERED_PATH");
+  string safeDefault=Path.Combine(local,"Programs","CCU_Planer");
+  Check(InstallLocation.InitialRoot(null,local)==safeDefault&&InstallLocation.InitialRoot("",local)==safeDefault,"PRIVATE_DEFAULT_PATH");
+  Check(InstallLocation.InitialRoot(target,local)==target,"UPDATE_USES_REGISTERED_PATH");
   Check(InstallLocation.Validate(target,local)==target,"CUSTOM_PATH_WITH_SPACES");Check(!Directory.Exists(target),"VALIDATION_CREATED_FOLDER");
   foreach(string bad in new[]{@"C:\",@"\\server\share\Planer","relative\\Planer",Path.Combine(local,"SarevocsCCUPlaner-Daten"),Path.Combine(local,"SarevocsCCUPlaner-Daten","Anmeldung"),local,Path.Combine(local,"SarevocsCCUPlaner"),Environment.GetFolderPath(Environment.SpecialFolder.Windows),target+".",target+" ",target+"\nmore",target+":stream"})Refuses(bad,local);
   string foreign=Path.Combine(area,"foreign");Directory.CreateDirectory(foreign);File.WriteAllText(Path.Combine(foreign,"keep.txt"),"SYNTHETIC_KEEP");Refuses(foreign,local);Check(File.ReadAllText(Path.Combine(foreign,"keep.txt"))=="SYNTHETIC_KEEP","FOREIGN_CHANGED");

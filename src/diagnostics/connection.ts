@@ -9,6 +9,10 @@ export const HANGAR_OBSERVATIONS = ['consent', 'list-missing', 'pledge-fields', 
   'reading-pages', 'preview-ready', 'page-read-failed', 'duplicate-page',
   'purchase-orders-only', 'purchase-matched', 'purchase-no-match', 'purchase-log-unavailable', 'purchase-orders-unavailable', 'purchase-auth-changed',
   'buyback-read', 'buyback-page-unreadable', 'buyback-duplicate-entry', 'buyback-limit-reached', 'buyback-size-limit'] as const;
+export const HANGAR_PAGE_FAILURES = ['request-failed', 'request-timeout', 'http-error', 'unexpected-response',
+  'response-too-large', 'list-missing', 'pledge-fields', 'invalid-data', 'account-changed', 'duplicate-page',
+  'pagination-conflict', 'size-limit', 'page-limit'] as const;
+export type HangarPageFailure = typeof HANGAR_PAGE_FAILURES[number];
 const targets = ['login', 'hangar', 'account', 'rsi-other', 'rsi-service', 'external', 'local', 'invalid'] as const;
 const resources = ['mainFrame', 'subFrame', 'xhr', 'script', 'other'] as const;
 const reasons = ['insecure-transport', 'protected-operation', 'read-only', 'navigation-policy'] as const;
@@ -27,6 +31,7 @@ export type ConnectionEvent = {
   event: typeof events[number]; target: typeof targets[number]; resource: typeof resources[number];
   code?: number; networkError?: NetworkError; httpStatus?: number; reason?: typeof reasons[number]; blockDetail?: OperationBlockDetail;
   observation?: typeof HANGAR_OBSERVATIONS[number];
+  hangarPage?: number; hangarFailure?: HangarPageFailure;
 };
 type StoredEvent = ConnectionEvent & { at: string; appVersion?: string };
 export interface DiagnosticSink { record(event: ConnectionEvent): boolean }
@@ -84,6 +89,11 @@ function allowedEvent(value: unknown): ConnectionEvent | null {
   if (event === 'request-blocked' && (reason === 'protected-operation' || reason === 'read-only') && blockDetail) clean.blockDetail = blockDetail;
   const observation = HANGAR_OBSERVATIONS.find(x => x === v.observation);
   if (event === 'hangar-observation' && observation) clean.observation = observation;
+  if (clean.observation === 'page-read-failed') {
+    if (typeof v.hangarPage === 'number' && Number.isInteger(v.hangarPage) && v.hangarPage >= 1 && v.hangarPage <= 5000) clean.hangarPage = v.hangarPage;
+    const failure = HANGAR_PAGE_FAILURES.find(x => x === v.hangarFailure);
+    if (failure) clean.hangarFailure = failure;
+  }
   return clean;
 }
 export function diagnosticLabel(event: ConnectionEvent): string {

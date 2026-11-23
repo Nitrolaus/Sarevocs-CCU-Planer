@@ -79,10 +79,31 @@
 }
 
 .purchase .ccu-price-advantage {
-  border-color: color-mix(in srgb, var(--ccu-buy) 30%, transparent);
-  background: color-mix(in srgb, var(--ccu-buy) 9%, transparent);
-  color: #ffdbad;
+  border-color: #3caaa0;
+  background: #192d2b;
+  color: var(--ccu-owned);
+  text-shadow: 0 0 8px #00f0db55;
 }
 
+.ccu-warbond-tag {
+  color: #b8eee5;
+  font-weight: 700;
+  background: #15474a;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px #477d7c;
+  padding-inline: 4px;
+}
+
+.purchase .ccu-warbond-tag {
+  color: var(--ccu-owned);
+  background: #192d2b;
+  box-shadow: 0 0 0 1px #3caaa0;
+  text-shadow: 0 0 8px #00f0db55;
+}
+
+.ccu-workbench .ccu-model > strong,
+.ccu-step-price > strong,
+.ccu-price-advantage > strong { font-weight: 600; }
+.ccu-step-price { font-weight: 500; }
 .ccu-price-advantage strong { font-size: 13px; font-variant-numeric: tabular-nums; }
 .ccu-stock-tile .has-advantage .ccu-model { grid-template-columns: minmax(0, 1fr); gap: 0; }

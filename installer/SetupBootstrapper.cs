@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+#if !CAB_PAYLOAD
 using System.Management;
+#endif
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
@@ -11,7 +13,9 @@ using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+#if !CAB_PAYLOAD
 using System.Threading.Tasks;
+#endif
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
 
@@ -40,7 +44,13 @@ public sealed class PayloadLease : IDisposable
 
 public static class SetupBootstrapperCore
 {
+#if CAB_PAYLOAD
+    public const string PayloadResourceName = "SarevocsCCUPlaner.Cabinet";
+    private const string PayloadFileName = "program-files.cab";
+#else
     public const string PayloadResourceName = "SarevocsCCUPlaner.InnerSetup";
+    private const string PayloadFileName = "SquirrelSetup.exe";
+#endif
     public const string ExecutableName = "Sarevocs-CCU-Planer.exe";
     public const string ApplicationTitle = "Sarevoc\u00b4s CCU Planer";
     private const int CloseTimeoutMilliseconds = 45000;
@@ -67,8 +77,10 @@ public static class SetupBootstrapperCore
     }
     private sealed class Blocker : IOException
     { public readonly string Code; public Blocker(string code) : base(code) { Code = code; } }
+#if !CAB_PAYLOAD
     private sealed class RmRequest
     { public volatile bool Cancelled; public volatile bool HasSession; public uint Session; public readonly object Sync = new object(); }
+#endif
 
     public static string InstallLockPath(string root) { return CanonicalRoot(root) + ".install.lock"; }
 
@@ -135,7 +147,9 @@ public static class SetupBootstrapperCore
                 if (fresh.Count == 0 && AllExited(targets)) { result.Code = "SUCCESS"; return result; }
                 if (fresh.Count > 0)
                 {
+#if !CAB_PAYLOAD
                     result.RestartManagerCode = RequestRestartManager(fresh, targets, elapsed);
+#endif
                     RequestOwnWindows(fresh, elapsed);
                 }
                 while (!AllExited(targets) && elapsed.ElapsedMilliseconds < CloseTimeoutMilliseconds) Thread.Sleep(50);
@@ -182,10 +196,14 @@ public static class SetupBootstrapperCore
                             if (identity.User == null || identity.User.Value != sid) { if (!Alive(handle)) continue; throw new Blocker("BLOCKED_OWNER_OR_SESSION"); }
                         NativeFileTime created, exit, kernel, user;
                         if (!GetProcessTimes(handle, out created, out exit, out kernel, out user)) throw new IOException("PROCESS_START_UNREADABLE");
+                        bool main = false;
+#if !CAB_PAYLOAD
                         bool child;
                         try { child = HasTypeArgument((uint)process.Id); } catch { if (!Alive(handle)) continue; throw; }
+                        main = !child;
+#endif
                         if (!Alive(handle)) continue;
-                        found.Add(new Target { Id = (uint)process.Id, Handle = handle, Start = created, Main = !child, LegacyClose = IsLegacy(relative, image.ToString()) });
+                        found.Add(new Target { Id = (uint)process.Id, Handle = handle, Start = created, Main = main, LegacyClose = IsLegacy(relative, image.ToString()) });
                         keep = true;
                     }
                     finally { if (!keep) handle.Dispose(); }
@@ -241,6 +259,7 @@ public static class SetupBootstrapperCore
         catch { return false; }
     }
 
+#if !CAB_PAYLOAD
     private static bool HasTypeArgument(uint id)
     {
         // Only the boolean switch classification survives. Never retain or log command lines.
@@ -315,11 +334,18 @@ public static class SetupBootstrapperCore
         }
         finally { lock (request.Sync) { request.HasSession = false; RmEndSession(session); } }
     }
+#endif
 
     private static void RequestOwnWindows(List<Target> targets, Stopwatch elapsed)
     {
         var byId = new Dictionary<uint, Target>();
-        foreach (Target target in targets) if (target.Main && Alive(target.Handle)) byId[target.Id] = target;
+        foreach (Target target in targets)
+        {
+#if !CAB_PAYLOAD
+            if (!target.Main) continue;
+#endif
+            if (Alive(target.Handle)) byId[target.Id] = target;
+        }
         EnumWindows(delegate(IntPtr window, IntPtr unused)
         {
             if (elapsed.ElapsedMilliseconds >= CloseTimeoutMilliseconds) return false;
@@ -328,6 +354,11 @@ public static class SetupBootstrapperCore
             if (!byId.TryGetValue(id, out target) || !Alive(target.Handle)) return true;
             var title = new StringBuilder(256); GetWindowText(window, title, title.Capacity);
             if (!String.Equals(title.ToString(), ApplicationTitle, StringComparison.Ordinal)) return true;
+            uint currentOwner;
+            GetWindowThreadProcessId(window, out currentOwner);
+            if (currentOwner != id || !Alive(target.Handle)) return true;
+            // All processes in the verified tree must exit, including ones without windows.
+            target.Main = true;
             IntPtr result;
             uint remaining = (uint)Math.Max(1, CloseTimeoutMilliseconds - elapsed.ElapsedMilliseconds);
             SendMessageTimeout(window, 0x0011, IntPtr.Zero, new IntPtr(1), 0x0003, Math.Min(2000u, remaining), out result);
@@ -359,7 +390,7 @@ public static class SetupBootstrapperCore
         SafeFileHandle directoryHandle = CreatePayloadDirectory(directory);
         try
         {
-            PayloadLease lease = ExtractPayloadFile(System.IO.Path.Combine(directory, "SquirrelSetup.exe"), directoryHandle);
+            PayloadLease lease = ExtractPayloadFile(System.IO.Path.Combine(directory, PayloadFileName), directoryHandle);
             directoryHandle = null;
             return lease;
         }
@@ -429,6 +460,55 @@ public static class SetupBootstrapperCore
         if (full.Length < 4 || full.StartsWith(@"\\", StringComparison.Ordinal)) throw new IOException("INVALID_ROOT");
         return full;
     }
+
+    private static SafeFileHandle OpenDirectory(string directory)
+    {
+        SafeFileHandle handle = CreateFile(directory, 0x80, 7, IntPtr.Zero, 3, 0x02000000 | 0x00200000, IntPtr.Zero);
+        ByHandleFileInformation info;
+        if (!handle.IsInvalid && GetFileInformationByHandle(handle, out info) &&
+            (info.Attributes & (ReparsePoint | 0x10)) == 0x10) return handle;
+        handle.Dispose();
+        throw new IOException("DIRECTORY_IDENTITY_UNAVAILABLE");
+    }
+
+    internal static string PhysicalDirectoryPath(string path)
+    {
+        path = AbsolutePath(path);
+        RejectReparseParents(path);
+        var missing = new Stack<string>();
+        string current = path;
+        while (!Directory.Exists(current))
+        {
+            if (File.Exists(current) || System.IO.Path.GetDirectoryName(current) == null)
+                throw new IOException("DIRECTORY_IDENTITY_UNAVAILABLE");
+            missing.Push(System.IO.Path.GetFileName(current));
+            current = System.IO.Path.GetDirectoryName(current);
+        }
+        using (SafeFileHandle handle = OpenDirectory(current))
+        {
+            var name = new StringBuilder(32768);
+            uint length = GetFinalPathNameByHandle(handle, name, (uint)name.Capacity, 0);
+            string physical = name.ToString();
+            if (length == 0 || length >= name.Capacity ||
+                !Regex.IsMatch(physical, @"^\\\\\?\\[A-Za-z]:\\"))
+                throw new IOException("DIRECTORY_IDENTITY_UNAVAILABLE");
+            physical = physical.Substring(4);
+            foreach (string part in missing) physical = System.IO.Path.Combine(physical, part);
+            return AbsolutePath(physical);
+        }
+    }
+
+    internal static bool SameDirectory(string first, string second)
+    {
+        using (SafeFileHandle a = OpenDirectory(first))
+        using (SafeFileHandle b = OpenDirectory(second))
+        {
+            ByHandleFileInformation x, y;
+            if (!GetFileInformationByHandle(a, out x) || !GetFileInformationByHandle(b, out y))
+                throw new IOException("DIRECTORY_IDENTITY_UNAVAILABLE");
+            return x.Volume == y.Volume && x.IndexHigh == y.IndexHigh && x.IndexLow == y.IndexLow;
+        }
+    }
     private static string AbsolutePath(string path)
     {
         if (String.IsNullOrWhiteSpace(path) || !Regex.IsMatch(path, @"^[A-Za-z]:[\\/]")) throw new IOException("ABSOLUTE_LOCAL_PATH_REQUIRED");
@@ -457,6 +537,7 @@ public static class SetupBootstrapperCore
     }
 
     [StructLayout(LayoutKind.Sequential)] private struct NativeFileTime { public uint Low; public uint High; }
+#if !CAB_PAYLOAD
     [StructLayout(LayoutKind.Sequential)] private struct RmUniqueProcess { public uint Id; public NativeFileTime Start; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct RmProcessInfo
     {
@@ -466,6 +547,7 @@ public static class SetupBootstrapperCore
         public uint Type; public uint Status; public uint Session;
         [MarshalAs(UnmanagedType.Bool)] public bool Restartable;
     }
+#endif
     [StructLayout(LayoutKind.Sequential)] private struct SecurityAttributes { public int Length; public IntPtr Descriptor; [MarshalAs(UnmanagedType.Bool)] public bool Inherit; }
     [StructLayout(LayoutKind.Sequential)] private struct ByHandleFileInformation
     { public uint Attributes; public NativeFileTime Creation, Access, Write; public uint Volume, SizeHigh, SizeLow, NumberOfLinks, IndexHigh, IndexLow; }
@@ -481,19 +563,24 @@ public static class SetupBootstrapperCore
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr window, StringBuilder text, int count);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+#if !CAB_PAYLOAD
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr CommandLineToArgv(string command, out int count);
+#endif
     [DllImport("kernel32.dll")] private static extern IntPtr LocalFree(IntPtr memory);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern uint GetFileAttributes(string path);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern SafeFileHandle CreateFile(string path, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GetFileInformationByHandle(SafeFileHandle file, out ByHandleFileInformation info);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern uint GetFinalPathNameByHandle(SafeFileHandle file, StringBuilder path, uint size, uint flags);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool CreateDirectory(string path, ref SecurityAttributes security);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(string descriptor, uint revision, out IntPtr security, out uint size);
+#if !CAB_PAYLOAD
     [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)] private static extern int RmStartSession(out uint session, uint flags, StringBuilder key);
     [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)] private static extern int RmRegisterResources(uint session, uint files, string[] names, uint applications, RmUniqueProcess[] processes, uint services, string[] serviceNames);
     [DllImport("rstrtmgr.dll")] private static extern int RmShutdown(uint session, uint flags, IntPtr callback);
     [DllImport("rstrtmgr.dll")] private static extern int RmEndSession(uint session);
     [DllImport("rstrtmgr.dll")] private static extern int RmCancelCurrentTask(uint session);
     [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)] private static extern int RmGetList(uint session, out uint needed, ref uint count, [In, Out] RmProcessInfo[] processes, out uint rebootReasons);
+#endif
 }
 
 public static class SetupBootstrapper

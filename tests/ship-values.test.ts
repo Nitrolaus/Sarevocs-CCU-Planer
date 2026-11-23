@@ -11,3 +11,13 @@ test('stale, future, zero and variant mismatches cannot invent nominal values',(
 test('legacy Hercules mapping requires both exact RSI ID and exact variant; broad fuzzy aliases stay unresolved',()=>{const catalogue=[ship(),ship(163,'M2 Hercules'),ship(164,'A2 Hercules'),ship(140,'600i Touring')];for(const [name,id]of [['Hercules Starlifter C2',162],['M2 Hercules Starlifter',163],['Hercules Starlifter A2',164]] as const)assert.equal(catalogueIdentity(name,catalogue)?.id,id);for(const name of ['600i Touring Module','Hercules','C2','Hercules Starlifter C2 extra'])assert.equal(catalogueIdentity(name,catalogue),undefined);assert.equal(catalogueIdentity('Hercules Starlifter C2',[ship(163)]),undefined);assert.equal(catalogueIdentity('C2 Hercules',[ship(),ship()]),undefined);});
 test('public values cache survives restart independently; failed reads preserve previous values and legacy cache schema',async()=>{const dir=path.resolve('work/temp/ship-values-tests',randomUUID());fs.mkdirSync(dir,{recursive:true});let fail=false;const service=new MarketService(dir,async source=>{if(source!=='shipValues'||fail)throw Error('SYNTHETIC');return raw();});try{await service.refresh();const first=service.snapshot().values;assert.ok(first);assert.equal(service.snapshot().valuesError,null);assert.equal(fs.existsSync(path.join(dir,'public-v1.json')),false);fail=true;await service.refresh();assert.deepEqual(service.snapshot().values,first);assert.ok(service.snapshot().valuesError);const restored=new MarketService(dir,async()=>null);assert.deepEqual(restored.snapshot().values,first);restored.close();}finally{service.close();}});
 test('ROC DS maps only to the exact ROC-DS variant and RSI ID, never to ROC',()=>{assert.equal(catalogueIdentity('ROC DS',[ship(219,'ROC-DS'),ship(214,'ROC')])?.id,219);assert.equal(catalogueIdentity('ROC DS',[ship(214,'ROC')]),undefined);assert.equal(catalogueIdentity('ROC DS',[ship(214,'ROC-DS')]),undefined);assert.equal(catalogueIdentity('ROC DS',[ship(219,'ROC-DS'),ship(219,'ROC-DS')]),undefined);});
+
+test('RSI Hangar names match the verified 350r and Nova IDs without matching other variants', () => {
+  const catalogue = [ship(10, '350r'), ship(154, 'Nova'), ship(9, '325a')];
+  assert.equal(catalogueIdentity('350r Racer', catalogue)?.id, 10);
+  assert.equal(catalogueIdentity('Nova Tank', catalogue)?.id, 154);
+  assert.equal(catalogueIdentity('350r Racer', [ship(9, '350r')]), undefined);
+  assert.equal(catalogueIdentity('Nova Tank', [ship(155, 'Nova')]), undefined);
+  assert.equal(catalogueIdentity('Nova Tank Edition', catalogue), undefined);
+  assert.equal(catalogueIdentity('350r Racer', [...catalogue, ship(10, '350r')]), undefined);
+});

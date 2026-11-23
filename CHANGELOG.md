@@ -1,5 +1,12 @@
 # Änderungen
 
+## 0.3.110 · Alpha
+
+- Der Kettenplaner erkennt „Nova Tank“ und „350r Racer“ als die passenden RSI-Modelle. Vorhandene CCUs schließen nach der Bestandsaktualisierung die entsprechenden Lücken.
+- Türkise Akzente machen Warbond-Rabatte auf Kaufkarten sichtbar. Bestandskarten kennzeichnen Warbonds in einem ruhigeren Türkiston.
+- Schiffsnamen und Preise auf den CCU-Karten sind weniger fett. Aufklappfelder geben Pfeil und Text mehr Platz.
+- Der CAB-Installer prüft das Ziel und seine Elternordner. Er vergleicht Verzeichnis-IDs vor dem Aufräumen und behält die Rücksicherung bis zum Abschluss.
+
 ## 0.3.103 · Alpha
 
 - Die Bestandssuche hebt beim Fokussieren das gesamte Suchfeld mit einem einzigen Rahmen hervor. Automatische Eingabevorschläge sind für das Feld deaktiviert.

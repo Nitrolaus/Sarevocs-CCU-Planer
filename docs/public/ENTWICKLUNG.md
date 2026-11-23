@@ -11,6 +11,17 @@ node scripts/verify-installer.mjs
 
 Installieren lädt die festgeschriebenen npm-Abhängigkeiten und die Electron-Laufzeit. Caches und temporäre Entwicklerdaten liegen unter `work` im Projekt. Es werden keine globalen npm-Pakete installiert. Der Installer-Build liegt zunächst unter `work/temp`. Die exakten Dateien stehen in `work/temp/bootstrapper-artifacts.json`.
 
+Für die CAB-Variante gilt der folgende Build- und Prüfablauf.
+
+```powershell
+npm run build
+node scripts/installer.mjs --cab-test
+$log = Get-Content -Raw work/temp/cab-bootstrapper-artifacts.json | ConvertFrom-Json
+node scripts/verify-cab-installer.mjs $log.setup work/temp/cab-bootstrapper-artifacts.json
+```
+
+Der Prüfer liest die Ressourcen der angegebenen EXE, prüft Variante und SHA-256 gegen das zugehörige Buildprotokoll und gleicht die CAB-Dateien mit dem eingebetteten Manifest ab. Er startet den Installer dabei nicht.
+
 Der Windows-Hello-Helfer wird beim App-Build aus `native/hello-consent.cpp` gebaut. Dafür werden Visual Studio C++ Build Tools für x64 mit C++20 und ein Windows-11-SDK mit C++/WinRT benötigt.
 
 `npm test` prüft Domänenlogik, Import, Versicherung, Ketten, Sicherheit und den täglichen Abruf mit synthetischen Daten. Die Zeitsteuerung wird ohne reale Wartezeiten einschließlich Sommerzeitwechsel, Standby-Nachholen und Beenden geprüft.

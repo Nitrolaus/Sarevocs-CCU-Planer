@@ -8,7 +8,9 @@ test('5000 pledges read sequentially through 501 pages, even beyond a simulated 
  const result=await readHangarPages({accountId,initial:page(1),restartAtFirst:false,assertActive:()=>{},sleep:async ms=>{elapsed+=ms;},loadPage:async n=>{inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);calls.push(n);await Promise.resolve();inFlight--;return n<=500?page((n-1)*10+1):page(1,0);},onProgress:p=>progress.push(p.pledgesRead)});
  assert.equal(result.candidate.document.pledges.length,5000);assert.equal(result.pagesRead,501);assert.equal(new Set(result.candidate.document.pledges.map(p=>p.pledgeId)).size,5000);assert.equal(maxInFlight,1);assert.ok(elapsed>60000);assert.equal(progress.at(-1),5000);assert.equal(result.candidate.completeness,'partial');assert.equal(result.candidate.document.scope.exportComplete,false);
 });
-test('170 pages continue beyond one minute and retry a slow page without reloading the preceding pages', async () => {
+test('240 pages with a full final page continue beyond one minute and only retry the slow page', async () => {
+  const lastPage = 240;
+  const slowPage = 183;
   let elapsed = 0, waits = 0;
   const requested: number[] = [];
   const result = await readHangarPages({
@@ -17,28 +19,50 @@ test('170 pages continue beyond one minute and retry a slow page without reloadi
     loadPage: async number => {
       elapsed += 550;
       requested.push(number);
-      if (number === 120 && requested.at(-2) !== 120) return { ok: false, retryable: true, retryAfterMs: 4000 };
-      return { ...page((number - 1) * 10 + 1, number === 170 ? 7 : 10), totalPages: 170 };
+      if (number === slowPage && requested.at(-2) !== slowPage) return { ok: false, retryable: true, retryAfterMs: 4000 };
+      return { ...page((number - 1) * 10 + 1), totalPages: lastPage, activePage: number,
+        navigation: number === lastPage ? 'last' : 'next' };
     },
     onProgress: progress => {
       if (progress.waiting) {
         waits++;
-        assert.equal(progress.page, 120);
-        assert.equal(progress.pagesRead, 119);
-        assert.equal(progress.pledgesRead, 1190);
-        assert.equal(progress.totalPages, 170);
+        assert.equal(progress.page, slowPage);
+        assert.equal(progress.pagesRead, slowPage - 1);
+        assert.equal(progress.pledgesRead, (slowPage - 1) * 10);
+        assert.equal(progress.totalPages, lastPage);
       }
     },
   });
   assert.ok(elapsed > 60_000);
   assert.equal(waits, 1);
-  assert.deepEqual(requested, Array.from({ length: 170 }, (_, index) => index + 1).flatMap(number => number === 120 ? [120, 120] : [number]));
-  assert.equal(result.pagesRead, 170);
-  assert.equal(result.candidate.document.pledges.length, 1697);
+  assert.deepEqual(requested, Array.from({ length: lastPage }, (_, index) => index + 1)
+    .flatMap(number => number === slowPage ? [number, number] : [number]));
+  assert.equal(result.pagesRead, lastPage);
+  assert.equal(result.candidate.document.pledges.length, lastPage * 10);
 });
 test('Only explicitly transient failures retry the same page with bounded backoff',async()=>{
  const calls:number[]=[],waits:number[]=[];let failures=0;const result=await readHangarPages({accountId,initial:page(1),restartAtFirst:false,assertActive:()=>{},sleep:async ms=>{waits.push(ms);},loadPage:async n=>{calls.push(n);if(n===2&&failures++<2)return {ok:false,retryable:true,retryAfterMs:500};return n===1?page(1):page(11,2);}});
  assert.deepEqual(calls,[1,2,2,2]);assert.equal(result.candidate.document.pledges.length,12);assert.equal(waits.reduce((a,b)=>a+b,0),4150);
+});
+test('A verified full final page ends the read without requesting a nonexistent page', async () => {
+  const requested: number[] = [];
+  const result = await readHangarPages({
+    accountId, initial: page(1), restartAtFirst: false, assertActive: () => {}, sleep: async () => {},
+    loadPage: async number => {
+      requested.push(number);
+      if (number === 29) return { ok: false, reason: 'unexpected-response' };
+      return { ...page((number - 1) * 10 + 1), navigation: number === 28 ? 'last' : 'next' };
+    },
+  });
+  assert.deepEqual(requested, Array.from({ length: 28 }, (_, index) => index + 1));
+  assert.equal(result.candidate.document.pledges.length, 280);
+  assert.equal(result.candidate.completeness, 'partial');
+});
+test('An empty page with a verified next link rejects the scan instead of saving partial data', async () => {
+  await assert.rejects(() => readHangarPages({
+    accountId, initial: page(1), restartAtFirst: false, assertActive: () => {}, sleep: async () => {},
+    loadPage: async number => ({ ...page((number - 1) * 10 + 1, number === 2 ? 0 : 10), navigation: 'next' }),
+  }), /Seitenfolge/);
 });
 test('Permanent errors stop immediately and exhausted transient errors do not return a partial candidate',async()=>{
  for(const retryable of [false,true]){let calls=0;await assert.rejects(()=>readHangarPages({accountId,initial:page(1),restartAtFirst:false,assertActive:()=>{},sleep:async()=>{},loadPage:async n=>{calls++;return n===1?page(1):{ok:false,retryable};}}),/nicht sicher gelesen/);assert.equal(calls,retryable?4:2);}

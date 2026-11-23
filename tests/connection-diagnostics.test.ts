@@ -116,6 +116,24 @@ test('Hangar observations accept fixed states only on their own event and discar
   for (const entry of entries.slice(known.length)) assert.equal(entry.observation, undefined);
 });
 
+test('Failed hangar page diagnostics retain only bounded page numbers and fixed reasons', () => {
+  const log = logger('hangar-page-failures');
+  const observation: ConnectionEvent = { event: 'hangar-observation', target: 'hangar', resource: 'xhr',
+    observation: 'page-read-failed', hangarPage: 28, hangarFailure: 'http-error', httpStatus: 503 };
+  assert.equal(log.record({ ...observation, response: canary } as ConnectionEvent), true);
+  assert.equal(log.record({ ...observation, hangarPage: 5001, hangarFailure: canary as never }), true);
+  assert.equal(log.record({ ...observation, observation: 'reading-pages' }), true);
+  const bytes = fs.readFileSync(log.file, 'utf8'), [valid, ...invalid] = JSON.parse(bytes).events;
+  assert.equal(bytes.includes(canary), false);
+  assert.equal(valid.hangarPage, 28);
+  assert.equal(valid.hangarFailure, 'http-error');
+  assert.equal(valid.httpStatus, 503);
+  for (const entry of invalid) {
+    assert.equal(entry.hangarPage, undefined);
+    assert.equal(entry.hangarFailure, undefined);
+  }
+});
+
 test('Per-event versions survive restart; legacy history is never relabelled as the new version', () => {
   const log = logger('event-versions'); fs.mkdirSync(path.dirname(log.file), { recursive: true });
   const at = '2026-11-14T12:00:00.000Z';
