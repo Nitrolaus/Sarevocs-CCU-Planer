@@ -4,10 +4,11 @@ using System.Security.Principal;
 public static class InstallLocationTestDriver {
  static void Check(bool value,string code){if(!value)throw new Exception(code);}
  static void CheckReadOnlyLocation(string directory,string target,string local,FileSystemRights denied){
-  var original=Directory.GetAccessControl(directory);
   var acl=Directory.GetAccessControl(directory);
+  FileSystemAccessRule block;
   using(var account=WindowsIdentity.GetCurrent())
-   acl.AddAccessRule(new FileSystemAccessRule(account.User,denied,AccessControlType.Deny));
+   block=new FileSystemAccessRule(account.User,denied,AccessControlType.Deny);
+  acl.AddAccessRule(block);
   Directory.SetAccessControl(directory,acl);
   try{
    Check(InstallLocation.Validate(target,local)==target,"PRIVATE_FOLDER_IS_STRUCTURALLY_SAFE");
@@ -15,7 +16,11 @@ public static class InstallLocationTestDriver {
    try{InstallLocation.ValidateForInstall(target,local);}
    catch(IOException error){blocked=error.Message==InstallLocation.TargetNotWritable;}
    Check(blocked,"READ_ONLY_INSTALL_LOCATION_MUST_BE_REJECTED");
-  }finally{Directory.SetAccessControl(directory,original);}
+  }finally{
+   var cleanup=Directory.GetAccessControl(directory);
+   cleanup.RemoveAccessRuleSpecific(block);
+   Directory.SetAccessControl(directory,cleanup);
+  }
  }
  static void Refuses(string value,string local){bool refused=false;try{InstallLocation.Validate(value,local);}catch{refused=true;}Check(refused,"ACCEPTED_UNSAFE_PATH: "+value);}
  [STAThread]public static int Main(string[] args){try{
