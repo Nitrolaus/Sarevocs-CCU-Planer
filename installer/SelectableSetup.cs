@@ -222,8 +222,17 @@ public static class SelectableSetup {
   }
  }
  static void Success(bool cleaned){Console.WriteLine("{\"code\":\"SUCCESS\",\"installedVersion\":\""+EmbeddedPayload.Version+"\",\"cleanupComplete\":"+(cleaned?"true":"false")+",\"newRsiLogin\":false}");}
- static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Die gesicherten Dateien liegen neben dem Installationsordner.";if(error.Message==InstallLocation.UnsafePermissions)return "Andere Windows-Konten können diesen Programmordner oder einen übergeordneten Ordner ändern. Bitte einen privaten Ordner wählen.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":"Bitte Programmordner und Schreibrechte prüfen und erneut versuchen.";}
- static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"||error.Message=="PAYLOAD_HASH_MISMATCH"||error.Message==InstallLocation.UnsafePermissions?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
+ static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Die gesicherten Dateien liegen neben dem Installationsordner.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":FolderFailure(error);}
+ static string FolderFailure(Exception error){
+  switch(error.Message){
+   case InstallLocation.FolderRequired:return "Bitte wähle den Programmordner.";
+   case InstallLocation.UnsafePermissions:return "Die Rechte am Programmordner oder einem übergeordneten Ordner sind unsicher oder nicht prüfbar.";
+   case "DIRECTORY_NOT_EMPTY":return "Der Ordner enthält bereits andere Dateien. Wähle einen leeren Ordner oder die bestehende Planer-Installation.";
+   case "PROTECTED_DIRECTORY":return "Dieser Ordner ist für Windows oder Planer-Daten reserviert. Wähle einen separaten Programmordner.";
+   default:return "Bitte prüfe den Pfad und deine Schreibrechte für diesen Programmordner.";
+  }
+ }
+ static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"||error.Message=="PAYLOAD_HASH_MISMATCH"||error.Message==InstallLocation.UnsafePermissions||error.Message==InstallLocation.FolderRequired?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
  [STAThread]public static int Main(string[] args){
   if(args.Length==1&&args[0].StartsWith("--extract-payload=",StringComparison.Ordinal))return SetupBootstrapper.Main(args);
   bool silent=args.Length==1&&args[0]=="--silent";if(args.Length>0&&!silent)return 1;
@@ -236,13 +245,20 @@ public static class SelectableSetup {
    security.AddAccessRule(new System.Security.AccessControl.MutexAccessRule(new System.Security.Principal.SecurityIdentifier(sid),System.Security.AccessControl.MutexRights.FullControl,System.Security.AccessControl.AccessControlType.Allow));
    security.AddAccessRule(new System.Security.AccessControl.MutexAccessRule(new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid,null),System.Security.AccessControl.MutexRights.FullControl,System.Security.AccessControl.AccessControlType.Allow));
    bool created;mutex=new Mutex(false,@"Local\SarevocsCCUPlaner.Install."+sid,out created,security);try{owns=mutex.WaitOne(0);}catch(AbandonedMutexException){owns=true;}if(!owns)throw new IOException("INSTALLER_ALREADY_RUNNING");
-   string previous=InstallLocation.RegisteredRoot(),initial=InstallLocation.DefaultRoot(local),installed=InstallLocation.InstalledVersion(local,previous);
+   string previous=InstallLocation.ExistingRoot(local),initial=InstallLocation.InitialRoot(previous),installed=InstallLocation.InstalledVersion(previous);
    if(silent){string target=InstallLocation.Validate(initial,local);Success(Install(local,previous,target,DisplaySetup.Prepare(local,true),true,(s,p)=>{}));return 0;}
    int result=0;
    using(var window=new SetupWindow(initial,installed,EmbeddedPayload.Version)){
+    if(initial.Length!=0){
+     try{InstallLocation.Validate(initial,local);}
+     catch(IOException error){window.ShowPathError(FolderFailure(error));}
+     catch(UnauthorizedAccessException error){window.ShowPathError(FolderFailure(error));}
+     catch(System.Security.SecurityException error){window.ShowPathError(FolderFailure(error));}
+     catch(ArgumentException error){window.ShowPathError(FolderFailure(error));}
+    }
     window.InstallRequested+=delegate{
      if(!window.AcceptTerms.Checked)return;
-     string target;try{target=InstallLocation.Validate(window.Folder.Text,local);}catch(Exception error){window.ShowPathError(error.Message==InstallLocation.UnsafePermissions?Failure(error):null);return;}
+     string target;try{target=InstallLocation.Validate(window.Folder.Text,local);}catch(Exception error){window.ShowPathError(FolderFailure(error));return;}
      DisplaySetup display=DisplaySetup.Prepare(local,false);if(display.Cancelled)return;
      window.SetBusy("Installation vorbereiten …",-1);
      Action<Action> post=action=>{if(!window.IsDisposed)try{window.BeginInvoke(action);}catch(InvalidOperationException){}};

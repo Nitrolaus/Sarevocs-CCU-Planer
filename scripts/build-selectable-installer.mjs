@@ -33,7 +33,7 @@ File "/oname=${esc(path.posix.basename(file))}" "${esc(path.join(application,fil
 IfErrors installFailed
 Push "${completedBytes}"
 Call ReportProgress`;}).join('\n');
-const uninstallFiles=[...files,'SetupGuard.exe','install-files.json','install-product.txt','Uninstall.exe'];
+const uninstallFiles=[...files,'install-files.json'];
 const dirs=[...new Set(files.map(f=>path.posix.dirname(f)).filter(f=>f!=='.').flatMap(f=>{let a=[];while(f!=='.'){a.push(f);f=path.posix.dirname(f);}return a;}))].sort((a,b)=>b.length-a.length);
 // NSIS macro names deliberately survive JavaScript interpolation.
 const If='${If}',EndIf='${EndIf}',IfNot='${IfNot}',GetParameters='${GetParameters}',GetOptions='${GetOptions}',Errors='${Errors}';
@@ -55,6 +55,8 @@ VIAddVersionKey /LANG=1031 "FileVersion" "${version}"
 InstallDir "$LOCALAPPDATA\\Programs\\Sarevocs-CCU-Planer"
 Var GuardStatus
 Var ProgressFile
+Var UninstallRoot
+Var UninstallFile
 UninstPage uninstConfirm
 UninstPage instfiles
 ${cabTest?`# The compiler exports the real uninstall program. This build-only executable is never run.
@@ -127,23 +129,59 @@ Function un.PrepareUninstall
   Abort
  okay:
 FunctionEnd
+Function un.ReportBlockedFile
+  IfSilent silentFailure
+  MessageBox MB_OK|MB_ICONSTOP "Die Programmdatei $UninstallFile konnte nicht entfernt werden. Schließe das Programm, das sie verwendet, und starte die Deinstallation erneut."
+ silentFailure:
+  SetErrorLevel 3
+  Quit
+FunctionEnd
+Function un.RemoveProductFile
+  Pop $UninstallFile
+  IfFileExists "$UninstallFile" 0 fileRemoved
+  ClearErrors
+  Delete "$UninstallFile"
+  IfErrors blockedFile
+  IfFileExists "$UninstallFile" blockedFile fileRemoved
+ blockedFile:
+  Call un.ReportBlockedFile
+ fileRemoved:
+FunctionEnd
 Section "Uninstall"
   SetShellVarContext current
   Call un.PrepareUninstall
-  ReadRegStr $0 HKCU "Software\\Sarevoc\\SarevocsCCUPlaner" "InstallLocation"
-  ${If} $0 == $INSTDIR
+  ReadRegStr $UninstallRoot HKCU "Software\\Sarevoc\\SarevocsCCUPlaner" "InstallLocation"
+  ${uninstallFiles.map(file=>`Push "$INSTDIR\\${esc(file)}"\n  Call un.RemoveProductFile`).join('\n  ')}
+  ${If} $UninstallRoot == $INSTDIR
     ExecWait '"$PLUGINSDIR\\SetupGuard.exe" --remove-shortcuts "$INSTDIR"' $0
     ${If} $0 != 0
       SetErrorLevel 2
       Abort
     ${EndIf}
     RMDir "$SMPROGRAMS\\Sarevoc"
+  ${EndIf}
+  Push "$INSTDIR\\SetupGuard.exe"
+  Call un.RemoveProductFile
+  Push "$INSTDIR\\install-product.txt"
+  Call un.RemoveProductFile
+  StrCpy $UninstallFile "$INSTDIR\\Uninstall.exe"
+  ClearErrors
+  Delete "$UninstallFile"
+  IfErrors restoreMarker
+  IfFileExists "$UninstallFile" restoreMarker
+  ${If} $UninstallRoot == $INSTDIR
     DeleteRegKey HKCU "Software\\Sarevoc\\SarevocsCCUPlaner"
     DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SarevocsCCUPlaner.Selectable"
   ${EndIf}
-  ${uninstallFiles.map(f=>`Delete "$INSTDIR\\${esc(f)}"`).join('\n  ')}
   ${dirs.map(d=>`RMDir "$INSTDIR\\${esc(d)}"`).join('\n  ')}
   RMDir "$INSTDIR"
+  Goto uninstallDone
+ restoreMarker:
+  SetOutPath "$INSTDIR"
+  SetOverwrite off
+  File "/oname=install-product.txt" "${esc(marker)}"
+  Call un.ReportBlockedFile
+ uninstallDone:
 SectionEnd
 `,'utf8');
 run(compiler,['/NOCONFIG','/V2',nsi]);

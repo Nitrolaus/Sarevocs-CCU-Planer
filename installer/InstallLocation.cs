@@ -7,31 +7,37 @@ public static class InstallLocation {
  [DllImport("dwmapi.dll")]static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int n);
  public static string RegisteredRoot(){using(var key=Registry.CurrentUser.OpenSubKey(Registration)){return key==null?null:key.GetValue("InstallLocation") as string;}}
  internal const string UnsafePermissions="UNSAFE_TARGET_PERMISSIONS";
- public static string InitialRoot(string registered,string local){return String.IsNullOrEmpty(registered)?Path.Combine(local,"Programs","CCU_Planer"):registered;}
- public static string DefaultRoot(string local){
-  string current=RegisteredRoot();
-  if(!String.IsNullOrEmpty(current)){
-   try{return Validate(current,local);}
-   catch(IOException){}
-   catch(UnauthorizedAccessException){}
-   catch(System.Security.SecurityException){}
-  }
-  return InitialRoot(null,local);
+ internal const string FolderRequired="INSTALLATION_FOLDER_REQUIRED";
+ public static string InitialRoot(string registered){return String.IsNullOrWhiteSpace(registered)?"":registered;}
+ internal static string ExistingRoot(string local){
+  string registered=RegisteredRoot();
+  if(!String.IsNullOrWhiteSpace(registered))return registered;
+  // The normal Windows uninstall entry also records the location of a selectable install.
+  // Only recover that location when it still contains the installed product.
+  string candidate;
+  using(var entry=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\SarevocsCCUPlaner.Selectable"))
+   candidate=entry==null?null:entry.GetValue("InstallLocation") as string;
+  string previous=FindPrevious(candidate,local);
+  return previous!=null&&File.Exists(Path.Combine(previous,"install-product.txt"))&&
+   File.Exists(Path.Combine(previous,SetupBootstrapperCore.ExecutableName))?previous:null;
  }
- public static string InstalledVersion(string local,string registered){
+ public static string InstalledVersion(string registered){
   string key=String.IsNullOrEmpty(registered)?@"Software\Microsoft\Windows\CurrentVersion\Uninstall\SarevocsCCUPlaner":@"Software\Microsoft\Windows\CurrentVersion\Uninstall\SarevocsCCUPlaner.Selectable";
   using(var entry=Registry.CurrentUser.OpenSubKey(key)){string value=entry==null?null:entry.GetValue("DisplayVersion") as string;Version version;if(Version.TryParse(value,out version)&&version.Build>=0)return new Version(version.Major,version.Minor,version.Build).ToString();}return null;
  }
  static bool Within(string value,string parent){return value.Equals(parent,StringComparison.OrdinalIgnoreCase)||value.StartsWith(parent+"\\",StringComparison.OrdinalIgnoreCase);}
- public static string Validate(string value,string local,bool staging=false){return ValidateLocation(value,local,staging,true);}
+ public static string Validate(string value,string local,bool staging=false){return ValidateLocation(value,local,staging,true,false);}
+ internal static string ValidateUninstall(string value,string local){return ValidateLocation(value,local,false,true,true);}
  internal static string FindPrevious(string value,string local){
   if(String.IsNullOrEmpty(value))return null;
-  try{return ValidateLocation(value,local,false,false);}
+  try{return ValidateLocation(value,local,false,false,false);}
   catch(IOException){return null;}
   catch(UnauthorizedAccessException){return null;}
   catch(System.Security.SecurityException){return null;}
+ catch(ArgumentException){return null;}
  }
- static string ValidateLocation(string value,string local,bool staging,bool checkPermissions){
+ static string ValidateLocation(string value,string local,bool staging,bool checkPermissions,bool uninstall){
+  if(String.IsNullOrWhiteSpace(value))throw new IOException(FolderRequired);
   if(value!=null)foreach(string part in value.Split('\\','/'))if(part.EndsWith(".")||part.EndsWith(" "))throw new IOException("INVALID_PATH");
   string root=SetupBootstrapperCore.CanonicalRoot(value);if(!staging&&root.Length>180)throw new IOException("PATH_TOO_LONG");
   foreach(char c in root)if(Char.IsControl(c)||c=='"'||c=='*'||c=='?'||c=='<'||c=='>'||c=='|')throw new IOException("INVALID_PATH");
@@ -44,7 +50,15 @@ public static class InstallLocation {
   if(Within(root,Environment.GetFolderPath(Environment.SpecialFolder.Windows))||Within(root,data)||Within(data,root)||Within(root,legacy)||Within(legacy,root))throw new IOException("PROTECTED_DIRECTORY");
   SetupBootstrapperCore.ValidateProgramTree(root);if(File.Exists(root))throw new IOException("TARGET_IS_FILE");
   if(staging&&(!Directory.Exists(root)||Directory.GetFileSystemEntries(root).Length!=0))throw new IOException("STAGING_NOT_EMPTY");
-  if(Directory.Exists(root)&&Directory.GetFileSystemEntries(root).Length!=0){string marker=Path.Combine(root,"install-product.txt");SetupBootstrapperCore.RejectReparseParents(marker);if(!File.Exists(marker)||new FileInfo(marker).Length>100||File.ReadAllText(marker).Trim()!=ProductMarker||(!File.Exists(Path.Combine(root,SetupBootstrapperCore.ExecutableName))&&!File.Exists(Path.Combine(root,"SetupGuard.exe"))))throw new IOException("DIRECTORY_NOT_EMPTY");}
+  if(Directory.Exists(root)&&Directory.GetFileSystemEntries(root).Length!=0){
+   string marker=Path.Combine(root,"install-product.txt");
+   SetupBootstrapperCore.RejectReparseParents(marker);
+   // After a partial removal, the retained uninstaller can retry with the same product marker.
+   bool productExecutable=File.Exists(Path.Combine(root,SetupBootstrapperCore.ExecutableName))||
+    File.Exists(Path.Combine(root,"SetupGuard.exe"))||(uninstall&&File.Exists(Path.Combine(root,"Uninstall.exe")));
+   if(!File.Exists(marker)||new FileInfo(marker).Length>100||File.ReadAllText(marker).Trim()!=ProductMarker||!productExecutable)
+    throw new IOException("DIRECTORY_NOT_EMPTY");
+  }
   if(checkPermissions)ValidateTargetAccess(root);
   return root;
  }

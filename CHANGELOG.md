@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.112 · Alpha
+
+Bei Updates bleibt der registrierte Programmordner sichtbar. Der Installer zeigt blockierende Rechte an der Ordnerwahl an. Bei einer Neuinstallation beginnt die Ordnerwahl leer.
+
+Der Sitzungsschutz setzt und prüft die Ordnerrechte über die Windows-API. Die Deinstallation kann nach einer unvollständigen Entfernung erneut ausgeführt werden.
+
 ## 0.3.110 · Alpha
 
 - Der Kettenplaner erkennt „Nova Tank“ und „350r Racer“ als die passenden RSI-Modelle. Vorhandene CCUs schließen nach der Bestandsaktualisierung die entsprechenden Lücken.

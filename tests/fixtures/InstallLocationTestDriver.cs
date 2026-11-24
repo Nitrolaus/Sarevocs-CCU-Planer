@@ -4,9 +4,9 @@ public static class InstallLocationTestDriver {
  static void Refuses(string value,string local){bool refused=false;try{InstallLocation.Validate(value,local);}catch{refused=true;}Check(refused,"ACCEPTED_UNSAFE_PATH: "+value);}
  [STAThread]public static int Main(string[] args){try{
   string area=Path.GetFullPath(args[0]),local=Path.Combine(area,"Local"),target=Path.Combine(area,"Meine Programme","Planer Test");Directory.CreateDirectory(local);
-  string safeDefault=Path.Combine(local,"Programs","CCU_Planer");
-  Check(InstallLocation.InitialRoot(null,local)==safeDefault&&InstallLocation.InitialRoot("",local)==safeDefault,"PRIVATE_DEFAULT_PATH");
-  Check(InstallLocation.InitialRoot(target,local)==target,"UPDATE_USES_REGISTERED_PATH");
+  Check(InstallLocation.InitialRoot(null)==""&&InstallLocation.InitialRoot("")=="","FRESH_FOLDER_REQUIRES_SELECTION");
+  Check(InstallLocation.InitialRoot(target)==target,"UPDATE_USES_REGISTERED_PATH");
+  Refuses("",local);
   Check(InstallLocation.Validate(target,local)==target,"CUSTOM_PATH_WITH_SPACES");Check(!Directory.Exists(target),"VALIDATION_CREATED_FOLDER");
   foreach(string bad in new[]{@"C:\",@"\\server\share\Planer","relative\\Planer",Path.Combine(local,"SarevocsCCUPlaner-Daten"),Path.Combine(local,"SarevocsCCUPlaner-Daten","Anmeldung"),local,Path.Combine(local,"SarevocsCCUPlaner"),Environment.GetFolderPath(Environment.SpecialFolder.Windows),target+".",target+" ",target+"\nmore",target+":stream"})Refuses(bad,local);
   string foreign=Path.Combine(area,"foreign");Directory.CreateDirectory(foreign);File.WriteAllText(Path.Combine(foreign,"keep.txt"),"SYNTHETIC_KEEP");Refuses(foreign,local);Check(File.ReadAllText(Path.Combine(foreign,"keep.txt"))=="SYNTHETIC_KEEP","FOREIGN_CHANGED");
@@ -43,6 +43,10 @@ public static class InstallLocationTestDriver {
   using(var window=new SetupWindow(target,"0.3.36","0.3.37")){
    window.Opacity=0;window.ShowInTaskbar=false;window.Shown+=delegate{
     Check(window.Hint.Text.Contains("0.3.36")&&window.Hint.Text.Contains("0.3.37"),"UPDATE_VERSION_HINT");
+    window.ShowPathError("Ordner prüfen");
+    Check(window.Folder.Text==target&&window.Note.Text=="Ordner prüfen"&&window.Hint.Text.Contains("0.3.36"),"PATH_ERROR_KEEPS_UPDATE_CONTEXT");
+    window.Folder.Text=target+" neu";
+    Check(!window.Note.Text.Contains("Ordner prüfen"),"PATH_ERROR_CLEARS_ON_EDIT");
     window.SetBusy("Programmdateien kopieren · 61 %",61);Application.DoEvents();Check(!window.Next.Enabled&&!window.CancelAction.Enabled,"BUSY_ACTIONS");
     var bar=window.Controls.Find("progress",true)[0];using(var picture=new Bitmap(bar.Width,bar.Height)){bar.DrawToBitmap(picture,new Rectangle(Point.Empty,picture.Size));int filled=0;for(int x=1;x<bar.Width-1;x++){var c=picture.GetPixel(x,bar.Height/2);if(c.R==132&&c.G==217&&c.B==197)filled++;}Check(filled>bar.Width*0.59&&filled<bar.Width*0.63,"REAL_BAR_FILL");}
     window.Close();Check(!window.IsDisposed,"BUSY_CLOSE_BLOCKED");window.SetFinished(true,"");Check(window.Next.Enabled&&window.Next.Text=="Schließen"&&window.Heading.Text=="Update abgeschlossen","DARK_COMPLETION");Check(window.BackColor.R<40,"DARK_COMPLETION_COLOR");window.Next.PerformClick();

@@ -68,6 +68,10 @@ for (const { file, size, sha256 } of manifest.values()) {
 }
 const asar = path.join(extracted, 'resources', 'app.asar');
 assert.equal(JSON.parse(extractFile(asar, 'package.json').toString()).version, log.version);
+const aclHelper = path.join(extracted, 'resources', 'app.asar.unpacked', 'build', 'session-acl.exe');
+assert.ok(manifest.has('resources/app.asar.unpacked/build/session-acl.exe'), 'Missing packaged session ACL helper');
+assert.equal(hash(aclHelper), hash('build/session-acl.exe'));
+assert.ok(extractFile(asar, 'build/main.cjs').includes(hash(aclHelper)), 'Session ACL helper digest missing from main app');
 const report = { status: 'PASS', kind: 'cab', version: log.version, setupSha256: log.setupSHA, cabinetSha256: log.innerSHA,
   verifiedFiles: manifest.size, installerExecuted: false };
 fs.writeFileSync(path.join(output, 'results.json'), JSON.stringify(report, null, 2));

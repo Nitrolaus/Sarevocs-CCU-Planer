@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export function buildWindowsHello() {
+export function buildWindowsHelpers() {
   const root = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
   const vswhere = path.join(root, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
   const studio = execFileSync(vswhere, ['-latest', '-products', '*', '-requires',
@@ -24,9 +24,13 @@ export function buildWindowsHello() {
   const includes = [path.join(vc, 'include'), ...['shared', 'ucrt', 'um', 'winrt', 'cppwinrt']
     .map(folder => path.join(kits, 'Include', sdkVersion, folder))];
   const libraries = [path.join(vc, 'lib', 'x64'), ...['um', 'ucrt'].map(folder => path.join(kits, 'Lib', sdkVersion, folder, 'x64'))];
-  execFileSync(path.join(vc, compilerPath), [
-    '/nologo', '/std:c++20', '/EHsc', '/O2', '/MT', '/Fe:build/hello-consent.exe', '/Fo:work/temp/hello-consent.obj',
-    ...includes.map(value => '/I' + value), 'native/hello-consent.cpp', 'runtimeobject.lib', 'user32.lib', 'ole32.lib', 'oleaut32.lib',
-    '/link', ...libraries.map(value => '/LIBPATH:' + value),
-  ], { stdio: 'inherit', windowsHide: true });
+  function compile(name, dependencies) {
+    execFileSync(path.join(vc, compilerPath), [
+      '/nologo', '/std:c++20', '/EHsc', '/O2', '/MT', '/Fe:build/' + name + '.exe', '/Fo:work/temp/' + name + '.obj',
+      ...includes.map(value => '/I' + value), 'native/' + name + '.cpp', ...dependencies,
+      '/link', ...libraries.map(value => '/LIBPATH:' + value),
+    ], { stdio: 'inherit', windowsHide: true });
+  }
+  compile('hello-consent', ['runtimeobject.lib', 'user32.lib', 'ole32.lib', 'oleaut32.lib']);
+  compile('session-acl', ['advapi32.lib']);
 }

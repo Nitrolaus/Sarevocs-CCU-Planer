@@ -1,5 +1,5 @@
 import fs from'node:fs';import path from'node:path';import assert from'node:assert/strict';import{randomUUID}from'node:crypto';import{spawnSync}from'node:child_process';
-const area=path.resolve('work/temp/install-location-tests',randomUUID());fs.mkdirSync(area,{recursive:true});
+const area=path.resolve('work/temp','il-'+randomUUID().slice(0,12));fs.mkdirSync(area,{recursive:true});
 const local=path.join(area,'Local'),own=path.join(area,'own');fs.mkdirSync(local);fs.mkdirSync(own);fs.writeFileSync(path.join(own,'install-product.txt'),'SarevocsCCUPlaner/1');fs.writeFileSync(path.join(own,'Sarevocs-CCU-Planer.exe'),'SYNTHETIC');
 const foreign=path.join(area,'foreign-link-target');fs.mkdirSync(foreign);fs.writeFileSync(path.join(foreign,'keep.txt'),'SYNTHETIC_UNCHANGED');
 const junction=path.join(area,'junction');fs.symlinkSync(foreign,junction,'junction');

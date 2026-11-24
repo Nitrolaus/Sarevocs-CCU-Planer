@@ -3,17 +3,18 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { applicationEntries } from './packaged-app-files.mjs';
-import { buildWindowsHello } from './build-windows-hello.mjs';
+import { buildWindowsHelpers } from './build-windows-hello.mjs';
 fs.mkdirSync('build/renderer/fonts', { recursive: true });
 fs.mkdirSync('work/temp', { recursive: true });
-buildWindowsHello();
+buildWindowsHelpers();
 const helloSha256 = createHash('sha256').update(fs.readFileSync('build/hello-consent.exe')).digest('hex');
+const sessionAclSha256 = createHash('sha256').update(fs.readFileSync('build/session-acl.exe')).digest('hex');
 await Promise.all([
   build({ entryPoints: ['src/ui/planner-worker.ts'], outfile: 'build/renderer/planner-worker.js', bundle: true, platform: 'browser', format: 'esm', target: 'chrome156', minify: true }),
   build({ entryPoints: ['src/ui/advisor-worker.ts'], outfile: 'build/renderer/advisor-worker.js', bundle: true, platform: 'browser', format: 'esm', target: 'chrome156', minify: true }),
   build({ entryPoints: ['src/bootstrap.ts'], outfile: 'build/bootstrap.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron', './main.cjs'] }),
   build({ entryPoints: ['src/main.ts'], outfile: 'build/main.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron', 'sql.js','exceljs'],
-    define: { CCU_HELLO_SHA256: JSON.stringify(helloSha256) } }),
+    define: { CCU_HELLO_SHA256: JSON.stringify(helloSha256), CCU_SESSION_ACL_SHA256: JSON.stringify(sessionAclSha256) } }),
   build({ entryPoints: ['src/preload.ts'], outfile: 'build/preload.cjs', bundle: true, platform: 'node', format: 'cjs', target: 'node24', external: ['electron'] }),
   build({ entryPoints: ['src/ui/App.tsx'], outfile: 'build/renderer/app.js', bundle: true, platform: 'browser', target: 'chrome156', minify: true, define: { 'process.env.NODE_ENV': '"production"' } }),
 ]);
