@@ -45,9 +45,10 @@ public static class InstallLocationTestDriver {
   using(InstallLocation.NewInstallDirectories.Prepare(target,local)){
    Check(Directory.GetAccessControl(target).AreAccessRulesProtected&&Directory.GetAccessControl(intermediate).AreAccessRulesProtected,
     "ALL_CREATED_DIRECTORIES_MUST_HAVE_PROTECTED_DACL");
-   bool pinned=false;
-   try{Directory.Move(target,target+" moved");}catch(IOException){pinned=true;}catch(UnauthorizedAccessException){pinned=true;}
-   Check(pinned&&Directory.Exists(target),"NEW_INSTALL_TARGET_MUST_STAY_PINNED");
+   string renamed=target+" moved";
+   bool sharingViolation=false;
+   try{Directory.Move(target,renamed);}catch(IOException error){sharingViolation=error.HResult==unchecked((int)0x80070020);}
+   Check(sharingViolation&&Directory.Exists(target)&&!Directory.Exists(renamed),"NEW_INSTALL_TARGET_MUST_STAY_PINNED");
   }
   Check(!Directory.Exists(intermediate),"ABANDONED_NEW_INSTALL_MUST_REMOVE_EMPTY_PRIVATE_DIRECTORIES");
   string old=Path.Combine(parent,"existing");Directory.CreateDirectory(old);

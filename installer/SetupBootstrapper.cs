@@ -421,7 +421,10 @@ public static class SetupBootstrapperCore
             if (!ConvertStringSecurityDescriptorToSecurityDescriptor("D:P(A;OICI;FA;;;" + sid + ")(A;OICI;FA;;;SY)", 1, out descriptor, out size)) throw new IOException("PAYLOAD_DIRECTORY_SECURITY_FAILED");
             var security = new SecurityAttributes { Length = Marshal.SizeOf(typeof(SecurityAttributes)), Descriptor = descriptor, Inherit = false };
             if (!CreateDirectory(directory, ref security)) throw new IOException("PAYLOAD_DIRECTORY_NOT_NEW");
-            SafeFileHandle directoryHandle = CreateFile(directory, 0x80, 3, IntPtr.Zero, 3, 0x02000000 | 0x00200000, IntPtr.Zero);
+            // Listing the directory makes Windows enforce the no-delete sharing
+            // reservation. A handle opened for attributes alone permits a rename.
+            const uint listDirectoryAndReadAttributes = 0x0001 | 0x0080;
+            SafeFileHandle directoryHandle = CreateFile(directory, listDirectoryAndReadAttributes, 3, IntPtr.Zero, 3, 0x02000000 | 0x00200000, IntPtr.Zero);
             if (!directoryHandle.IsInvalid) return directoryHandle;
             directoryHandle.Dispose();
             throw new IOException("PAYLOAD_DIRECTORY_LOCK_FAILED");
