@@ -7,6 +7,7 @@ public static class InstallLocation {
  [DllImport("dwmapi.dll")]static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int n);
  public static string RegisteredRoot(){using(var key=Registry.CurrentUser.OpenSubKey(Registration)){return key==null?null:key.GetValue("InstallLocation") as string;}}
  internal const string UnsafePermissions="UNSAFE_TARGET_PERMISSIONS";
+ internal const string TargetNotWritable="TARGET_NOT_WRITABLE";
  internal const string FolderRequired="INSTALLATION_FOLDER_REQUIRED";
  public static string InitialRoot(string registered){return String.IsNullOrWhiteSpace(registered)?"":registered;}
  internal static string ExistingRoot(string local){
@@ -27,6 +28,16 @@ public static class InstallLocation {
  }
  static bool Within(string value,string parent){return value.Equals(parent,StringComparison.OrdinalIgnoreCase)||value.StartsWith(parent+"\\",StringComparison.OrdinalIgnoreCase);}
  public static string Validate(string value,string local,bool staging=false){return ValidateLocation(value,local,staging,true,false);}
+ internal static string ValidateForInstall(string value,string local){
+  string target=Validate(value,local);
+  // The transaction creates its staging and rollback directory beside the target.
+  string parent=Path.GetDirectoryName(target);
+  while(parent!=null&&!Directory.Exists(parent))parent=Path.GetDirectoryName(parent);
+  if(parent==null||!SetupBootstrapperCore.CanCreateEntries(parent,false)||
+     (Directory.Exists(target)&&!SetupBootstrapperCore.CanCreateEntries(target,true)))
+   throw new IOException(TargetNotWritable);
+  return target;
+ }
  internal static string SuggestAlternative(string rejected,string local,string profile){
   string drive=null;
   try{if(!String.IsNullOrWhiteSpace(rejected))drive=Path.GetPathRoot(rejected);}
@@ -35,9 +46,9 @@ public static class InstallLocation {
   foreach(string parent in new[]{drive,profile}){
    if(String.IsNullOrEmpty(parent)||!Directory.Exists(parent))continue;
    try{
-    string candidate=Validate(Path.Combine(parent,"CCU_Planer"),local);
+    string candidate=ValidateForInstall(Path.Combine(parent,"CCU_Planer"),local);
     if(String.Equals(candidate,rejected,StringComparison.OrdinalIgnoreCase)||Within(candidate,local)||Directory.Exists(candidate))continue;
-    if(SetupBootstrapperCore.CanCreateSubdirectory(Path.GetDirectoryName(candidate)))return candidate;
+    return candidate;
    }catch(IOException){}catch(UnauthorizedAccessException){}catch(System.Security.SecurityException){}catch(ArgumentException){}
   }
   return null;

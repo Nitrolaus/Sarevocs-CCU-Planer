@@ -1,6 +1,22 @@
 using System;using System.IO;using System.Drawing;using System.Windows.Forms;using System.Reflection;
+using System.Security.AccessControl;
+using System.Security.Principal;
 public static class InstallLocationTestDriver {
  static void Check(bool value,string code){if(!value)throw new Exception(code);}
+ static void CheckReadOnlyLocation(string directory,string target,string local,FileSystemRights denied){
+  var original=Directory.GetAccessControl(directory);
+  var acl=Directory.GetAccessControl(directory);
+  using(var account=WindowsIdentity.GetCurrent())
+   acl.AddAccessRule(new FileSystemAccessRule(account.User,denied,AccessControlType.Deny));
+  Directory.SetAccessControl(directory,acl);
+  try{
+   Check(InstallLocation.Validate(target,local)==target,"PRIVATE_FOLDER_IS_STRUCTURALLY_SAFE");
+   bool blocked=false;
+   try{InstallLocation.ValidateForInstall(target,local);}
+   catch(IOException error){blocked=error.Message==InstallLocation.TargetNotWritable;}
+   Check(blocked,"READ_ONLY_INSTALL_LOCATION_MUST_BE_REJECTED");
+  }finally{Directory.SetAccessControl(directory,original);}
+ }
  static void Refuses(string value,string local){bool refused=false;try{InstallLocation.Validate(value,local);}catch{refused=true;}Check(refused,"ACCEPTED_UNSAFE_PATH: "+value);}
  [STAThread]public static int Main(string[] args){try{
   string area=Path.GetFullPath(args[0]),local=Path.Combine(area,"Local"),target=Path.Combine(area,"Meine Programme","Planer Test");Directory.CreateDirectory(local);
@@ -16,6 +32,9 @@ public static class InstallLocationTestDriver {
   foreach(string bad in new[]{@"C:\",@"\\server\share\Planer","relative\\Planer",Path.Combine(local,"SarevocsCCUPlaner-Daten"),Path.Combine(local,"SarevocsCCUPlaner-Daten","Anmeldung"),local,Path.Combine(local,"SarevocsCCUPlaner"),Environment.GetFolderPath(Environment.SpecialFolder.Windows),target+".",target+" ",target+"\nmore",target+":stream"})Refuses(bad,local);
   string foreign=Path.Combine(area,"foreign");Directory.CreateDirectory(foreign);File.WriteAllText(Path.Combine(foreign,"keep.txt"),"SYNTHETIC_KEEP");Refuses(foreign,local);Check(File.ReadAllText(Path.Combine(foreign,"keep.txt"))=="SYNTHETIC_KEEP","FOREIGN_CHANGED");
   Directory.CreateDirectory(target);File.WriteAllText(Path.Combine(target,"install-product.txt"),InstallLocation.ProductMarker);File.WriteAllText(Path.Combine(target,SetupBootstrapperCore.ExecutableName),"SYNTHETIC");Check(InstallLocation.Validate(target,local)==target,"OWN_UPDATE_ROOT");
+  CheckReadOnlyLocation(target,target,local,FileSystemRights.CreateFiles);
+  CheckReadOnlyLocation(Path.GetDirectoryName(target),target,local,FileSystemRights.CreateDirectories);
+  Check(InstallLocation.ValidateForInstall(target,local)==target,"WRITABLE_UPDATE_CAN_CONTINUE");
   foreach(string bad in new[]{args[1],args[2],args[3]})Refuses(bad,local);
   string legacy=Path.Combine(area,"SyntheticLegacy");Directory.CreateDirectory(legacy);
   Check(!SelectableSetup.HasLegacyInstallation(legacy),"NO_LEGACY_UPDATER");

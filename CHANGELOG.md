@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.115 · Alpha
+
+Beim Update prüft das Setup, ob dein Windows-Konto in den gewählten Programmordner schreiben kann. Fehlen die Rechte, kannst du direkt im Setup einen geeigneten Ordner auswählen.
+
 ## 0.3.114 · Alpha
 
 Wenn die Rechte am gewählten Programmordner ein Update verhindern, bietet der Installer einen geprüften Ordner außerhalb von AppData an. Ein Klick trägt den Vorschlag ins Pfadfeld ein. Die Installation beginnt nach der Bestätigung und aktualisiert die Verknüpfungen. Lokale Profile und Sitzungsdaten bleiben erhalten.

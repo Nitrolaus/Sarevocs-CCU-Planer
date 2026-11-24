@@ -146,7 +146,7 @@ public static class SelectableSetup {
  }
  static bool Install(string local,string previous,string target,DisplaySetup display,bool acceptedTerms,Action<string,int> report){
   SetupTerms.Require(acceptedTerms);
-  target=InstallLocation.Validate(target,local);
+  target=InstallLocation.ValidateForInstall(target,local);
   string previousLocation=InstallLocation.FindPrevious(previous,local);
   CheckMove(previousLocation,target);
   string legacy=Path.Combine(local,"SarevocsCCUPlaner");
@@ -227,15 +227,30 @@ public static class SelectableSetup {
   switch(error.Message){
    case InstallLocation.FolderRequired:return "Bitte wähle den Programmordner.";
    case InstallLocation.UnsafePermissions:return "Die Rechte an diesem Pfad schützen die Programmdateien nicht ausreichend.";
+   case InstallLocation.TargetNotWritable:return "Dein Windows-Konto kann die Programmdateien an diesem Ort nicht installieren oder aktualisieren.";
    case "DIRECTORY_NOT_EMPTY":return "Der Ordner enthält bereits andere Dateien. Wähle einen leeren Ordner oder die bestehende Planer-Installation.";
    case "PROTECTED_DIRECTORY":return "Dieser Ordner ist für Windows oder Planer-Daten reserviert. Wähle einen separaten Programmordner.";
    default:return "Bitte prüfe den Pfad und deine Schreibrechte für diesen Programmordner.";
   }
  }
- static void ShowFolderFailure(SetupWindow window,Exception error,string local){
-  string alternative=error.Message==InstallLocation.UnsafePermissions
+ static void ShowFolderFailure(SetupWindow window,Exception error,string local,bool afterClick=false){
+  bool permissions=error.Message==InstallLocation.UnsafePermissions||error.Message==InstallLocation.TargetNotWritable||
+   error is UnauthorizedAccessException||error is System.Security.SecurityException;
+  string alternative=permissions
    ?InstallLocation.SuggestAlternative(window.Folder.Text,local,Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)):null;
-  window.ShowPathError(FolderFailure(error),alternative);
+  string message=FolderFailure(error);
+  window.ShowPathError(message,alternative);
+  if(!afterClick)return;
+  if(alternative==null){
+   MessageBox.Show(window,message,"Programmordner prüfen",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+   window.Folder.Focus();
+   return;
+  }
+  string question=message+"\n\nDiesen Programmordner verwenden?\n"+alternative;
+  if(MessageBox.Show(window,question,"Programmordner wechseln",MessageBoxButtons.YesNo,MessageBoxIcon.Question)==DialogResult.Yes){
+   window.Folder.Text=alternative;
+   window.Next.Focus();
+  }else window.Folder.Focus();
  }
  static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"||error.Message=="PAYLOAD_HASH_MISMATCH"||error.Message==InstallLocation.UnsafePermissions||error.Message==InstallLocation.FolderRequired?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
  [STAThread]public static int Main(string[] args){
@@ -255,7 +270,7 @@ public static class SelectableSetup {
    int result=0;
    using(var window=new SetupWindow(initial,installed,EmbeddedPayload.Version)){
     if(initial.Length!=0){
-     try{InstallLocation.Validate(initial,local);}
+     try{InstallLocation.ValidateForInstall(initial,local);}
      catch(IOException error){ShowFolderFailure(window,error,local);}
      catch(UnauthorizedAccessException error){ShowFolderFailure(window,error,local);}
      catch(System.Security.SecurityException error){ShowFolderFailure(window,error,local);}
@@ -263,8 +278,11 @@ public static class SelectableSetup {
     }
     window.InstallRequested+=delegate{
      if(!window.AcceptTerms.Checked)return;
-     string target;try{target=InstallLocation.Validate(window.Folder.Text,local);}catch(Exception error){ShowFolderFailure(window,error,local);return;}
-     DisplaySetup display=DisplaySetup.Prepare(local,false);if(display.Cancelled)return;
+     string target;try{target=InstallLocation.ValidateForInstall(window.Folder.Text,local);}catch(Exception error){ShowFolderFailure(window,error,local,true);return;}
+     DisplaySetup display;
+     try{display=DisplaySetup.Prepare(local,false,window);}
+     catch(Exception){MessageBox.Show(window,"Die lokalen Anzeigeeinstellungen konnten nicht gelesen werden. Prüfe den Zugriff auf deinen Planer-Datenordner.","Anzeigeeinstellungen prüfen",MessageBoxButtons.OK,MessageBoxIcon.Warning);return;}
+     if(display.Cancelled)return;
      window.SetBusy("Installation vorbereiten …",-1);
      Action<Action> post=action=>{if(!window.IsDisposed)try{window.BeginInvoke(action);}catch(InvalidOperationException){}};
      Task.Run(delegate{

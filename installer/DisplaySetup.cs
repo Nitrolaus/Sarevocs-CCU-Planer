@@ -31,14 +31,16 @@ public sealed class DisplaySetup
         if ((language != "de" && language != "en") || (currency != "EUR" && currency != "USD") || (mode != "net" && mode != "gross") || vatBasisPoints < 0 || vatBasisPoints > 10000) throw new ArgumentException("DISPLAY_VALUES");
         return "{\"schemaVersion\":1,\"language\":\"" + language + "\",\"currency\":\"" + currency + "\",\"taxMode\":\"" + mode + "\",\"vatBasisPoints\":" + vatBasisPoints.ToString(CultureInfo.InvariantCulture) + "}";
     }
-    public static DisplaySetup Prepare(string local, bool silent)
+    public static DisplaySetup Prepare(string local, bool silent) { return Prepare(local, silent, null); }
+    internal static DisplaySetup Prepare(string local, bool silent, IWin32Window owner)
     {
         CheckPath(local, false);
         DisplaySetup result = new DisplaySetup();
         if (File.Exists(Preferences(local)) || silent) return result;
         using (Form form = CreateForm())
         {
-            if (form.ShowDialog() != DialogResult.OK) { result.Cancelled = true; return result; }
+            if (owner != null) form.StartPosition = FormStartPosition.CenterParent;
+            if (form.ShowDialog(owner) != DialogResult.OK) { result.Cancelled = true; return result; }
             result.json = (string)form.Tag;
         }
         return result;
