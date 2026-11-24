@@ -4,6 +4,7 @@ const version = require('./package.json').version;
 module.exports = {
   packagerConfig: {
     name: 'Sarevocs-CCU-Planer', executableName: 'Sarevocs-CCU-Planer',
+    electronZipDir: process.env.CCU_ELECTRON_ZIP_DIR || undefined,
     appCopyright: 'Sarevoc', asar: { unpack: '**/{hello-consent,session-acl}.exe' },
     icon: require('node:path').join(__dirname, 'assets/app.ico'),
     win32metadata: { CompanyName: 'Sarevoc', FileDescription: 'Sarevoc´s CCU Planer', ProductName: 'Sarevoc´s CCU Planer', 'requested-execution-level': 'asInvoker' },

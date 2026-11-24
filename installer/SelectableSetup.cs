@@ -226,11 +226,16 @@ public static class SelectableSetup {
  static string FolderFailure(Exception error){
   switch(error.Message){
    case InstallLocation.FolderRequired:return "Bitte wähle den Programmordner.";
-   case InstallLocation.UnsafePermissions:return "Die Rechte am Programmordner oder einem übergeordneten Ordner sind unsicher oder nicht prüfbar.";
+   case InstallLocation.UnsafePermissions:return "Die Rechte an diesem Pfad schützen die Programmdateien nicht ausreichend.";
    case "DIRECTORY_NOT_EMPTY":return "Der Ordner enthält bereits andere Dateien. Wähle einen leeren Ordner oder die bestehende Planer-Installation.";
    case "PROTECTED_DIRECTORY":return "Dieser Ordner ist für Windows oder Planer-Daten reserviert. Wähle einen separaten Programmordner.";
    default:return "Bitte prüfe den Pfad und deine Schreibrechte für diesen Programmordner.";
   }
+ }
+ static void ShowFolderFailure(SetupWindow window,Exception error,string local){
+  string alternative=error.Message==InstallLocation.UnsafePermissions
+   ?InstallLocation.SuggestAlternative(window.Folder.Text,local,Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)):null;
+  window.ShowPathError(FolderFailure(error),alternative);
  }
  static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"||error.Message=="PAYLOAD_HASH_MISMATCH"||error.Message==InstallLocation.UnsafePermissions||error.Message==InstallLocation.FolderRequired?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
  [STAThread]public static int Main(string[] args){
@@ -251,14 +256,14 @@ public static class SelectableSetup {
    using(var window=new SetupWindow(initial,installed,EmbeddedPayload.Version)){
     if(initial.Length!=0){
      try{InstallLocation.Validate(initial,local);}
-     catch(IOException error){window.ShowPathError(FolderFailure(error));}
-     catch(UnauthorizedAccessException error){window.ShowPathError(FolderFailure(error));}
-     catch(System.Security.SecurityException error){window.ShowPathError(FolderFailure(error));}
-     catch(ArgumentException error){window.ShowPathError(FolderFailure(error));}
+     catch(IOException error){ShowFolderFailure(window,error,local);}
+     catch(UnauthorizedAccessException error){ShowFolderFailure(window,error,local);}
+     catch(System.Security.SecurityException error){ShowFolderFailure(window,error,local);}
+     catch(ArgumentException error){ShowFolderFailure(window,error,local);}
     }
     window.InstallRequested+=delegate{
      if(!window.AcceptTerms.Checked)return;
-     string target;try{target=InstallLocation.Validate(window.Folder.Text,local);}catch(Exception error){window.ShowPathError(FolderFailure(error));return;}
+     string target;try{target=InstallLocation.Validate(window.Folder.Text,local);}catch(Exception error){ShowFolderFailure(window,error,local);return;}
      DisplaySetup display=DisplaySetup.Prepare(local,false);if(display.Cancelled)return;
      window.SetBusy("Installation vorbereiten …",-1);
      Action<Action> post=action=>{if(!window.IsDisposed)try{window.BeginInvoke(action);}catch(InvalidOperationException){}};

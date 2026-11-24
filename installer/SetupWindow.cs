@@ -1,7 +1,8 @@
 using System;using System.Drawing;using System.IO;using System.Runtime.InteropServices;using System.Windows.Forms;
 public sealed class SetupWindow:Form {
  public readonly TextBox Folder;public readonly Button Next,CancelAction;public readonly Label Heading,Hint,Note,Destination,DataHeading,DataInfo;
- readonly Button browse;readonly Label folderLabel;readonly SetupBar bar;bool busy,finished;readonly string targetVersion;readonly bool update;
+ readonly Button browse;readonly Label folderLabel;readonly LinkLabel folderNote;readonly SetupBar bar;bool busy,finished;readonly string targetVersion;readonly bool update;
+ string suggestedFolder;
  public readonly CheckBox AcceptTerms;public readonly LinkLabel TermsLink;
  public event Action InstallRequested;
  [DllImport("dwmapi.dll")]static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int n);
@@ -12,7 +13,8 @@ public sealed class SetupWindow:Form {
   folderLabel=new Label{Text="Programmordner",AutoSize=true,Location=new Point(26,94)};
   Folder=new TextBox{Name="folder",Text=initial??"",Location=new Point(26,124),Size=new Size(438,27),BackColor=Color.FromArgb(16,29,38),ForeColor=ForeColor,BorderStyle=BorderStyle.FixedSingle};
   browse=Button("browse","Durchsuchen …",new Rectangle(476,121,118,34),false);
-  Note=new Label{Name="note",Text=FolderNote(),Location=new Point(26,173),Size=new Size(568,34),ForeColor=Color.FromArgb(157,180,193)};
+  folderNote=new LinkLabel{Name="note",Text=FolderNote(),Location=new Point(26,173),Size=new Size(568,34),ForeColor=Color.FromArgb(157,180,193),LinkColor=Color.FromArgb(132,217,197),ActiveLinkColor=Color.White,UseMnemonic=false};
+  folderNote.Links.Clear();folderNote.LinkClicked+=delegate{if(!busy&&!finished&&suggestedFolder!=null)Folder.Text=suggestedFolder;};Note=folderNote;
   Destination=new Label{Name="destination",Text=initial??"",Location=new Point(26,151),Size=new Size(568,22),AutoEllipsis=true,Visible=false};
   bar=new SetupBar{Name="progress",Location=new Point(26,116),Size=new Size(568,16),Visible=false};
   DataHeading=new Label{Name="dataHeading",Text="Dein Hangar bleibt in deiner Hand",UseMnemonic=false,AutoSize=true,Location=new Point(26,207),Font=new Font("Segoe UI",10F,FontStyle.Bold),ForeColor=Color.FromArgb(132,217,197)};
@@ -28,7 +30,7 @@ public sealed class SetupWindow:Form {
   TermsLink.LinkClicked+=delegate{using(var dialog=SetupTerms.CreateDialog())dialog.ShowDialog(this);};
   AcceptTerms.CheckedChanged+=delegate{if(!busy&&!finished)Next.Enabled=AcceptTerms.Checked&&!String.IsNullOrWhiteSpace(Folder.Text);};
   CancelAction.Click+=delegate{Close();};Next.Click+=delegate{if(finished)Close();else if(!busy&&AcceptTerms.Checked&&InstallRequested!=null)InstallRequested();};Folder.TextChanged+=delegate{
-   Note.Text=FolderNote();Next.Enabled=AcceptTerms.Checked&&!String.IsNullOrWhiteSpace(Folder.Text);
+   ShowPathError(FolderNote());Next.Enabled=AcceptTerms.Checked&&!String.IsNullOrWhiteSpace(Folder.Text);
   };
   Next.EnabledChanged+=delegate{
    Next.BackColor=Next.Enabled?Color.FromArgb(132,217,197):Color.FromArgb(38,53,63);
@@ -52,7 +54,14 @@ public sealed class SetupWindow:Form {
  }
  Button Button(string name,string text,Rectangle bounds,bool primary){var b=new Button{Name=name,Text=text,Bounds=bounds,BackColor=primary?Color.FromArgb(132,217,197):Color.FromArgb(31,49,62),ForeColor=primary?Color.FromArgb(15,41,39):ForeColor,FlatStyle=FlatStyle.Flat};b.FlatAppearance.BorderColor=Color.FromArgb(76,107,124);return b;}
  string FolderNote(){return String.IsNullOrWhiteSpace(Folder.Text)?"Bitte wähle den Programmordner.":"Bestand und geschützte Sitzung bleiben erhalten.";}
- public void ShowPathError(string message){Note.Text=message;}
+ public void ShowPathError(string message,string alternative=null){
+  folderNote.Links.Clear();suggestedFolder=alternative;
+  folderNote.Text=message;
+  if(suggestedFolder==null)return;
+  const string action="Sicheren Programmordner auswählen";
+  folderNote.Text+="\n"+action;
+  folderNote.Links.Add(folderNote.Text.Length-action.Length,action.Length);
+ }
  public void SetBusy(string phase,int percent){busy=true;AcceptTerms.Enabled=false;Heading.Text=update?"Update wird installiert":"Installation läuft";Hint.Text=phase;Folder.Visible=browse.Visible=folderLabel.Visible=false;bar.Visible=Destination.Visible=true;Destination.Text=Folder.Text;bar.Value=percent;Next.Text="Bitte warten …";Next.Enabled=false;CancelAction.Enabled=false;}
  public void SetFinished(bool success,string detail){busy=false;finished=true;Heading.Text=success?(update?"Update abgeschlossen":"Installation abgeschlossen"):"Installation nicht abgeschlossen";Hint.Text=success?"Version "+targetVersion+" ist installiert."+(String.IsNullOrEmpty(detail)?"":"\n"+detail):detail;Folder.Visible=browse.Visible=folderLabel.Visible=false;bar.Visible=Destination.Visible=true;Destination.Text=Folder.Text;bar.Value=success?100:0;CancelAction.Visible=false;Next.Text="Schließen";Next.Enabled=true;}
  protected override void Dispose(bool d){if(d)bar.Dispose();base.Dispose(d);}

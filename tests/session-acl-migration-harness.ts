@@ -65,7 +65,10 @@ async function checkFailure(directory: string, keyDirectory?: string) {
 }
 
 app.whenReady().then(async () => {
-  const report: Record<string, unknown> = { phase, status: 'PASS', data: 'synthetic-only', actualRsiRequests: 0 };
+  const report: Record<string, unknown> = {
+    phase, status: 'PASS', data: 'synthetic-only', actualRsiRequests: 0,
+    electronVersion: process.versions.electron, nodeVersion: process.versions.node,
+  };
   const negatives = path.join(root, 'Sandbox-Acl-Negatives');
   if (phase === 'reject-links') {
     await checkFailure(path.join(negatives, 'leaf-junction'));

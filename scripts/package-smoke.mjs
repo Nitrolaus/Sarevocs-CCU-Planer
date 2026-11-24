@@ -87,7 +87,7 @@ try {
     results.push('Native Windows-Taskleistenmetadaten: stabile AppID, aktuelles EXE-Icon und korrekter Neustartpfad statt altem Squirrel-Icon.');
   }
   const runtime = await page.evaluate(async () => (await window.ccu.request({ action: 'state' })).data);
-  assert.equal(runtime.packaged, true); assert.equal(runtime.electron, '45.3.2');
+  assert.equal(runtime.packaged, true); assert.equal(runtime.electron, expected.devDependencies.electron);
   assert.equal(runtime.version, expected.version);
   const diagnosticFile = path.join(runDir, 'data/Diagnose/Verbindung/rsi-verbindung.json');
   assert.equal(fs.existsSync(diagnosticFile), false, 'Normal start must not open RSI or create connection diagnostics');

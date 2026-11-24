@@ -214,7 +214,7 @@ Zielkarten und Flottenplan verwenden neutrale, lokal dargestellte Schiffssilhoue
 
 ## Laufzeit
 
-Electron 45.3.2: MIT; Chromium und weitere gebündelte Komponenten: siehe die unveränderten Dateien LICENSE und LICENSES.chromium.html neben der EXE. SQLite ist Public Domain, sql.js steht unter MIT.
+Electron 45.4.1: MIT; Chromium und weitere gebündelte Komponenten: siehe die unveränderten Dateien LICENSE und LICENSES.chromium.html neben der EXE. SQLite ist Public Domain, sql.js steht unter MIT.
 
 ## RSI-Loaner und enthaltene Fahrzeuge
 

@@ -8,6 +8,11 @@ public static class InstallLocationTestDriver {
   Check(InstallLocation.InitialRoot(target)==target,"UPDATE_USES_REGISTERED_PATH");
   Refuses("",local);
   Check(InstallLocation.Validate(target,local)==target,"CUSTOM_PATH_WITH_SPACES");Check(!Directory.Exists(target),"VALIDATION_CREATED_FOLDER");
+  string profile=Path.Combine(area,"SyntheticProfile");Directory.CreateDirectory(profile);
+  string alternative=Path.Combine(profile,"CCU_Planer");
+  Check(InstallLocation.SuggestAlternative(null,local,profile)==alternative&&!Directory.Exists(alternative),"CHECKED_ALTERNATIVE_IS_READ_ONLY");
+  Directory.CreateDirectory(alternative);File.WriteAllText(Path.Combine(alternative,"keep.txt"),"KEEP");
+  Check(InstallLocation.SuggestAlternative(null,local,profile)==null&&File.ReadAllText(Path.Combine(alternative,"keep.txt"))=="KEEP","OCCUPIED_ALTERNATIVE_IS_SKIPPED");
   foreach(string bad in new[]{@"C:\",@"\\server\share\Planer","relative\\Planer",Path.Combine(local,"SarevocsCCUPlaner-Daten"),Path.Combine(local,"SarevocsCCUPlaner-Daten","Anmeldung"),local,Path.Combine(local,"SarevocsCCUPlaner"),Environment.GetFolderPath(Environment.SpecialFolder.Windows),target+".",target+" ",target+"\nmore",target+":stream"})Refuses(bad,local);
   string foreign=Path.Combine(area,"foreign");Directory.CreateDirectory(foreign);File.WriteAllText(Path.Combine(foreign,"keep.txt"),"SYNTHETIC_KEEP");Refuses(foreign,local);Check(File.ReadAllText(Path.Combine(foreign,"keep.txt"))=="SYNTHETIC_KEEP","FOREIGN_CHANGED");
   Directory.CreateDirectory(target);File.WriteAllText(Path.Combine(target,"install-product.txt"),InstallLocation.ProductMarker);File.WriteAllText(Path.Combine(target,SetupBootstrapperCore.ExecutableName),"SYNTHETIC");Check(InstallLocation.Validate(target,local)==target,"OWN_UPDATE_ROOT");
@@ -45,6 +50,12 @@ public static class InstallLocationTestDriver {
     Check(window.Hint.Text.Contains("0.3.36")&&window.Hint.Text.Contains("0.3.37"),"UPDATE_VERSION_HINT");
     window.ShowPathError("Ordner prüfen");
     Check(window.Folder.Text==target&&window.Note.Text=="Ordner prüfen"&&window.Hint.Text.Contains("0.3.36"),"PATH_ERROR_KEEPS_UPDATE_CONTEXT");
+    int installRequests=0;window.InstallRequested+=()=>installRequests++;
+    window.ShowPathError("Ordner prüfen",alternative);
+    var note=(LinkLabel)window.Note;
+    Check(note.Links.Count==1&&window.Folder.Text==target,"ALTERNATIVE_REQUIRES_CLICK");
+    typeof(LinkLabel).GetMethod("OnLinkClicked",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(note,new object[]{new LinkLabelLinkClickedEventArgs(note.Links[0])});
+    Check(window.Folder.Text==alternative&&note.Links.Count==0&&installRequests==0,"ALTERNATIVE_ONLY_SELECTS_DESTINATION");
     window.Folder.Text=target+" neu";
     Check(!window.Note.Text.Contains("Ordner prüfen"),"PATH_ERROR_CLEARS_ON_EDIT");
     window.SetBusy("Programmdateien kopieren · 61 %",61);Application.DoEvents();Check(!window.Next.Enabled&&!window.CancelAction.Enabled,"BUSY_ACTIONS");

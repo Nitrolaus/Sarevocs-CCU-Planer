@@ -397,6 +397,17 @@ public static class SetupBootstrapperCore
         finally { if (directoryHandle != null) directoryHandle.Dispose(); }
     }
 
+    internal static bool CanCreateSubdirectory(string directory)
+    {
+        RejectReparseParents(directory);
+        const uint addSubdirectory = 0x00000004;
+        const uint shareReadWriteDelete = 7;
+        const uint openExisting = 3;
+        const uint openDirectoryWithoutFollowingLinks = 0x02000000 | 0x00200000;
+        using (var handle = CreateFile(directory, addSubdirectory, shareReadWriteDelete, IntPtr.Zero, openExisting, openDirectoryWithoutFollowingLinks, IntPtr.Zero))
+            return !handle.IsInvalid;
+    }
+
     internal static SafeFileHandle CreatePayloadDirectory(string directory)
     {
         RejectReparseParents(System.IO.Path.GetDirectoryName(directory));

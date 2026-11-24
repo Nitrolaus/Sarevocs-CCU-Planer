@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.114 · Alpha
+
+Wenn die Rechte am gewählten Programmordner ein Update verhindern, bietet der Installer einen geprüften Ordner außerhalb von AppData an. Ein Klick trägt den Vorschlag ins Pfadfeld ein. Die Installation beginnt nach der Bestätigung und aktualisiert die Verknüpfungen. Lokale Profile und Sitzungsdaten bleiben erhalten.
+
+Die Anwendung verwendet Electron 45.4.1.
+
 ## 0.3.112 · Alpha
 
 Bei Updates bleibt der registrierte Programmordner sichtbar. Der Installer zeigt blockierende Rechte an der Ordnerwahl an. Bei einer Neuinstallation beginnt die Ordnerwahl leer.
