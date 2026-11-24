@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.116 · Alpha
+
+Ist dein vorhandener Programmordner geschützt und für dich beschreibbar, kann das Setup seine Arbeitsdateien und die Rücksicherung darin anlegen. Damit ist ein Update auch möglich, wenn Windows neben dem Programmordner keine neuen Ordner erlaubt. Bei einer fehlgeschlagenen Rechteprüfung nennt das Setup den betroffenen Pfad. Ordnerempfehlungen berücksichtigen dein gewähltes Laufwerk.
+
 ## 0.3.115 · Alpha
 
 Beim Update prüft das Setup, ob dein Windows-Konto in den gewählten Programmordner schreiben kann. Fehlen die Rechte, kannst du direkt im Setup einen geeigneten Ordner auswählen.

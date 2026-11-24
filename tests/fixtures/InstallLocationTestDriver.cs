@@ -3,7 +3,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 public static class InstallLocationTestDriver {
  static void Check(bool value,string code){if(!value)throw new Exception(code);}
- static void CheckReadOnlyLocation(string directory,string target,string local,FileSystemRights denied){
+ static void CheckReadOnlyLocation(string directory,string target,string local,FileSystemRights denied,bool canStageInside){
   var acl=Directory.GetAccessControl(directory);
   FileSystemAccessRule block;
   using(var account=WindowsIdentity.GetCurrent())
@@ -12,6 +12,15 @@ public static class InstallLocationTestDriver {
   Directory.SetAccessControl(directory,acl);
   try{
    Check(InstallLocation.Validate(target,local)==target,"PRIVATE_FOLDER_IS_STRUCTURALLY_SAFE");
+   if(canStageInside){
+    Check(InstallLocation.ValidateForInstall(target,local)==target&&InstallLocation.TransactionParent(target)==target,
+     "WRITABLE_TARGET_UNDER_READ_ONLY_PARENT_MUST_KEEP_ORIGINAL_PATH");
+    string missing=Path.Combine(directory,"not created");
+    bool refused=false;
+    try{InstallLocation.ValidateForInstall(missing,local);}catch(IOException error){refused=error.Message==InstallLocation.TargetNotWritable;}
+    Check(refused&&!Directory.Exists(missing),"MISSING_TARGET_NEEDS_PARENT_CREATION_RIGHTS");
+    return;
+   }
    bool blocked=false;
    try{InstallLocation.ValidateForInstall(target,local);}
    catch(IOException error){blocked=error.Message==InstallLocation.TargetNotWritable;}
@@ -37,9 +46,24 @@ public static class InstallLocationTestDriver {
   foreach(string bad in new[]{@"C:\",@"\\server\share\Planer","relative\\Planer",Path.Combine(local,"SarevocsCCUPlaner-Daten"),Path.Combine(local,"SarevocsCCUPlaner-Daten","Anmeldung"),local,Path.Combine(local,"SarevocsCCUPlaner"),Environment.GetFolderPath(Environment.SpecialFolder.Windows),target+".",target+" ",target+"\nmore",target+":stream"})Refuses(bad,local);
   string foreign=Path.Combine(area,"foreign");Directory.CreateDirectory(foreign);File.WriteAllText(Path.Combine(foreign,"keep.txt"),"SYNTHETIC_KEEP");Refuses(foreign,local);Check(File.ReadAllText(Path.Combine(foreign,"keep.txt"))=="SYNTHETIC_KEEP","FOREIGN_CHANGED");
   Directory.CreateDirectory(target);File.WriteAllText(Path.Combine(target,"install-product.txt"),InstallLocation.ProductMarker);File.WriteAllText(Path.Combine(target,SetupBootstrapperCore.ExecutableName),"SYNTHETIC");Check(InstallLocation.Validate(target,local)==target,"OWN_UPDATE_ROOT");
-  CheckReadOnlyLocation(target,target,local,FileSystemRights.CreateFiles);
-  CheckReadOnlyLocation(Path.GetDirectoryName(target),target,local,FileSystemRights.CreateDirectories);
+  string neighbor=Path.Combine(Path.GetDirectoryName(target),"CCU_Planer");
+  Check(InstallLocation.SuggestAlternative(target,local,profile)==neighbor&&!Directory.Exists(neighbor),"PREFER_UNUSED_NEIGHBOR_ON_SELECTED_DRIVE");
+  string absentDrive=null;
+  for(char drive='Z';drive>='D';drive--){string name=drive+":\\";if(!Directory.Exists(name)){absentDrive=name;break;}}
+  if(absentDrive!=null)Check(InstallLocation.SuggestAlternative(Path.Combine(absentDrive,"Planer"),local,profile)==null,"NO_SILENT_SUGGESTION_ON_ANOTHER_DRIVE");
+  CheckReadOnlyLocation(target,target,local,FileSystemRights.CreateFiles,false);
+  CheckReadOnlyLocation(Path.GetDirectoryName(target),target,local,FileSystemRights.CreateDirectories,true);
   Check(InstallLocation.ValidateForInstall(target,local)==target,"WRITABLE_UPDATE_CAN_CONTINUE");
+  string empty=Path.Combine(area,"ExistingEmptyProgramFolder");
+  Directory.CreateDirectory(empty);
+  string work=Path.Combine(empty,".ccu-setup-fixture");
+  using(SetupBootstrapperCore.CreatePayloadDirectory(work)){
+   Check(InstallLocation.ValidateDuringInstall(empty,local,work)==empty,"OWN_TEMP_IS_ALLOWED_IN_EMPTY_TARGET");
+   File.WriteAllText(Path.Combine(empty,"foreign.txt"),"KEEP");
+   bool refused=false;
+   try{InstallLocation.ValidateDuringInstall(empty,local,work);}catch(IOException error){refused=error.Message=="DIRECTORY_NOT_EMPTY";}
+   Check(refused,"FOREIGN_DATA_BESIDE_ACTIVE_WORK_MUST_BE_REJECTED");
+  }
   foreach(string bad in new[]{args[1],args[2],args[3]})Refuses(bad,local);
   string legacy=Path.Combine(area,"SyntheticLegacy");Directory.CreateDirectory(legacy);
   Check(!SelectableSetup.HasLegacyInstallation(legacy),"NO_LEGACY_UPDATER");

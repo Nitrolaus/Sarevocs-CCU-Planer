@@ -161,11 +161,12 @@ public static class SelectableSetup {
 
     var manifest=InstallTransaction.ReadEmbeddedManifest();
     var managedNames=manifest.Select(entry=>entry.Name).Concat(new[]{InstallTransaction.UninstallerName}).ToArray();
-    string parent=Path.GetDirectoryName(target);
+    string parent=InstallLocation.TransactionParent(target);
     SetupBootstrapperCore.RejectReparseParents(parent);
     Directory.CreateDirectory(parent);
     InstallLocation.Validate(target,local);
-    string work=Path.Combine(parent,".ccu-setup-"+Guid.NewGuid().ToString("N").Substring(0,12));
+    string prefix=String.Equals(parent,target,StringComparison.OrdinalIgnoreCase)?".ccu-":".ccu-setup-";
+    string work=Path.Combine(parent,prefix+Guid.NewGuid().ToString("N").Substring(0,12));
     string staging=Path.Combine(work,"new"),backup=Path.Combine(work,"old");
     string temporary=Path.Combine(Path.GetTempPath(),"SarevocsCCUPlaner-Setup-"+Guid.NewGuid().ToString("N"));
     string extracted=null,progressFile=null;
@@ -186,7 +187,7 @@ public static class SelectableSetup {
       }
       var entries=InstallTransaction.CheckStaging(staging,manifest);
       InspectShortcuts(desktop,roots,shellType,shell);InspectShortcuts(menu,roots,shellType,shell);
-      InstallLocation.Validate(target,local);
+      InstallLocation.ValidateDuringInstall(target,local,work);
       report("Laufende Vorversion geordnet beenden …",-1);
       foreach(string root in roots){var result=SetupBootstrapperCore.CloseOwnProcesses(root);if(!result.Success)throw new IOException("CLOSE_"+result.Code);}
       string inventory=Path.Combine(local,@"SarevocsCCUPlaner-Daten\Daten\inventory.sqlite");
@@ -203,6 +204,9 @@ public static class SelectableSetup {
        display.Commit(local);
       },ref retainBackup);
      }
+    }catch(IOException error){
+     if(retainBackup)error.Data["recoveryFolder"]=backup;
+     throw;
     }finally{
      if(ownWork){
       InstallTransaction.RemoveStaging(staging,managedNames);
@@ -222,12 +226,12 @@ public static class SelectableSetup {
   }
  }
  static void Success(bool cleaned){Console.WriteLine("{\"code\":\"SUCCESS\",\"installedVersion\":\""+EmbeddedPayload.Version+"\",\"cleanupComplete\":"+(cleaned?"true":"false")+",\"newRsiLogin\":false}");}
- static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Die gesicherten Dateien liegen neben dem Installationsordner.";return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":FolderFailure(error);}
+ static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Sicherungsordner: "+error.Data["recoveryFolder"];return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":FolderFailure(error);}
  static string FolderFailure(Exception error){
   switch(error.Message){
    case InstallLocation.FolderRequired:return "Bitte wähle den Programmordner.";
-   case InstallLocation.UnsafePermissions:return "Die Rechte an diesem Pfad schützen die Programmdateien nicht ausreichend.";
-   case InstallLocation.TargetNotWritable:return "Dein Windows-Konto kann die Programmdateien an diesem Ort nicht installieren oder aktualisieren.";
+   case InstallLocation.UnsafePermissions:return error.Data.Contains("unverifiable")?"Windows kann die Ordnerrechte nicht prüfen.":"Die Ordnerrechte schützen die Programmdateien nicht ausreichend.";
+   case InstallLocation.TargetNotWritable:return "Dein Windows-Konto kann hier keine Programmdateien oder Arbeitsordner anlegen.";
    case "DIRECTORY_NOT_EMPTY":return "Der Ordner enthält bereits andere Dateien. Wähle einen leeren Ordner oder die bestehende Planer-Installation.";
    case "PROTECTED_DIRECTORY":return "Dieser Ordner ist für Windows oder Planer-Daten reserviert. Wähle einen separaten Programmordner.";
    default:return "Bitte prüfe den Pfad und deine Schreibrechte für diesen Programmordner.";
@@ -241,8 +245,12 @@ public static class SelectableSetup {
   string message=FolderFailure(error);
   window.ShowPathError(message,alternative);
   if(!afterClick)return;
+  if(error.Data["folder"] is string)message+="\n"+(string)error.Data["folder"];
   if(alternative==null){
-   MessageBox.Show(window,message,"Programmordner prüfen",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+   if(permissions){
+    if(MessageBox.Show(window,message+"\n\nJetzt einen anderen Programmordner auswählen?","Programmordner wählen",
+      MessageBoxButtons.YesNo,MessageBoxIcon.Question)==DialogResult.Yes)window.BrowseFolder();
+   }else MessageBox.Show(window,message,"Programmordner prüfen",MessageBoxButtons.OK,MessageBoxIcon.Warning);
    window.Folder.Focus();
    return;
   }

@@ -3,10 +3,12 @@ public sealed class SetupWindow:Form {
  public readonly TextBox Folder;public readonly Button Next,CancelAction;public readonly Label Heading,Hint,Note,Destination,DataHeading,DataInfo;
  readonly Button browse;readonly Label folderLabel;readonly LinkLabel folderNote;readonly SetupBar bar;bool busy,finished;readonly string targetVersion;readonly bool update;
  string suggestedFolder;
+ readonly string previousFolder;
  public readonly CheckBox AcceptTerms;public readonly LinkLabel TermsLink;
  public event Action InstallRequested;
  [DllImport("dwmapi.dll")]static extern int DwmSetWindowAttribute(IntPtr h,int a,ref int v,int n);
  public SetupWindow(string initial,string installed,string target){
+  previousFolder=initial??"";
   targetVersion=target;update=!String.IsNullOrEmpty(installed);Text="Sarevoc´s CCU Planer – Installation";Name="locationSetup";ClientSize=new Size(620,520);StartPosition=FormStartPosition.CenterScreen;FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;AutoScaleMode=AutoScaleMode.Dpi;Font=new Font("Segoe UI",10F);BackColor=Color.FromArgb(23,37,47);ForeColor=Color.FromArgb(237,242,245);
   Heading=new Label{Name="heading",Text=update?"Update installieren":"Installationsordner wählen",AutoSize=true,Location=new Point(25,23),Font=new Font("Segoe UI",16F,FontStyle.Bold)};
   Hint=new Label{Name="hint",Text=update?"Version "+installed+" vorhanden → "+target:"Bitte einen Programmordner auswählen.",AutoSize=true,MaximumSize=new Size(568,0),Location=new Point(26,62),ForeColor=Color.FromArgb(157,180,193)};
@@ -36,20 +38,34 @@ public sealed class SetupWindow:Form {
    Next.BackColor=Next.Enabled?Color.FromArgb(132,217,197):Color.FromArgb(38,53,63);
   };
   Next.Enabled=false;
-  browse.Click+=delegate{
-   using(var dialog=new FolderBrowserDialog()){
-    dialog.Description=update?"Programmordner für Sarevoc´s CCU Planer":"Zielordner für den Unterordner CCU_Planer auswählen";
-    dialog.SelectedPath=Folder.Text;
-    if(dialog.ShowDialog(this)==DialogResult.OK)ApplyBrowsedFolder(dialog.SelectedPath);
-   }
-  };
+  browse.Click+=delegate{BrowseFolder();};
   Controls.AddRange(new Control[]{Heading,Hint,folderLabel,Folder,browse,bar,Destination,Note,DataHeading,DataInfo,TermsLink,AcceptTerms,CancelAction,Next});AcceptButton=Next;CancelButton=CancelAction;
   Shown+=delegate{int dark=1;try{DwmSetWindowAttribute(Handle,20,ref dark,4);}catch{}Next.Focus();};FormClosing+=delegate(object s,FormClosingEventArgs e){if(busy&&e.CloseReason==CloseReason.UserClosing)e.Cancel=true;};
  }
+ internal void BrowseFolder(){
+  using(var dialog=new FolderBrowserDialog()){
+   dialog.Description=update?"Bisherigen Programmordner oder neuen Zielordner auswählen":"Zielordner für den Unterordner CCU_Planer auswählen";
+   string path=Folder.Text;
+   while(!String.IsNullOrEmpty(path)&&!Directory.Exists(path)){
+    try{path=Path.GetDirectoryName(path);}catch(ArgumentException){path=null;}
+   }
+   if(!String.IsNullOrEmpty(path))dialog.SelectedPath=path;
+   if(dialog.ShowDialog(this)==DialogResult.OK)ApplyBrowsedFolder(dialog.SelectedPath);
+  }
+ }
  internal void ApplyBrowsedFolder(string selectedPath){
   const string productFolder="CCU_Planer";
-  string leaf=Path.GetFileName(selectedPath.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar));
-  Folder.Text=update||String.Equals(leaf,productFolder,StringComparison.OrdinalIgnoreCase)
+  string selected=selectedPath.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);
+  string prefix=selected+Path.DirectorySeparatorChar;
+  string previous=previousFolder.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);
+  if(update&&previous.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)&&
+     previous.IndexOf(Path.DirectorySeparatorChar,prefix.Length)==-1&&Directory.Exists(previous)){
+   Folder.Text=previous;
+   return;
+  }
+  bool driveRoot=String.Equals(selected,Path.GetPathRoot(selectedPath).TrimEnd(Path.DirectorySeparatorChar),StringComparison.OrdinalIgnoreCase);
+  string leaf=Path.GetFileName(selected);
+  Folder.Text=(update&&!driveRoot)||String.Equals(leaf,productFolder,StringComparison.OrdinalIgnoreCase)
    ?selectedPath:Path.Combine(selectedPath,productFolder);
  }
  Button Button(string name,string text,Rectangle bounds,bool primary){var b=new Button{Name=name,Text=text,Bounds=bounds,BackColor=primary?Color.FromArgb(132,217,197):Color.FromArgb(31,49,62),ForeColor=primary?Color.FromArgb(15,41,39):ForeColor,FlatStyle=FlatStyle.Flat};b.FlatAppearance.BorderColor=Color.FromArgb(76,107,124);return b;}

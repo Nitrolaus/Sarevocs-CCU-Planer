@@ -30,23 +30,43 @@ public static class InstallLocation {
  public static string Validate(string value,string local,bool staging=false){return ValidateLocation(value,local,staging,true,false);}
  internal static string ValidateForInstall(string value,string local){
   string target=Validate(value,local);
-  // The transaction creates its staging and rollback directory beside the target.
-  string parent=Path.GetDirectoryName(target);
-  while(parent!=null&&!Directory.Exists(parent))parent=Path.GetDirectoryName(parent);
-  if(parent==null||!SetupBootstrapperCore.CanCreateEntries(parent,false)||
-     (Directory.Exists(target)&&!SetupBootstrapperCore.CanCreateEntries(target,true)))
-   throw new IOException(TargetNotWritable);
+  TransactionParent(target);
   return target;
  }
+ internal static string TransactionParent(string target){
+  bool existing=Directory.Exists(target);
+  if(existing&&!SetupBootstrapperCore.CanCreateEntries(target,true))throw WriteDenied(target);
+  string parent=Path.GetDirectoryName(target);
+  string ancestor=parent;
+  while(ancestor!=null&&!Directory.Exists(ancestor))ancestor=Path.GetDirectoryName(ancestor);
+  if(ancestor!=null&&SetupBootstrapperCore.CanCreateEntries(ancestor,false))return parent;
+  // A private working directory inside the verified target keeps File.Replace on its own volume.
+  if(existing)return target;
+  throw WriteDenied(ancestor??parent);
+ }
+ static IOException WriteDenied(string path){
+  var error=new IOException(TargetNotWritable);
+  error.Data["folder"]=path;
+  return error;
+ }
  internal static string SuggestAlternative(string rejected,string local,string profile){
-  string drive=null;
-  try{if(!String.IsNullOrWhiteSpace(rejected))drive=Path.GetPathRoot(rejected);}
-  catch(ArgumentException){}
-  if(drive!=null&&(drive.Length!=3||drive[1]!=':'||drive[2]!='\\'))drive=null;
-  foreach(string parent in new[]{drive,profile}){
+  string drive=null,neighbor=null;
+  if(!String.IsNullOrWhiteSpace(rejected)){
+   try{
+    drive=Path.GetPathRoot(rejected);
+    if(drive==null||drive.Length!=3||drive[1]!=':'||drive[2]!='\\')return null;
+    neighbor=Path.GetDirectoryName(Path.GetFullPath(rejected).TrimEnd('\\'));
+   }catch(ArgumentException){return null;}catch(NotSupportedException){return null;}catch(IOException){return null;}
+  }
+  foreach(string parent in new[]{neighbor,drive,profile}){
    if(String.IsNullOrEmpty(parent)||!Directory.Exists(parent))continue;
    try{
-    string candidate=ValidateForInstall(Path.Combine(parent,"CCU_Planer"),local);
+    if(drive!=null&&!String.Equals(Path.GetPathRoot(parent),drive,StringComparison.OrdinalIgnoreCase))continue;
+    string suggested=Path.Combine(parent,"CCU_Planer");
+    if(String.Equals(suggested,rejected,StringComparison.OrdinalIgnoreCase))suggested=Path.Combine(parent,"CCU_Planer-2");
+    if(Directory.Exists(suggested)||File.Exists(suggested))continue;
+    string candidate=ValidateForInstall(suggested,local);
+    if(drive!=null&&!String.Equals(Path.GetPathRoot(candidate),drive,StringComparison.OrdinalIgnoreCase))continue;
     if(String.Equals(candidate,rejected,StringComparison.OrdinalIgnoreCase)||Within(candidate,local)||Directory.Exists(candidate))continue;
     return candidate;
    }catch(IOException){}catch(UnauthorizedAccessException){}catch(System.Security.SecurityException){}catch(ArgumentException){}
@@ -62,7 +82,10 @@ public static class InstallLocation {
   catch(System.Security.SecurityException){return null;}
  catch(ArgumentException){return null;}
  }
- static string ValidateLocation(string value,string local,bool staging,bool checkPermissions,bool uninstall){
+ internal static string ValidateDuringInstall(string target,string local,string work){
+  return ValidateLocation(target,local,false,true,false,work);
+ }
+ static string ValidateLocation(string value,string local,bool staging,bool checkPermissions,bool uninstall,string activeWork=null){
   if(String.IsNullOrWhiteSpace(value))throw new IOException(FolderRequired);
   if(value!=null)foreach(string part in value.Split('\\','/'))if(part.EndsWith(".")||part.EndsWith(" "))throw new IOException("INVALID_PATH");
   string root=SetupBootstrapperCore.CanonicalRoot(value);if(!staging&&root.Length>180)throw new IOException("PATH_TOO_LONG");
@@ -76,7 +99,10 @@ public static class InstallLocation {
   if(Within(root,Environment.GetFolderPath(Environment.SpecialFolder.Windows))||Within(root,data)||Within(data,root)||Within(root,legacy)||Within(legacy,root))throw new IOException("PROTECTED_DIRECTORY");
   SetupBootstrapperCore.ValidateProgramTree(root);if(File.Exists(root))throw new IOException("TARGET_IS_FILE");
   if(staging&&(!Directory.Exists(root)||Directory.GetFileSystemEntries(root).Length!=0))throw new IOException("STAGING_NOT_EMPTY");
-  if(Directory.Exists(root)&&Directory.GetFileSystemEntries(root).Length!=0){
+  string[] contents=Directory.Exists(root)?Directory.GetFileSystemEntries(root):new string[0];
+  // The active workspace is created and held by Install. It is still covered by
+  // tree and ACL checks. Ignore only its exact path when recognizing an empty target.
+  if(contents.Length!=0&&!(contents.Length==1&&String.Equals(contents[0],activeWork,StringComparison.OrdinalIgnoreCase))){
    string marker=Path.Combine(root,"install-product.txt");
    SetupBootstrapperCore.RejectReparseParents(marker);
    // After a partial removal, the retained uninstaller can retry with the same product marker.
@@ -98,11 +124,13 @@ public static class InstallLocation {
  internal static void ValidateTargetAccess(string root){
   SecurityIdentifier user;
   using(var identity=WindowsIdentity.GetCurrent())user=identity.User;
+  string checkedPath=root;
   try{
    bool childMissing=!Directory.Exists(root);
    if(!childMissing)CheckTreeAccess(root,user);
    for(string parent=Path.GetDirectoryName(root);!String.IsNullOrEmpty(parent);parent=Path.GetDirectoryName(parent)){
     if(!Directory.Exists(parent)){childMissing=true;continue;}
+    checkedPath=parent;
     // The drive root cannot be replaced as a directory. Rights to delete its
     // children or change its ACL can still undermine every install below it.
     FileSystemRights parentMask=Path.GetDirectoryName(parent)==null
@@ -111,16 +139,35 @@ public static class InstallLocation {
     CheckAccess(Directory.GetAccessControl(parent,AccessAndOwner),user,parentMask,childMissing);
     childMissing=false;
    }
-  }catch(UnauthorizedAccessException){throw new IOException(UnsafePermissions);}
-  catch(System.Security.SecurityException){throw new IOException(UnsafePermissions);}
+  }catch(UnauthorizedAccessException){throw UnverifiableAccess(checkedPath);}
+  catch(System.Security.SecurityException){throw UnverifiableAccess(checkedPath);}
+  catch(IOException error){
+   if(error.Message==UnsafePermissions&&!error.Data.Contains("folder"))error.Data["folder"]=checkedPath;
+   throw;
+  }
+ }
+ static IOException UnverifiableAccess(string path){
+  var error=new IOException(UnsafePermissions);
+  error.Data["folder"]=path;
+  error.Data["unverifiable"]=true;
+  return error;
  }
 
  static void CheckTreeAccess(string directory,SecurityIdentifier user){
-  CheckAccess(Directory.GetAccessControl(directory,AccessAndOwner),user,ChangeContents,true);
-  foreach(string entry in Directory.GetFileSystemEntries(directory)){
-   SetupBootstrapperCore.RejectReparseParents(entry);
-   if(Directory.Exists(entry))CheckTreeAccess(entry,user);
-   else CheckAccess(File.GetAccessControl(entry,AccessAndOwner),user,ChangeContents,false);
+  string current=directory;
+  try{
+   CheckAccess(Directory.GetAccessControl(directory,AccessAndOwner),user,ChangeContents,true);
+   foreach(string entry in Directory.GetFileSystemEntries(directory)){
+    current=entry;
+    SetupBootstrapperCore.RejectReparseParents(entry);
+    if(Directory.Exists(entry))CheckTreeAccess(entry,user);
+    else CheckAccess(File.GetAccessControl(entry,AccessAndOwner),user,ChangeContents,false);
+   }
+  }catch(UnauthorizedAccessException){throw UnverifiableAccess(current);}
+  catch(System.Security.SecurityException){throw UnverifiableAccess(current);}
+  catch(IOException error){
+   if(error.Message==UnsafePermissions&&!error.Data.Contains("folder"))error.Data["folder"]=current;
+   throw;
   }
  }
 

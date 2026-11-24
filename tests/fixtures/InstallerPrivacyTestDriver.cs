@@ -70,6 +70,11 @@ public static class InstallerPrivacyTestDriver {
    Check(installed.Folder.Text==suggested,"UPDATE_LOST_INSTALLED_FOLDER");
    installed.ApplyBrowsedFolder(parent);
    Check(installed.Folder.Text==parent,"UPDATE_APPENDED_FRESH_SUFFIX");
+   Directory.CreateDirectory(suggested);
+   installed.ApplyBrowsedFolder(parent);
+   Check(installed.Folder.Text==suggested,"BROWSING_REGISTERED_PARENT_LOST_INSTALLATION");
+   installed.ApplyBrowsedFolder(@"R:\");
+   Check(installed.Folder.Text==@"R:\CCU_Planer","DRIVE_ROOT_MUST_SUGGEST_FOLDER_ON_SAME_DRIVE");
    checks.Add("Updates preserve the registered path and respect explicitly selected alternatives");
   }
   File.WriteAllLines(Path.Combine(area,"geometry.txt"),geometry);Console.WriteLine("{\"status\":\"PASS\",\"groups\":"+checks.Count+",\"checks\":[\""+String.Join("\",\"",checks)+"\"],\"realInstallation\":false,\"realUserDataRead\":false,\"newRsiLogin\":false}");return 0;
