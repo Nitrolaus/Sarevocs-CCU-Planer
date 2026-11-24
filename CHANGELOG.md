@@ -4,6 +4,8 @@
 
 Ist dein vorhandener Programmordner geschützt und für dich beschreibbar, kann das Setup seine Arbeitsdateien und die Rücksicherung darin anlegen. Damit ist ein Update auch möglich, wenn Windows neben dem Programmordner keine neuen Ordner erlaubt. Bei einer fehlgeschlagenen Rechteprüfung nennt das Setup den betroffenen Pfad. Ordnerempfehlungen berücksichtigen dein gewähltes Laufwerk.
 
+Bricht ein Update während des Dateiaustauschs ab, stellt der Installer bereits ersetzte Programmdateien aus seiner Sicherung auf demselben Laufwerk wieder her. Bei einem erfolgreichen Ordnerwechsel räumt er die bekannten Programmdateien im bisherigen Ordner auf, soweit Windows dies erlaubt. Profile und gespeicherte Sitzungen liegen weiterhin im Windows-Benutzerprofil.
+
 ## 0.3.115 · Alpha
 
 Beim Update prüft das Setup, ob dein Windows-Konto in den gewählten Programmordner schreiben kann. Fehlen die Rechte, kannst du direkt im Setup einen geeigneten Ordner auswählen.

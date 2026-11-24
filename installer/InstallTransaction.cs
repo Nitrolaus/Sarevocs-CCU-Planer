@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
@@ -63,6 +65,47 @@ internal static class InstallTransaction
             throw new IOException("PROGRAM_FILE_HASH_MISMATCH");
     }
 
+    private sealed class Replacement
+    {
+        internal readonly ProgramFile Original, Update;
+        internal Replacement(string destination, ProgramFile update)
+        {
+            Original = new ProgramFile(update.Name, new FileInfo(destination).Length, SetupBootstrapperCore.FileSha256(destination));
+            Update = update;
+        }
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "MoveFileExW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool MoveFileEx(string source, string destination, uint flags);
+
+    private static void RestoreOriginal(Replacement change, string target, string backup)
+    {
+        string destination = FilePath(target, change.Original.Name), saved = FilePath(backup, change.Original.Name);
+        SetupBootstrapperCore.RejectReparseParents(destination);
+        SetupBootstrapperCore.RejectReparseParents(saved);
+        if (!File.Exists(saved))
+        {
+            // ReplaceFile can fail before moving the original at all.
+            CheckFile(destination, change.Original);
+            return;
+        }
+        CheckFile(saved, change.Original);
+        if (File.Exists(destination))
+        {
+            string hash = SetupBootstrapperCore.FileSha256(destination);
+            if (hash != change.Update.Sha256 && hash != change.Original.Sha256)
+                throw new IOException("PROGRAM_CHANGED_DURING_ROLLBACK");
+        }
+        // Return the original NTFS file, including its security descriptor. Another
+        // ReplaceFile would attempt to merge the new ACL into an admin-owned original.
+        // COPY_ALLOWED is deliberately absent: both paths must remain on one volume.
+        const uint replaceExisting = 1, writeThrough = 8;
+        if (!MoveFileEx(saved, destination, replaceExisting | writeThrough))
+            throw new IOException("RESTORE_RENAME_FAILED", new Win32Exception(Marshal.GetLastWin32Error()));
+        CheckFile(destination, change.Original);
+    }
+
     internal static ProgramFile[] ReadEmbeddedManifest()
     {
         using (Stream resource = Assembly.GetExecutingAssembly().GetManifestResourceStream(ManifestResource))
@@ -96,7 +139,7 @@ internal static class InstallTransaction
         Action<Action<Action>> complete, ref bool retainBackup)
     {
         var installed = new List<ProgramFile>();
-        var replaced = new List<ProgramFile>();
+        var replaced = new List<Replacement>();
         var createdDirectories = new List<string>();
         var undoCompletion = new Stack<Action>();
         try
@@ -135,7 +178,9 @@ internal static class InstallTransaction
                 {
                     string saved = FilePath(backup, entry.Name);
                     Directory.CreateDirectory(Path.GetDirectoryName(saved));
-                    replaced.Add(entry);
+                    // Capture the preimage before ReplaceFile: on certain Windows
+                    // errors it can already have moved the original to the backup.
+                    replaced.Add(new Replacement(destination, entry));
                     File.Replace(source, destination, saved, false);
                 }
                 else
@@ -165,17 +210,9 @@ internal static class InstallTransaction
                 }
                 catch { retainBackup = true; }
             }
-            foreach (var entry in replaced.AsEnumerable().Reverse())
+            foreach (var change in replaced.AsEnumerable().Reverse())
             {
-                try
-                {
-                    string destination = FilePath(target, entry.Name), saved = FilePath(backup, entry.Name);
-                    if (!File.Exists(saved)) continue;
-                    SetupBootstrapperCore.RejectReparseParents(destination);
-                    SetupBootstrapperCore.RejectReparseParents(saved);
-                    if (File.Exists(destination)) File.Replace(saved, destination, null, false);
-                    else File.Move(saved, destination);
-                }
+                try { RestoreOriginal(change, target, backup); }
                 catch { retainBackup = true; }
             }
             foreach (string folder in createdDirectories.AsEnumerable().Reverse())

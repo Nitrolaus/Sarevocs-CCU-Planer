@@ -226,7 +226,16 @@ public static class SelectableSetup {
   }
  }
  static void Success(bool cleaned){Console.WriteLine("{\"code\":\"SUCCESS\",\"installedVersion\":\""+EmbeddedPayload.Version+"\",\"cleanupComplete\":"+(cleaned?"true":"false")+",\"newRsiLogin\":false}");}
- static string Failure(Exception error){if(error is IOException&&error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Sicherungsordner: "+error.Data["recoveryFolder"];return error is IOException&&error.Message=="SHORTCUT_NAME_IN_USE"?"Ein anderes Programm verwendet den Namen der Verknüpfung.":FolderFailure(error);}
+ static string Failure(Exception error){
+  if(error.Message=="INSTALL_ROLLBACK_INCOMPLETE")return "Die Rücksicherung konnte nicht vollständig abgeschlossen werden. Sicherungsordner: "+error.Data["recoveryFolder"];
+  if(error is IOException){
+   if(error.Message.StartsWith("CLOSE_",StringComparison.Ordinal))return "Bitte Planer über „Beenden“ schließen und erneut versuchen.";
+   int code=error.HResult&0xffff;
+   if(code==32||code==33)return "Eine für das Setup benötigte Datei wird verwendet. Schließe den Planer und versuche das Update erneut.";
+   if(error.Message=="SHORTCUT_NAME_IN_USE")return "Ein anderes Programm verwendet den Namen der Verknüpfung.";
+  }
+  return FolderFailure(error);
+ }
  static string FolderFailure(Exception error){
   switch(error.Message){
    case InstallLocation.FolderRequired:return "Bitte wähle den Programmordner.";
