@@ -32,22 +32,51 @@ public static class InstallLocationTestDriver {
   }
  }
  static void Refuses(string value,string local){bool refused=false;try{InstallLocation.Validate(value,local);}catch{refused=true;}Check(refused,"ACCEPTED_UNSAFE_PATH: "+value);}
+ static void CheckProtectedCreation(string area,string local){
+  string parent=Path.Combine(area,"Inheritable rights");
+  Directory.CreateDirectory(parent);
+  var users=new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid,null);
+  var acl=Directory.GetAccessControl(parent);
+  acl.AddAccessRule(new FileSystemAccessRule(users,FileSystemRights.Modify,
+   InheritanceFlags.ContainerInherit|InheritanceFlags.ObjectInherit,PropagationFlags.InheritOnly,AccessControlType.Allow));
+  Directory.SetAccessControl(parent,acl);
+  string intermediate=Path.Combine(parent,"private"),target=Path.Combine(intermediate,"CCU");
+  Check(InstallLocation.ValidateForInstall(target,local)==target&&!Directory.Exists(intermediate),"NEW_FOLDER_PREFLIGHT_DOES_NOT_WRITE");
+  using(InstallLocation.NewInstallDirectories.Prepare(target,local)){
+   Check(Directory.GetAccessControl(target).AreAccessRulesProtected&&Directory.GetAccessControl(intermediate).AreAccessRulesProtected,
+    "ALL_CREATED_DIRECTORIES_MUST_HAVE_PROTECTED_DACL");
+   bool pinned=false;
+   try{Directory.Move(target,target+" moved");}catch(IOException){pinned=true;}catch(UnauthorizedAccessException){pinned=true;}
+   Check(pinned&&Directory.Exists(target),"NEW_INSTALL_TARGET_MUST_STAY_PINNED");
+  }
+  Check(!Directory.Exists(intermediate),"ABANDONED_NEW_INSTALL_MUST_REMOVE_EMPTY_PRIVATE_DIRECTORIES");
+  string old=Path.Combine(parent,"existing");Directory.CreateDirectory(old);
+  Refuses(old,local);
+  acl.AddAccessRule(new FileSystemAccessRule(users,FileSystemRights.DeleteSubdirectoriesAndFiles,AccessControlType.Allow));
+  Directory.SetAccessControl(parent,acl);
+  bool rejected=false;try{InstallLocation.ValidateForInstall(target,local);}catch(IOException e){rejected=e.Message==InstallLocation.UnsafePermissions;}
+  Check(rejected&&!Directory.Exists(intermediate),"DELETE_CHILD_ON_PARENT_REMAINS_UNSAFE");
+ }
  [STAThread]public static int Main(string[] args){try{
   string area=Path.GetFullPath(args[0]),local=Path.Combine(area,"Local"),target=Path.Combine(area,"Meine Programme","Planer Test");Directory.CreateDirectory(local);
   Check(InstallLocation.InitialRoot(null)==""&&InstallLocation.InitialRoot("")=="","FRESH_FOLDER_REQUIRES_SELECTION");
   Check(InstallLocation.InitialRoot(target)==target,"UPDATE_USES_REGISTERED_PATH");
   Refuses("",local);
   Check(InstallLocation.Validate(target,local)==target,"CUSTOM_PATH_WITH_SPACES");Check(!Directory.Exists(target),"VALIDATION_CREATED_FOLDER");
+  CheckProtectedCreation(area,local);
   string profile=Path.Combine(area,"SyntheticProfile");Directory.CreateDirectory(profile);
   string alternative=Path.Combine(profile,"CCU_Planer");
   Check(InstallLocation.SuggestAlternative(null,local,profile)==alternative&&!Directory.Exists(alternative),"CHECKED_ALTERNATIVE_IS_READ_ONLY");
   Directory.CreateDirectory(alternative);File.WriteAllText(Path.Combine(alternative,"keep.txt"),"KEEP");
-  Check(InstallLocation.SuggestAlternative(null,local,profile)==null&&File.ReadAllText(Path.Combine(alternative,"keep.txt"))=="KEEP","OCCUPIED_ALTERNATIVE_IS_SKIPPED");
+  Check(InstallLocation.SuggestAlternative(null,local,profile)==alternative+"-2"&&!Directory.Exists(alternative+"-2")&&File.ReadAllText(Path.Combine(alternative,"keep.txt"))=="KEEP","OCCUPIED_ALTERNATIVE_IS_SKIPPED");
   foreach(string bad in new[]{@"C:\",@"\\server\share\Planer","relative\\Planer",Path.Combine(local,"SarevocsCCUPlaner-Daten"),Path.Combine(local,"SarevocsCCUPlaner-Daten","Anmeldung"),local,Path.Combine(local,"SarevocsCCUPlaner"),Environment.GetFolderPath(Environment.SpecialFolder.Windows),target+".",target+" ",target+"\nmore",target+":stream"})Refuses(bad,local);
   string foreign=Path.Combine(area,"foreign");Directory.CreateDirectory(foreign);File.WriteAllText(Path.Combine(foreign,"keep.txt"),"SYNTHETIC_KEEP");Refuses(foreign,local);Check(File.ReadAllText(Path.Combine(foreign,"keep.txt"))=="SYNTHETIC_KEEP","FOREIGN_CHANGED");
   Directory.CreateDirectory(target);File.WriteAllText(Path.Combine(target,"install-product.txt"),InstallLocation.ProductMarker);File.WriteAllText(Path.Combine(target,SetupBootstrapperCore.ExecutableName),"SYNTHETIC");Check(InstallLocation.Validate(target,local)==target,"OWN_UPDATE_ROOT");
   string neighbor=Path.Combine(Path.GetDirectoryName(target),"CCU_Planer");
   Check(InstallLocation.SuggestAlternative(target,local,profile)==neighbor&&!Directory.Exists(neighbor),"PREFER_UNUSED_NEIGHBOR_ON_SELECTED_DRIVE");
+  Directory.CreateDirectory(neighbor);File.WriteAllText(Path.Combine(neighbor,"keep.txt"),"KEEP");
+  File.WriteAllText(neighbor+"-2","OCCUPIED");
+  Check(InstallLocation.SuggestAlternative(target,local,profile)==neighbor+"-3"&&!Directory.Exists(neighbor+"-3")&&File.ReadAllText(Path.Combine(neighbor,"keep.txt"))=="KEEP"&&File.ReadAllText(neighbor+"-2")=="OCCUPIED","NUMBERED_NEIGHBOR_SKIPS_FOREIGN_FILE_AND_DIRECTORY");
   string absentDrive=null;
   for(char drive='Z';drive>='D';drive--){string name=drive+":\\";if(!Directory.Exists(name)){absentDrive=name;break;}}
   if(absentDrive!=null)Check(InstallLocation.SuggestAlternative(Path.Combine(absentDrive,"Planer"),local,profile)==null,"NO_SILENT_SUGGESTION_ON_ANOTHER_DRIVE");

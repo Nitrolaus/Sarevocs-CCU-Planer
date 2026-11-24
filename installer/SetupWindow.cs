@@ -2,7 +2,7 @@ using System;using System.Drawing;using System.IO;using System.Runtime.InteropSe
 public sealed class SetupWindow:Form {
  public readonly TextBox Folder;public readonly Button Next,CancelAction;public readonly Label Heading,Hint,Note,Destination,DataHeading,DataInfo;
  readonly Button browse;readonly Label folderLabel;readonly LinkLabel folderNote;readonly SetupBar bar;bool busy,finished;readonly string targetVersion;readonly bool update;
- string suggestedFolder;
+ string suggestedFolder,rejectedFolder;
  readonly string previousFolder;
  public readonly CheckBox AcceptTerms;public readonly LinkLabel TermsLink;
  public event Action InstallRequested;
@@ -58,7 +58,11 @@ public sealed class SetupWindow:Form {
   string selected=selectedPath.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);
   string prefix=selected+Path.DirectorySeparatorChar;
   string previous=previousFolder.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);
-  if(update&&previous.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)&&
+  if(suggestedFolder!=null&&String.Equals(Path.GetDirectoryName(suggestedFolder).TrimEnd(Path.DirectorySeparatorChar),selected,StringComparison.OrdinalIgnoreCase)){
+   Folder.Text=suggestedFolder;
+   return;
+  }
+  if(update&&!String.Equals(previous,rejectedFolder,StringComparison.OrdinalIgnoreCase)&&previous.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)&&
      previous.IndexOf(Path.DirectorySeparatorChar,prefix.Length)==-1&&Directory.Exists(previous)){
    Folder.Text=previous;
    return;
@@ -70,7 +74,8 @@ public sealed class SetupWindow:Form {
  }
  Button Button(string name,string text,Rectangle bounds,bool primary){var b=new Button{Name=name,Text=text,Bounds=bounds,BackColor=primary?Color.FromArgb(132,217,197):Color.FromArgb(31,49,62),ForeColor=primary?Color.FromArgb(15,41,39):ForeColor,FlatStyle=FlatStyle.Flat};b.FlatAppearance.BorderColor=Color.FromArgb(76,107,124);return b;}
  string FolderNote(){return String.IsNullOrWhiteSpace(Folder.Text)?"Bitte wähle den Programmordner.":"Bestand und geschützte Sitzung bleiben erhalten.";}
- public void ShowPathError(string message,string alternative=null){
+ public void ShowPathError(string message,string alternative=null,bool invalid=false){
+  rejectedFolder=invalid?Folder.Text.TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar):null;
   folderNote.Links.Clear();suggestedFolder=alternative;
   folderNote.Text=message;
   if(suggestedFolder==null)return;

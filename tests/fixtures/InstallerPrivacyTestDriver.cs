@@ -73,6 +73,10 @@ public static class InstallerPrivacyTestDriver {
    Directory.CreateDirectory(suggested);
    installed.ApplyBrowsedFolder(parent);
    Check(installed.Folder.Text==suggested,"BROWSING_REGISTERED_PARENT_LOST_INSTALLATION");
+   string safeSibling=Path.Combine(parent,"CCU_Planer-2");
+   installed.ShowPathError("Ordnerrechte",safeSibling,true);
+   installed.ApplyBrowsedFolder(parent);
+   Check(installed.Folder.Text==safeSibling,"BROWSING_PARENT_RESELECTED_REJECTED_FOLDER");
    installed.ApplyBrowsedFolder(@"R:\");
    Check(installed.Folder.Text==@"R:\CCU_Planer","DRIVE_ROOT_MUST_SUGGEST_FOLDER_ON_SAME_DRIVE");
    checks.Add("Updates preserve the registered path and respect explicitly selected alternatives");

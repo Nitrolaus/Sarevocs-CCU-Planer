@@ -161,9 +161,9 @@ public static class SelectableSetup {
 
     var manifest=InstallTransaction.ReadEmbeddedManifest();
     var managedNames=manifest.Select(entry=>entry.Name).Concat(new[]{InstallTransaction.UninstallerName}).ToArray();
+    using(var newFolders=InstallLocation.NewInstallDirectories.Prepare(target,local)){
     string parent=InstallLocation.TransactionParent(target);
     SetupBootstrapperCore.RejectReparseParents(parent);
-    Directory.CreateDirectory(parent);
     InstallLocation.Validate(target,local);
     string prefix=String.Equals(parent,target,StringComparison.OrdinalIgnoreCase)?".ccu-":".ccu-setup-";
     string work=Path.Combine(parent,prefix+Guid.NewGuid().ToString("N").Substring(0,12));
@@ -203,6 +203,7 @@ public static class SelectableSetup {
        InstallTransaction.Register(target,acceptedTerms,undo);
        display.Commit(local);
       },ref retainBackup);
+      newFolders.Commit();
      }
     }catch(IOException error){
      if(retainBackup)error.Data["recoveryFolder"]=backup;
@@ -215,6 +216,7 @@ public static class SelectableSetup {
      }
      foreach(string file in new[]{progressFile,extracted})if(file!=null)try{File.Delete(file);}catch(IOException){}catch(UnauthorizedAccessException){}
      try{Directory.Delete(temporary,false);}catch(IOException){}catch(UnauthorizedAccessException){}
+    }
     }
     // Only retire old locations after the new registration, files and settings have all succeeded.
     report("Bisherige Programmversion bereinigen …",-1);
@@ -239,35 +241,49 @@ public static class SelectableSetup {
  static string FolderFailure(Exception error){
   switch(error.Message){
    case InstallLocation.FolderRequired:return "Bitte wähle den Programmordner.";
-   case InstallLocation.UnsafePermissions:return error.Data.Contains("unverifiable")?"Windows kann die Ordnerrechte nicht prüfen.":"Die Ordnerrechte schützen die Programmdateien nicht ausreichend.";
+   case InstallLocation.UnsafePermissions:return error.Data.Contains("unverifiable")?"Windows konnte die Ordnerrechte nicht prüfen.":"Der Installer kann die Programmdateien hier nicht vor Änderungen durch andere Konten schützen.";
    case InstallLocation.TargetNotWritable:return "Dein Windows-Konto kann hier keine Programmdateien oder Arbeitsordner anlegen.";
    case "DIRECTORY_NOT_EMPTY":return "Der Ordner enthält bereits andere Dateien. Wähle einen leeren Ordner oder die bestehende Planer-Installation.";
    case "PROTECTED_DIRECTORY":return "Dieser Ordner ist für Windows oder Planer-Daten reserviert. Wähle einen separaten Programmordner.";
    default:return "Bitte prüfe den Pfad und deine Schreibrechte für diesen Programmordner.";
   }
  }
- static void ShowFolderFailure(SetupWindow window,Exception error,string local,bool afterClick=false){
+ static string ShowFolderFailure(SetupWindow window,Exception error,string local,bool afterClick=false){
   bool permissions=error.Message==InstallLocation.UnsafePermissions||error.Message==InstallLocation.TargetNotWritable||
    error is UnauthorizedAccessException||error is System.Security.SecurityException;
+  string profile=Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
   string alternative=permissions
-   ?InstallLocation.SuggestAlternative(window.Folder.Text,local,Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)):null;
+   ?InstallLocation.SuggestAlternative(window.Folder.Text,local,profile):null;
   string message=FolderFailure(error);
-  window.ShowPathError(message,alternative);
-  if(!afterClick)return;
-  if(error.Data["folder"] is string)message+="\n"+(string)error.Data["folder"];
+  window.ShowPathError(permissions?"Bitte wähle einen geschützten, beschreibbaren Programmordner.":message,alternative,true);
+  if(!afterClick)return null;
+  if(error.Data["folder"] is string)message+="\nBetroffener Pfad: "+(string)error.Data["folder"];
+  // Only offer the personal folder in a modal that names it and requires consent.
+  bool personal=false;
+  if(permissions&&alternative==null){
+   alternative=InstallLocation.SuggestAlternative(null,local,profile);
+   personal=alternative!=null&&!String.Equals(alternative,window.Folder.Text,StringComparison.OrdinalIgnoreCase);
+   if(!personal)alternative=null;
+  }
   if(alternative==null){
    if(permissions){
     if(MessageBox.Show(window,message+"\n\nJetzt einen anderen Programmordner auswählen?","Programmordner wählen",
       MessageBoxButtons.YesNo,MessageBoxIcon.Question)==DialogResult.Yes)window.BrowseFolder();
    }else MessageBox.Show(window,message,"Programmordner prüfen",MessageBoxButtons.OK,MessageBoxIcon.Warning);
    window.Folder.Focus();
-   return;
+   return null;
   }
-  string question=message+"\n\nDiesen Programmordner verwenden?\n"+alternative;
-  if(MessageBox.Show(window,question,"Programmordner wechseln",MessageBoxButtons.YesNo,MessageBoxIcon.Question)==DialogResult.Yes){
+  string location=personal?"In deinem persönlichen Windows-Ordner ist dieser Programmordner möglich:":"Auf demselben Laufwerk ist dieser neue Programmordner möglich:";
+  string question=message+"\n\n"+location+"\n"+alternative+
+   "\n\nHier installieren? Mit „Nein“ kannst du selbst einen Ordner wählen.";
+  var choice=MessageBox.Show(window,question,"Programmordner wechseln",MessageBoxButtons.YesNoCancel,MessageBoxIcon.Question,MessageBoxDefaultButton.Button3);
+  if(choice==DialogResult.Yes){
    window.Folder.Text=alternative;
-   window.Next.Focus();
-  }else window.Folder.Focus();
+   return alternative;
+  }
+  if(choice==DialogResult.No)window.BrowseFolder();
+  window.Folder.Focus();
+  return null;
  }
  static void ReportFailure(Exception error){string code=error.Message=="INSTALL_ROLLBACK_INCOMPLETE"||error.Message=="SHORTCUT_NAME_IN_USE"||error.Message=="PAYLOAD_HASH_MISMATCH"||error.Message==InstallLocation.UnsafePermissions||error.Message==InstallLocation.FolderRequired?error.Message:"INSTALLATION_ABORTED";Console.WriteLine("{\"code\":\""+code+"\"}");}
  [STAThread]public static int Main(string[] args){
@@ -283,7 +299,7 @@ public static class SelectableSetup {
    security.AddAccessRule(new System.Security.AccessControl.MutexAccessRule(new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid,null),System.Security.AccessControl.MutexRights.FullControl,System.Security.AccessControl.AccessControlType.Allow));
    bool created;mutex=new Mutex(false,@"Local\SarevocsCCUPlaner.Install."+sid,out created,security);try{owns=mutex.WaitOne(0);}catch(AbandonedMutexException){owns=true;}if(!owns)throw new IOException("INSTALLER_ALREADY_RUNNING");
    string previous=InstallLocation.ExistingRoot(local),initial=InstallLocation.InitialRoot(previous),installed=InstallLocation.InstalledVersion(previous);
-   if(silent){string target=InstallLocation.Validate(initial,local);Success(Install(local,previous,target,DisplaySetup.Prepare(local,true),true,(s,p)=>{}));return 0;}
+   if(silent){Success(Install(local,previous,initial,DisplaySetup.Prepare(local,true),true,(s,p)=>{}));return 0;}
    int result=0;
    using(var window=new SetupWindow(initial,installed,EmbeddedPayload.Version)){
     if(initial.Length!=0){
@@ -295,7 +311,10 @@ public static class SelectableSetup {
     }
     window.InstallRequested+=delegate{
      if(!window.AcceptTerms.Checked)return;
-     string target;try{target=InstallLocation.ValidateForInstall(window.Folder.Text,local);}catch(Exception error){ShowFolderFailure(window,error,local,true);return;}
+     string target;try{target=InstallLocation.ValidateForInstall(window.Folder.Text,local);}catch(Exception error){
+      target=ShowFolderFailure(window,error,local,true);
+      if(target==null)return;
+     }
      DisplaySetup display;
      try{display=DisplaySetup.Prepare(local,false,window);}
      catch(Exception){MessageBox.Show(window,"Die lokalen Anzeigeeinstellungen konnten nicht gelesen werden. Prüfe den Zugriff auf deinen Planer-Datenordner.","Anzeigeeinstellungen prüfen",MessageBoxButtons.OK,MessageBoxIcon.Warning);return;}

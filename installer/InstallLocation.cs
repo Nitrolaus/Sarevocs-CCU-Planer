@@ -1,6 +1,8 @@
 using System;using System.IO;using System.Drawing;using System.Runtime.InteropServices;using System.Windows.Forms;using Microsoft.Win32;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Collections.Generic;
+using Microsoft.Win32.SafeHandles;
 public static class InstallLocation {
  public const string ProductMarker="SarevocsCCUPlaner/1";
  public const string Registration=@"Software\Sarevoc\SarevocsCCUPlaner";
@@ -29,9 +31,42 @@ public static class InstallLocation {
  static bool Within(string value,string parent){return value.Equals(parent,StringComparison.OrdinalIgnoreCase)||value.StartsWith(parent+"\\",StringComparison.OrdinalIgnoreCase);}
  public static string Validate(string value,string local,bool staging=false){return ValidateLocation(value,local,staging,true,false);}
  internal static string ValidateForInstall(string value,string local){
-  string target=Validate(value,local);
+  string target=ValidateLocation(value,local,false,true,false,null,true);
   TransactionParent(target);
   return target;
+ }
+ // Fresh components are created with a protected DACL at creation time. Keep
+ // every returned directory handle open without delete-sharing until commit.
+ internal sealed class NewInstallDirectories:IDisposable {
+  readonly List<KeyValuePair<string,SafeFileHandle>> created=new List<KeyValuePair<string,SafeFileHandle>>();
+  bool installed;
+  internal static NewInstallDirectories Prepare(string target,string local){
+   var result=new NewInstallDirectories();
+   try{
+    var missing=new Stack<string>();
+    for(string part=target;part!=null&&!Directory.Exists(part);part=Path.GetDirectoryName(part))missing.Push(part);
+    ValidateForInstall(target,local);
+    foreach(string part in missing){
+     // CreatePayloadDirectory rejects a path that appeared since the snapshot.
+     var handle=SetupBootstrapperCore.CreatePayloadDirectory(part);
+     result.created.Add(new KeyValuePair<string,SafeFileHandle>(part,handle));
+     ValidateTargetAccess(part);
+    }
+    Validate(target,local);
+    return result;
+   }catch{result.Dispose();throw;}
+  }
+  internal void Commit(){installed=true;}
+  public void Dispose(){
+   for(int i=created.Count-1;i>=0;i--){
+    var item=created[i];
+    item.Value.Dispose();
+    if(installed)continue;
+    try{SetupBootstrapperCore.RejectReparseParents(item.Key);Directory.Delete(item.Key,false);}
+    catch(IOException){}catch(UnauthorizedAccessException){}
+   }
+   created.Clear();
+  }
  }
  internal static string TransactionParent(string target){
   bool existing=Directory.Exists(target);
@@ -58,17 +93,19 @@ public static class InstallLocation {
     neighbor=Path.GetDirectoryName(Path.GetFullPath(rejected).TrimEnd('\\'));
    }catch(ArgumentException){return null;}catch(NotSupportedException){return null;}catch(IOException){return null;}
   }
+  var triedParents=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
   foreach(string parent in new[]{neighbor,drive,profile}){
-   if(String.IsNullOrEmpty(parent)||!Directory.Exists(parent))continue;
+   if(String.IsNullOrEmpty(parent)||!triedParents.Add(parent)||!Directory.Exists(parent))continue;
    try{
     if(drive!=null&&!String.Equals(Path.GetPathRoot(parent),drive,StringComparison.OrdinalIgnoreCase))continue;
-    string suggested=Path.Combine(parent,"CCU_Planer");
-    if(String.Equals(suggested,rejected,StringComparison.OrdinalIgnoreCase))suggested=Path.Combine(parent,"CCU_Planer-2");
-    if(Directory.Exists(suggested)||File.Exists(suggested))continue;
-    string candidate=ValidateForInstall(suggested,local);
-    if(drive!=null&&!String.Equals(Path.GetPathRoot(candidate),drive,StringComparison.OrdinalIgnoreCase))continue;
-    if(String.Equals(candidate,rejected,StringComparison.OrdinalIgnoreCase)||Within(candidate,local)||Directory.Exists(candidate))continue;
-    return candidate;
+    for(int number=1;number<=10;number++){
+     string suggested=Path.Combine(parent,number==1?"CCU_Planer":"CCU_Planer-"+number);
+     if(String.Equals(suggested,rejected,StringComparison.OrdinalIgnoreCase)||Directory.Exists(suggested)||File.Exists(suggested))continue;
+     string candidate=ValidateForInstall(suggested,local);
+     if(drive!=null&&!String.Equals(Path.GetPathRoot(candidate),drive,StringComparison.OrdinalIgnoreCase))continue;
+     if(String.Equals(candidate,rejected,StringComparison.OrdinalIgnoreCase)||Within(candidate,local)||Directory.Exists(candidate)||File.Exists(candidate))continue;
+     return candidate;
+    }
    }catch(IOException){}catch(UnauthorizedAccessException){}catch(System.Security.SecurityException){}catch(ArgumentException){}
   }
   return null;
@@ -85,7 +122,7 @@ public static class InstallLocation {
  internal static string ValidateDuringInstall(string target,string local,string work){
   return ValidateLocation(target,local,false,true,false,work);
  }
- static string ValidateLocation(string value,string local,bool staging,bool checkPermissions,bool uninstall,string activeWork=null){
+ static string ValidateLocation(string value,string local,bool staging,bool checkPermissions,bool uninstall,string activeWork=null,bool protectedCreation=false){
   if(String.IsNullOrWhiteSpace(value))throw new IOException(FolderRequired);
   if(value!=null)foreach(string part in value.Split('\\','/'))if(part.EndsWith(".")||part.EndsWith(" "))throw new IOException("INVALID_PATH");
   string root=SetupBootstrapperCore.CanonicalRoot(value);if(!staging&&root.Length>180)throw new IOException("PATH_TOO_LONG");
@@ -111,7 +148,7 @@ public static class InstallLocation {
    if(!File.Exists(marker)||new FileInfo(marker).Length>100||File.ReadAllText(marker).Trim()!=ProductMarker||!productExecutable)
     throw new IOException("DIRECTORY_NOT_EMPTY");
   }
-  if(checkPermissions)ValidateTargetAccess(root);
+  if(checkPermissions)ValidateTargetAccess(root,protectedCreation);
   return root;
  }
 
@@ -121,7 +158,8 @@ public static class InstallLocation {
  const FileSystemRights ChangeContents = ReplaceDirectory | FileSystemRights.WriteData | FileSystemRights.AppendData;
  const AccessControlSections AccessAndOwner = AccessControlSections.Access | AccessControlSections.Owner;
 
- internal static void ValidateTargetAccess(string root){
+ internal static void ValidateTargetAccess(string root){ValidateTargetAccess(root,false);}
+ static void ValidateTargetAccess(string root,bool protectedCreation){
   SecurityIdentifier user;
   using(var identity=WindowsIdentity.GetCurrent())user=identity.User;
   string checkedPath=root;
@@ -136,7 +174,9 @@ public static class InstallLocation {
     FileSystemRights parentMask=Path.GetDirectoryName(parent)==null
      ? FileSystemRights.DeleteSubdirectoriesAndFiles | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership
      : ReplaceDirectory;
-    CheckAccess(Directory.GetAccessControl(parent,AccessAndOwner),user,parentMask,childMissing);
+    // A protected new child cannot inherit this parent's ACEs. Direct rights
+    // that let others replace or take over the child/ancestry still block it.
+    CheckAccess(Directory.GetAccessControl(parent,AccessAndOwner),user,parentMask,childMissing&&!protectedCreation);
     childMissing=false;
    }
   }catch(UnauthorizedAccessException){throw UnverifiableAccess(checkedPath);}
