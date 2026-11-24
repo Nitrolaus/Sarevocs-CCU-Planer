@@ -8,9 +8,9 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.112 Alpha (CAB)** ist als kostenlose Testversion verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.114 Alpha (CAB)** ist als kostenlose Testversion verfügbar.
 
-[Installer und Prüfsumme](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.112-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Prüfsumme](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.114-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
 Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update zeigt der Installer den registrierten Ordner. Wenn Windows-Berechtigungen das Update dort blockieren, zeigt er den Hinweis direkt bei der Ordnerwahl.
 
@@ -68,9 +68,9 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.112 Alpha (CAB)** is available as a free test release.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.114 Alpha (CAB)** is available as a free test release.
 
-[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.112-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and checksum](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.114-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
 Choose the program folder when installing for the first time. During an update, the installer shows the registered folder. If Windows permissions block the update there, the installer explains why next to the folder field.
 
