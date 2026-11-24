@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="{142B7731-1211-4ED2-AE86-C572D7053118}" Name="Sarevoc´s CCU Planer"
+           Codepage="65001" Manufacturer="Sarevoc" Language="1031" Version="0.3.118" UpgradeCode="{6458FCD5-BD95-42AB-86D7-9C136FA4439D}">
+    <Package SummaryCodepage="1252" Description="Sarevocs CCU Planer" Comments="Sarevocs CCU Planer 0.3.118 installer" InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64"/>
+    <MediaTemplate EmbedCab="yes" CompressionLevel="mszip"/>
+    <Property Id="CCUINSTALLDIR" Secure="yes"/>
+    <Property Id="CCUACCEPTTERMS" Secure="yes"/>
+    <Property Id="CCUUIREQUESTED" Secure="yes"/>
+    <Property Id="REINSTALLMODE" Value="amus"/>
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable"/>
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <Icon Id="Planner.ico" SourceFile="$(var.MsiSources)\..\..\assets\app.ico"/>
+    <Property Id="ARPPRODUCTICON" Value="Planner.ico"/>
+    <Condition Message="Diese Installation benötigt ein 64-Bit-Windows mit aktivierter Rücksicherung.">VersionNT64 AND NOT ALLUSERS AND NOT RollbackDisabled AND NOT DISABLEROLLBACK</Condition>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder"><Directory Id="CcuRoot" Name="CCU_Planer"/></Directory>
+      <Directory Id="CcuLegacyRoot" Name="."/>
+      <Directory Id="DesktopFolder"/>
+      <Directory Id="ProgramMenuFolder"><Directory Id="CcuMenu" Name="Sarevoc"/></Directory>
+    </Directory>
+    <DirectoryRef Id="CcuRoot">
+      <Component Id="Registration" Guid="{493DE28B-A8CE-43AF-9225-9A22E7CC1EEF}" Win64="yes">
+        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="InstallLocation" Type="string" Value="[CcuNormalizedRoot]" KeyPath="yes"/>
+        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="TermsAcceptance" Type="string" Value="2026-11-18.2:5438e49d354058b32007d2ed20e189391af6a96150bd9fa7ced6b3823c0e2e73"/>
+        <Shortcut Id="PlannerDesktop" Directory="DesktopFolder" Name="Sarevoc´s CCU Planer" Target="[CcuRoot]Sarevocs-CCU-Planer.exe" WorkingDirectory="CcuRoot" Icon="Planner.ico" Advertise="no"/>
+        <Shortcut Id="PlannerStart" Directory="CcuMenu" Name="Sarevoc´s CCU Planer" Target="[CcuRoot]Sarevocs-CCU-Planer.exe" WorkingDirectory="CcuRoot" Icon="Planner.ico" Advertise="no"/>
+        <RemoveFolder Id="RemoveEmptyMenu" Directory="CcuMenu" On="uninstall"/>
+      </Component>
+      <Component Id="Cab117Migration" Guid="{BECFC7EB-F426-437F-B90F-E188E32E0DE8}" Win64="yes">
+        <Condition>CcuLegacy = "1"</Condition>
+        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="MigratedCabVersion" Type="string" Value="0.3.117" KeyPath="yes"/>
+        <RemoveRegistryKey Id="RemoveExactCabArp" Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\SarevocsCCUPlaner.Selectable" Action="removeOnInstall"/>
+        <RemoveFile Id="OldDesktop" Directory="DesktopFolder" Name="Sarevoc´s CCU Planer.lnk" On="install"/>
+        <RemoveFile Id="OldMenu" Directory="CcuMenu" Name="Sarevoc´s CCU Planer.lnk" On="install"/>
+        <?include Migration.wxi?>
+      </Component>
+      <Component Id="Cab117Relocation" Guid="{5D9CF33D-7603-4253-A47F-ABFFD9F26677}" Win64="yes">
+        <Condition>CcuLegacyMoved = "1"</Condition>
+        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="RelocatedCabVersion" Type="string" Value="0.3.117" KeyPath="yes"/>
+        <?include Relocation.wxi?>
+      </Component>
+    </DirectoryRef>
+    <Feature Id="Planner" Title="CCU Planer" Level="1" Absent="disallow" AllowAdvertise="no">
+      <ComponentGroupRef Id="Payload"/>
+      <ComponentRef Id="Registration"/>
+      <ComponentRef Id="Cab117Migration"/>
+      <ComponentRef Id="Cab117Relocation"/>
+    </Feature>
+    <Binary Id="PreflightCA" SourceFile="$(var.BuildDir)\Preflight.CA.dll"/>
+    <CustomAction Id="ResolveCcuRoot" BinaryKey="PreflightCA" DllEntry="ResolveCcuRoot" Execute="immediate" Return="check"/>
+    <CustomAction Id="VerifyCcuOwnership" BinaryKey="PreflightCA" DllEntry="VerifyCcuOwnership" Execute="immediate" Return="check"/>
+    <CustomAction Id="PrepareCcuUi" BinaryKey="PreflightCA" DllEntry="PrepareCcuUi" Execute="immediate" Return="check"/>
+    <UIRef Id="CcuSetupUI"/>
+    <InstallUISequence>
+      <Custom Action="PrepareCcuUi" Before="CostInitialize">NOT Installed AND UILevel = 5</Custom>
+      <Show Dialog="CcuSetupDlg" Before="ProgressDlg">NOT Installed AND UILevel = 5</Show>
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="ResolveCcuRoot" Before="CostInitialize">1</Custom>
+      <Custom Action="VerifyCcuOwnership" Before="InstallValidate">1</Custom>
+    </InstallExecuteSequence>
+  </Product>
+</Wix>

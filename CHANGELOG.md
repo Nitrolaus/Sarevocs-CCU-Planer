@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.118 · Alpha
+
+Der WiX-MSI-Installer zeigt den bisherigen Programmordner als Vorschlag. Über „Durchsuchen …“ lässt sich ein anderer geeigneter Ordner auswählen. Die Bestätigung der Nutzungsbedingungen schaltet die Installation frei.
+
+Das Update von 0.3.117, die Rücksicherung und der Erhalt der lokalen Daten wurden in der Windows-Sandbox geprüft.
+
 ## 0.3.117 · Alpha
 
 Bei der Ordnerwahl auf einem NTFS-Laufwerk berücksichtigt das Setup geerbte Rechte. Wenn sich der bisherige Programmordner nicht sicher weiterverwenden lässt, prüft das Setup einen eigenen Programmordner auf dem gewählten Laufwerk.

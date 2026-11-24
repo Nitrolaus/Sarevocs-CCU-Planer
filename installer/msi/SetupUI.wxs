@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <Binary Id="CcuSetupBannerUpdate" SourceFile="$(var.BuildDir)\SetupBannerUpdate.bmp"/>
+    <Binary Id="CcuSetupBannerFresh" SourceFile="$(var.BuildDir)\SetupBannerFresh.bmp"/>
+    <UI Id="CcuSetupUI">
+      <TextStyle Id="CcuDefault" FaceName="Segoe UI" Size="9"/>
+      <TextStyle Id="CcuHeading" FaceName="Segoe UI" Size="10" Bold="yes"/>
+      <TextStyle Id="CcuHeaderVersion" FaceName="Segoe UI" Size="10" Red="180" Green="207" Blue="213"/>
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9"/>
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="10" Bold="yes"/>
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12"/>
+      <Property Id="DefaultUIFont" Value="CcuDefault"/>
+      <DialogRef Id="BrowseDlg"/>
+      <DialogRef Id="ProgressDlg"/>
+      <DialogRef Id="ExitDialog"/>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
+
+      <Dialog Id="CcuSetupDlg" Width="426" Height="294" Title="[ProductName] – [CcuUiTitle]">
+        <Control Id="Banner" Type="Bitmap" X="0" Y="0" Width="426" Height="64" Text="[CcuUiBanner]" TabSkip="yes"/>
+        <Control Id="Version" Type="Text" X="72" Y="42" Width="343" Height="15" Transparent="yes" NoPrefix="yes" Text="{\CcuHeaderVersion}[CcuUiVersion]" TabSkip="yes"/>
+
+        <Control Id="FolderLabel" Type="Text" X="17" Y="77" Width="392" Height="14" TabSkip="no" Text="{\CcuHeading}Programmordner"/>
+        <Control Id="Folder" Type="PathEdit" X="17" Y="94" Width="309" Height="19" Property="CcuRoot"/>
+        <Control Id="Browse" Type="PushButton" X="333" Y="94" Width="76" Height="19" Text="Durchsuchen …">
+          <Publish Property="_BrowseProperty" Value="CcuRoot" Order="1">1</Publish>
+          <Publish Event="SpawnDialog" Value="BrowseDlg" Order="2">1</Publish>
+        </Control>
+        <Control Id="FolderHint" Type="Text" X="17" Y="118" Width="392" Height="14" Text="[CcuUiHint]" TabSkip="yes"/>
+
+        <Control Id="TermsLabel" Type="Text" X="17" Y="138" Width="392" Height="14" TabSkip="no" Text="{\CcuHeading}Nutzungsbedingungen"/>
+        <Control Id="Terms" Type="ScrollableText" X="17" Y="154" Width="392" Height="71" Sunken="yes">
+          <Text SourceFile="$(var.BuildDir)\SetupTerms.rtf"/>
+        </Control>
+        <Control Id="Accept" Type="CheckBox" X="17" Y="232" Width="392" Height="17" Property="CCUACCEPTTERMS" CheckBoxValue="1"
+                 Text="Ich akzeptiere die Nutzungsbedingungen."/>
+        <Control Id="FooterLine" Type="Line" X="0" Y="256" Width="426" Height="0"/>
+        <Control Id="Cancel" Type="PushButton" X="232" Y="265" Width="67" Height="20" Cancel="yes" Text="Abbrechen">
+          <Publish Event="EndDialog" Value="Exit">1</Publish>
+        </Control>
+        <Control Id="Install" Type="PushButton" X="307" Y="265" Width="102" Height="20" Default="yes" Disabled="yes" Text="[CcuUiButton]">
+          <Condition Action="enable">CCUACCEPTTERMS = "1"</Condition>
+          <Condition Action="disable">NOT (CCUACCEPTTERMS = "1")</Condition>
+          <Publish Event="SetTargetPath" Value="CcuRoot" Order="1">CCUACCEPTTERMS = "1"</Publish>
+          <Publish Property="CCUINSTALLDIR" Value="[CcuRoot]" Order="2">CCUACCEPTTERMS = "1"</Publish>
+          <Publish Event="EndDialog" Value="Return" Order="3">CCUACCEPTTERMS = "1"</Publish>
+        </Control>
+      </Dialog>
+    </UI>
+    <UIRef Id="WixUI_Common"/>
+  </Fragment>
+</Wix>
