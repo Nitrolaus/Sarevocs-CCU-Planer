@@ -301,7 +301,7 @@ void verifyAccess(const fs::path& p,PSID user,DWORD directMask,bool checkInherit
         bool direct=!(header->AceFlags&INHERIT_ONLY_ACE) && (rights&directMask);
         bool inherited=checkInheritance && (header->AceFlags&(CONTAINER_INHERIT_ACE|OBJECT_INHERIT_ACE)) &&
             (rights&changeRights) && !IsWellKnownSid(sid,WinCreatorOwnerSid);
-        if(direct||inherited) throw UnsafeFolderPermissions{L"Unsafe target permissions: "+p.filename().wstring()};
+        if(direct||inherited) throw UnsafeFolderPermissions{L"Andere Windows-Konten dürfen hier Änderungen vornehmen: "+p.wstring()};
     }
 }
 void verifyTree(const fs::path& root,HANDLE token) {
@@ -430,9 +430,19 @@ void verifyOwnership(MSIHANDLE s) {
         require(arp!=nullptr,L"Die registrierte Altinstallation fehlt.");
         const auto& build=checkLegacyKey(arp.get(),oldRoot);
         require(property(s,L"CcuLegacyVersion")==build.version,L"Die Altversion hat sich während des Setups geändert.");
-        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi119,false);
+        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi120,false);
     }
-    if(installed) verifyFiles(root,msi119,cab117,true);
+    if(installed) {
+        wchar_t version[32]{};
+        DWORD count=static_cast<DWORD>(std::size(version));
+        require(MsiGetProductInfoW(property(s,L"ProductCode").c_str(),INSTALLPROPERTY_VERSIONSTRING,version,&count)==ERROR_SUCCESS,
+                L"Die installierte MSI-Version konnte nicht geprüft werden.");
+        if(wstring(version)==L"0.3.119") verifyFiles(root,msi119,cab117,false);
+        else {
+            require(wstring(version)==L"0.3.120",L"Unerwartete installierte Programmversion.");
+            verifyFiles(root,msi120,cab117,true);
+        }
+    }
     const wstring& shortcutRoot=legacy?oldRoot:root;
     verifyShortcut(desktop,shortcutRoot,legacy||installed);verifyShortcut(menu,shortcutRoot,legacy||installed);
     const auto state=plannerState();

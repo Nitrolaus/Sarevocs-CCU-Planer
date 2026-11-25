@@ -12,6 +12,8 @@ import { CREDIT_URL, CREDIT_CSRF_PROBE, readStoreCredit } from './rsi-credit';
 import { buybackFetchProbe, buybackPageUrl, isBuybackListRead, readBuybacks } from './rsi-buyback';
 import { poundRateFor, type PoundRate } from '../pricing/pound-history';
 import { readPurchases } from './rsi-purchases';
+import { readConcierge } from './rsi-concierge';
+import type { ObservedConciergeRank } from '../domain/concierge';
 import { MAX_FILE_BYTES } from './files';
 export { RSI_PAGE_PROBE, RSI_CONNECTION_PROBE } from './rsi-page';
 
@@ -31,6 +33,7 @@ type RsiSession = { session: Electron.Session; remember: boolean; closing: boole
   restoreFailure: BackgroundRestoreCode | null; buybackListUrl?: string };
 type ConnectionAttempt = { cancelled: boolean; done: Promise<void>; finish: () => void; timedOut?: boolean };
 type RestoreAttempt = ConnectionAttempt & { timedOut: boolean };
+type RankObservation = { signal: AbortSignal; accept: (rank: ObservedConciergeRank) => void };
 export class RsiLogin {
   private windows = new Map<string, BrowserWindow>();
   private statuses = new Map<string, LoginStatus>();
@@ -318,7 +321,9 @@ export class RsiLogin {
     void win.loadURL(initialHangar ? RSI_HANGAR_URL : RSI_LOGIN_URL).catch(() => {});
     return this.status(accountId);
   }
-  async connect(accountId: string, parent: BrowserWindow, remember: boolean, options: { hideHangar?: boolean; signal?: AbortSignal } = {}): Promise<ImportCandidate> {
+  async connect(accountId: string, parent: BrowserWindow, remember: boolean, options: {
+    hideHangar?: boolean; signal?: AbortSignal; rankObservation?: RankObservation;
+  } = {}): Promise<ImportCandidate> {
     let attempt: ConnectionAttempt | undefined;
     let aborted = options.signal?.aborted ?? false;
     let abortCleanup: Promise<void> | undefined;
@@ -412,7 +417,7 @@ export class RsiLogin {
             if (observation === 'consent' && state.hideHangar && !win.isVisible() && !win.isMinimized()) win.show();
             if (observation === 'ready') {
               if (state.hideHangar && win.isVisible()) win.hide();
-              const candidate = await this.probe(accountId);
+              const candidate = await this.probe(accountId, options.rankObservation);
               current();
               if (remember) {
                 const cookies = await this.cookies(win.webContents.session);
@@ -459,7 +464,7 @@ export class RsiLogin {
       }
     }
   }
-  async probe(accountId: string): Promise<ImportCandidate> {
+  async probe(accountId: string, rankObservation?: RankObservation): Promise<ImportCandidate> {
     const win = this.windows.get(accountId);
     if (!win || win.isDestroyed()) throw new UserError('Kein RSI-Fenster geöffnet. Erst manuell anmelden; bei Schutzabfragen Dateiimport verwenden.');
     if (!isPledgesPage(win.webContents.getURL())) {
@@ -575,6 +580,24 @@ export class RsiLogin {
       checkWindow();
       if (isDeepStrictEqual(auth(snapshot), auth(latest))) active.verified = {identity, cookies: latest};
     }
+    // A user-authorized hangar read can report rank from the same temporary session.
+    // Do not persist its cookies, and do not read the billing page here.
+    if (rankObservation && (!active.remember || !active.verified) && !active.background && !rankObservation.signal.aborted &&
+        (matchedProfile || manualReference) && hasAuthenticationCookie(snapshot)) {
+      try {
+        const latest = await this.cookies(active.session);
+        checkWindow();
+        if (isDeepStrictEqual(auth(snapshot), auth(latest))) {
+          const rank = await readConcierge('rank', latest, rankObservation.signal);
+          checkWindow();
+          const current = await this.cookies(active.session);
+          checkWindow();
+          if (!rankObservation.signal.aborted && isDeepStrictEqual(auth(latest), auth(current)) &&
+              (rank.status === 'loaded' || rank.status === 'no-rank')) rankObservation.accept(rank);
+        }
+      } catch { /* An optional rank never invalidates an otherwise successful hangar read. */ }
+    }
+    checkWindow();
     this.frozen.add(accountId);
     this.statuses.set(accountId, { state: 'page-ready', message: 'Hangar gelesen. Vorschau vor der lokalen Übernahme prüfen.' });
     this.record({ event: 'hangar-observation', target: 'hangar', resource: 'mainFrame', observation: 'preview-ready' });

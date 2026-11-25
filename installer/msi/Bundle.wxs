@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <Bundle Name="Sarevoc´s CCU Planer" Manufacturer="Sarevoc" Version="0.3.120.0"
+          UpgradeCode="{E7201A09-B391-4E98-8852-CEBECC126F77}" IconSourceFile="$(var.Icon)" Compressed="yes">
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense">
+      <bal:WixStandardBootstrapperApplication LicenseUrl="" LogoFile="$(var.Logo)" SuppressOptionsUI="yes"/>
+    </BootstrapperApplicationRef>
+    <util:ProductSearch Id="FirstMsi" ProductCode="{142B7731-1211-4ED2-AE86-C572D7053118}" Result="state" Variable="FirstMsi"/>
+    <util:ProductSearch Id="SecondMsi" ProductCode="{142B7731-1211-4ED2-AE86-C572D7053119}" Result="state" Variable="SecondMsi"/>
+    <util:ProductSearch Id="NewMsi" ProductCode="{142B7731-1211-4ED2-AE86-C572D7053120}" Result="state" Variable="NewMsi"/>
+    <bal:Condition Message="Mehrere MSI-Installationen wurden erkannt. Das Setup benötigt eine eindeutige vorhandene Installation.">
+        NOT ((FirstMsi = 5 AND SecondMsi = 5) OR ((FirstMsi = 5 OR SecondMsi = 5) AND NewMsi = 5))
+    </bal:Condition>
+    <Variable Name="CcuAccepted" Type="numeric" Value="0" bal:Overridable="yes"/>
+    <Chain>
+      <MsiPackage Id="InstallPlanner" SourceFile="$(var.Msi)" DisplayInternalUI="yes"
+                  InstallCondition="FirstMsi &lt;&gt; 5 AND SecondMsi &lt;&gt; 5">
+        <MsiProperty Name="CCUACCEPTTERMS" Value="[CcuAccepted]"/>
+      </MsiPackage>
+      <MspPackage Id="UpdatePlanner" SourceFile="$(var.Msp)" PerMachine="no" Permanent="yes"
+                  InstallCondition="FirstMsi = 5 OR SecondMsi = 5"/>
+    </Chain>
+  </Bundle>
+</Wix>

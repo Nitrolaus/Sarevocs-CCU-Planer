@@ -96,6 +96,25 @@ test('Synchron werfendes Restore hinterlässt keinen erledigten Job und erlaubt 
   assert.equal(coordinator.snapshot(account.id).view?.document.pledges[0]!.name, 'Synthetic retry observation');
 });
 
+test('Live beobachteter Concierge-Rang bleibt beim gelesenen Profil im Arbeitsspeicher', async () => {
+  const { account, accounts, cache, lookup } = setup();
+  const other = profile(); accounts.set(other.id, other);
+  const rank = { status: 'loaded', rank: 'Space Marshal', nextRank: 'Wing Commander', progress: 93 } as const;
+  const coordinator = new BackgroundInventory(cache, lookup, async () => null, async () => {});
+  coordinator.observe(account.id, candidate(account), rank);
+  assert.deepEqual(coordinator.conciergeRank(account.id), rank);
+  assert.equal(coordinator.conciergeRank(other.id), undefined);
+  const file = path.join(cache.directory, account.id + '.json');
+  assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /Space Marshal|conciergeRank/);
+  const restarted = new BackgroundInventory(cache, lookup, async () => null, async () => {});
+  assert.equal(restarted.conciergeRank(account.id), undefined);
+  await coordinator.cancel(account.id);
+  assert.equal(coordinator.conciergeRank(account.id), undefined);
+  coordinator.observe(account.id, candidate(account), rank);
+  await coordinator.refresh(account.id);
+  assert.equal(coordinator.conciergeRank(account.id), undefined);
+});
+
 test('Abbruch wartet auf Close und Restore; verspätete Completion schreibt nichts und erzeugt keine neue Ansicht', { timeout: 5000 }, async () => {
   const { account, cache, lookup } = setup(), pending = deferred<ImportCandidate | null>(), closing = deferred<void>();
   const saved = cache.save(account, candidate(account)); cache.writes = 0;

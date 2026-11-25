@@ -70,6 +70,21 @@ test('an offline startup is not retried before a new program run', async () => {
   assert.equal(requests, 2);
 });
 
+test('opening GitHub requires confirmation and respects a cancel or shutdown', async () => {
+  const tag = 'v0.3.120-alpha';
+  const checker = new ReleaseUpdates('0.3.119', async () => [release(tag)]);
+  await checker.check();
+  let prompts = 0, opens = 0;
+  const open = async () => { opens++; };
+  assert.equal(await checker.open('v0.3.121-alpha', open, async () => { prompts++; return true; }), null);
+  assert.deepEqual(await checker.open(tag, open, async () => { prompts++; return false; }), { opened: false });
+  assert.equal(prompts, 1);
+  assert.equal(opens, 0);
+  await assert.rejects(checker.open(tag, async () => { throw new Error('browser unavailable'); }, async () => true));
+  assert.equal(await checker.open(tag, open, async () => { checker.close(); return true; }), null);
+  assert.equal(opens, 0);
+});
+
 test('update IPC accepts a tag but no renderer-supplied URL or additional request data', () => {
   assert.equal(commandSchema.safeParse({ action: 'help.checkUpdate' }).success, true);
   assert.equal(commandSchema.safeParse({ action: 'help.checkUpdate', accountId: 'data' }).success, false);

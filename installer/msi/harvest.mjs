@@ -28,7 +28,7 @@ function guid(name) {
   const h = digest('SarevocsCCUPlaner|file|' + name.toLowerCase());
   return `{${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}}`;
 }
-const manifest = readManifest('msi119.tsv');
+const manifest = readManifest('msi120.tsv');
 const pins = JSON.parse(fs.readFileSync(path.join(source, 'cab-manifests.json'), 'utf8'));
 const legacy = new Map(Object.entries(pins).map(([build, expectedDigest]) => {
   if (!/^[1-9]\d{1,2}$/.test(build) || !/^[a-f0-9]{64}$/.test(expectedDigest)) throw Error('Invalid legacy manifest pin');
@@ -39,7 +39,8 @@ const header = [
   'struct KnownFile { const wchar_t* path; long long size; const char* sha; };',
   'struct KnownCabBuild { const wchar_t* version; std::span<const KnownFile> files; };',
 ];
-for(const [id,entries] of [['msi119',manifest], ...Array.from(legacy, ([build,files]) => [`cab${build}`,files])]) {
+for(const [id,entries] of [['msi120',manifest],['msi119',readManifest('msi119.tsv','b82f41034b0d1f12bdcb4c5b8f480396b86e3c60c4695d4755d42b483b1ad126')],
+  ...Array.from(legacy, ([build,files]) => [`cab${build}`,files])]) {
   header.push('constexpr KnownFile '+id+'[] = {');
   for(const [name,item] of entries) {
     header.push('    { L"'+name.replaceAll('/','\\\\')+'", '+item.size+'LL, "'+item.hash+'" },');

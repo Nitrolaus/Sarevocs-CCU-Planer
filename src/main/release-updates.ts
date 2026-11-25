@@ -92,8 +92,11 @@ export class ReleaseUpdates {
     return this.startupCheck;
   }
 
-  async open(tag: string, openExternal: (url: string) => Promise<void>): Promise<{ opened: true } | null> {
+  async open(tag: string, openExternal: (url: string) => Promise<void>,
+    confirm: () => Promise<boolean> = async () => true): Promise<{ opened: boolean } | null> {
     if (this.controller.signal.aborted || tag !== this.current?.tag || !releaseTagSchema.safeParse(tag).success) return null;
+    if (!await confirm()) return { opened: false };
+    if (this.controller.signal.aborted || tag !== this.current?.tag) return null;
     await openExternal(`https://github.com/${repository}/releases/tag/${tag}`);
     return { opened: true };
   }

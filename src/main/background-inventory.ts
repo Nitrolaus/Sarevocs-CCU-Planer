@@ -1,10 +1,11 @@
 import type { Account, ImportCandidate } from '../domain/model';
 import { LastSeenStore, type LastSeen } from '../storage/last-seen';
 import type { HangarRefreshProgress } from '../importers/hangar-read';
+import type { ObservedConciergeRank } from '../domain/concierge';
 
 export type BackgroundStatus = 'idle' | 'connecting' | 'connected' | 'auth-required' | 'unavailable';
 export type BackgroundSnapshot = { status: BackgroundStatus; revision: string | null; changed: boolean; view?: LastSeen | null; progress?: HangarRefreshProgress };
-type StoredState = { status: BackgroundStatus; view: LastSeen | null };
+type StoredState = { status: BackgroundStatus; view: LastSeen | null; conciergeRank?: ObservedConciergeRank };
 
 /** Each result belongs to a profile and generation. This class never stages or commits an import. */
 export class BackgroundInventory {
@@ -24,7 +25,7 @@ export class BackgroundInventory {
     }
     if (state.view) {
       try { this.cache.assertIdentity(account, state.view); }
-      catch { state.view = null; state.status = 'unavailable'; }
+      catch { state.view = null; state.status = 'unavailable'; state.conciergeRank = undefined; }
     }
     return state;
   }
@@ -33,23 +34,27 @@ export class BackgroundInventory {
     const changed = revision !== (knownRevision ?? null);
     return { status: state.status, revision, changed, ...(changed ? { view: state.view } : {}) };
   }
-  observe(id: string, candidate: ImportCandidate): LastSeen {
+  conciergeRank(id: string): ObservedConciergeRank | undefined {
+    const state = this.state(id);
+    return state.status === 'connected' ? state.conciergeRank : undefined;
+  }
+  observe(id: string, candidate: ImportCandidate, conciergeRank?: ObservedConciergeRank): LastSeen {
     // Manual publishers must first await cancel(), as the main-process authorizer does.
     if (this.jobs.has(id)) throw new Error('Background read still active');
-    return this.publish(id, candidate);
+    return this.publish(id, candidate, conciergeRank);
   }
-  private publish(id: string, candidate: ImportCandidate): LastSeen {
+  private publish(id: string, candidate: ImportCandidate, conciergeRank?: ObservedConciergeRank): LastSeen {
     if (this.stopping) throw new Error('Background stopped');
     const state = this.state(id);
     const view = this.cache.save(this.account(id), candidate, state.view);
-    state.view = view; state.status = 'connected';
+    state.view = view; state.status = 'connected'; state.conciergeRank = conciergeRank;
     return view;
   }
   refresh(id: string): Promise<void> {
     if (this.stopping || this.account(id).mode !== 'real') return Promise.resolve();
     const existing = this.jobs.get(id); if (existing) return existing;
     const state = this.state(id), epoch = (this.epochs.get(id) ?? 0) + 1;
-    this.epochs.set(id, epoch); state.status = 'connecting';
+    this.epochs.set(id, epoch); state.status = 'connecting'; state.conciergeRank = undefined;
     const current = () => !this.stopping && this.epochs.get(id) === epoch;
     const job = (async () => {
       try {
@@ -71,6 +76,8 @@ export class BackgroundInventory {
     return job;
   }
   async cancel(id: string): Promise<void> {
+    const state = this.states.get(id);
+    if (state) state.conciergeRank = undefined;
     const job = this.jobs.get(id); if (!job) return;
     this.epochs.set(id, (this.epochs.get(id) ?? 0) + 1);
     this.state(id).status = 'idle';

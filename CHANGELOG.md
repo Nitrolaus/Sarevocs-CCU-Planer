@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.120 · Alpha
+
+Eine Setup-Datei wählt den Installationsweg für Neuinstallationen und vorhandene Planer-Installationen. Der Concierge-Rang kann beim Lesen des Hangars aus derselben laufenden RSI-Sitzung gelesen werden. Windows Hello schützt die Pledge-Summe weiterhin.
+
+Beim Öffnen des GitHub-Downloads fragt der Planer vorher nach, weil er sich anschließend vollständig beendet.
+
 ## 0.3.119 · Alpha
 
 Das MSI übernimmt frühere veröffentlichte EXE-Installationen direkt im bisherigen Programmordner. Für MSI 0.3.118 gibt es ein eigenes Windows-Installer-Updatepaket (MSP), das die bestehende Installation aktualisiert. Profile, Hangarbestand und die gespeicherte RSI-Sitzung bleiben im Benutzerprofil.

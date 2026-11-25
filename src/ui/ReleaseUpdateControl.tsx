@@ -33,8 +33,8 @@ export function ReleaseUpdateControl({ update }: { update: ReleaseUpdate }) {
     setFailed(false);
     try {
       const result = await window.ccu.request({ action: 'help.openUpdate', tag: update.tag });
-      if (result.ok) dialog.current?.close();
-      else setFailed(true);
+      if (!result.ok) setFailed(true);
+      else if ((result.data as { opened?: boolean } | undefined)?.opened) dialog.current?.close();
     } catch { setFailed(true); }
     finally { setOpening(false); }
   }

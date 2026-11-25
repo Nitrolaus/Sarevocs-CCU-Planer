@@ -9,6 +9,7 @@ import { giveawayShip } from './domain/giveaway';
 import { MAX_FILE_BYTES, parseImport } from './importers/files';
 import { RsiLogin } from './importers/rsi';
 import { readConcierge } from './importers/rsi-concierge';
+import type { ObservedConciergeRank } from './domain/concierge';
 import { requestHello } from './main/windows-hello';
 import { readWithPledgeConsent } from './main/pledge-consent';
 import { ConnectionDiagnostics } from './diagnostics/connection';
@@ -152,6 +153,7 @@ async function start() {
   const publicReader = publicMarketReader();
   const readReleases = publicClient(1024 * 1024);
   const releases = new ReleaseUpdates(APP_VERSION, signal => readReleases(RELEASES_API_URL, signal, false));
+  let updatePromptOpen = false;
   void releases.check();
   app.once('before-quit', () => releases.close());
   const marketDirectory = path.join(dataDir, 'Marktdaten');
@@ -291,8 +293,25 @@ async function start() {
         case 'help.readDocument': data = await readHelpDocument(cmd.document, __dirname); break;
         case 'help.checkUpdate': data = await releases.check(); break;
         case 'help.openUpdate': {
-          data = await releases.open(cmd.tag, url => shell.openExternal(url));
-          if (!data) throw new UserError('Diese Release-Version ist zurzeit nicht verfügbar.');
+          if (updatePromptOpen) { data = { opened: false }; break; }
+          updatePromptOpen = true;
+          try {
+            const en = pricing.snapshot().settings.language === 'en';
+            const result = await releases.open(cmd.tag, url => shell.openExternal(url), async () => {
+              const answer = await dialog.showMessageBox(win, {
+                type: 'warning',
+                title: en ? 'Open update on GitHub?' : 'Update auf GitHub öffnen?',
+                message: en ? 'The planner will close after GitHub opens.' : 'Der Planer wird beendet, sobald GitHub geöffnet ist.',
+                detail: en ? 'This also closes the planner in the system tray.' : 'Dabei wird der Planer auch im Windows-Infobereich beendet.',
+                buttons: en ? ['Cancel', 'Open GitHub and exit'] : ['Abbrechen', 'GitHub öffnen und beenden'],
+                cancelId: 0, defaultId: 0, noLink: true,
+              });
+              return answer.response === 1 && !shuttingDown && !win.isDestroyed();
+            });
+            if (!result) throw new UserError('Diese Release-Version ist zurzeit nicht verfügbar.');
+            data = result;
+            if (result.opened) app.quit();
+          } finally { updatePromptOpen = false; }
           break;
         }
         case 'pricing.status': data = pricing.snapshot(); break;
@@ -351,6 +370,8 @@ async function start() {
           const current = () => permitted() && !controller.signal.aborted;
           if (cmd.action === 'rsi.conciergeRank') {
             rankRead?.abort();
+            const observed = background.conciergeRank(id);
+            if (observed) { data = observed; break; }
             rankRead = controller;
             try {
               const cookies = await vault.load(id, false);
@@ -434,9 +455,13 @@ async function start() {
           const task = beginInteractive(cmd.accountId);
           try {
             await prepareInteractive(cmd.accountId, task);
-            const candidate = await login.connect(cmd.accountId, win, cmd.remember, { hideHangar: true, signal: task.controller.signal });
+            let rank: ObservedConciergeRank | undefined;
+            const candidate = await login.connect(cmd.accountId, win, cmd.remember, {
+              hideHangar: true, signal: task.controller.signal,
+              rankObservation: { signal: task.controller.signal, accept: value => { rank = value; } },
+            });
             ensureInteractive(cmd.accountId, task);
-            background.observe(cmd.accountId, candidate);
+            background.observe(cmd.accountId, candidate, rank);
           } finally { try { await login.close(cmd.accountId); } finally { finishInteractive(cmd.accountId, task); } }
           data = background.snapshot(cmd.accountId);
           if (win.isVisible() && !win.isMinimized()) win.focus();

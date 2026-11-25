@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory)][string]$Application,
     [Parameter(Mandatory)][string]$BuildDirectory,
-    [string]$WixDirectory = 'C:\Codex\tools\WiX-3.14.1-CCU'
+    [string]$WixDirectory = 'C:\Codex\tools\WiX-3.14.1-CCU',
+    [ValidateSet('{142B7731-1211-4ED2-AE86-C572D7053119}','{142B7731-1211-4ED2-AE86-C572D7053120}')]
+    [string]$ProductCode = '{142B7731-1211-4ED2-AE86-C572D7053120}'
 )
 $ErrorActionPreference = 'Stop'
 $Application = (Resolve-Path -LiteralPath $Application).Path
@@ -25,7 +27,7 @@ function Run([string]$exe, [string[]]$parameters) {
 try {
     $env:TEMP = $scratch
     $env:TMP = $scratch
-    if ((Get-FileHash "$PSScriptRoot\msi119.tsv").Hash -ne 'B82F41034B0D1F12BDCB4C5B8F480396B86E3C60C4695D4755D42B483B1AD126') { throw 'Manifest pin mismatch' }
+    if ((Get-FileHash "$PSScriptRoot\msi120.tsv").Hash -ne '2E873E14F8DAF1EEE209E7F1F10A9255DA55CEC4E8522F4B838BDECD11E213FD') { throw 'Manifest pin mismatch' }
     Run 'node.exe' @("$PSScriptRoot\harvest.mjs", $Application, $BuildDirectory)
     & "$PSScriptRoot\Build-DialogResources.ps1" -BuildDirectory $BuildDirectory
     $flags = @('/nologo','/std:c++20','/EHsc','/O2','/MT','/LD','/utf-8',"/I$BuildDirectory","/I$($vc.FullName)\include")
@@ -35,8 +37,8 @@ try {
         "/IMPLIB:$BuildDirectory\Preflight.lib",'msi.lib','shell32.lib','ole32.lib','uuid.lib','advapi32.lib','bcrypt.lib')
     Run "$($vc.FullName)\bin\Hostx64\x64\cl.exe" $flags
     Run "$WixDirectory\candle.exe" @('-nologo','-arch','x64',"-dMsiSources=$PSScriptRoot","-dBuildDir=$BuildDirectory",
-        "-dAppDir=$Application","-I$BuildDirectory",'-out',"$BuildDirectory\","$PSScriptRoot\Product.wxs","$PSScriptRoot\SetupUI.wxs","$BuildDirectory\Payload.wxs")
-    $msi = Join-Path $BuildDirectory 'Sarevocs-CCU-Planer-Setup-0.3.119-Alpha.msi'
+        "-dAppDir=$Application","-dProductCode=$ProductCode","-I$BuildDirectory",'-out',"$BuildDirectory\","$PSScriptRoot\Product.wxs","$PSScriptRoot\SetupUI.wxs","$BuildDirectory\Payload.wxs")
+    $msi = Join-Path $BuildDirectory 'Sarevocs-CCU-Planer-Setup-0.3.120.msi'
     # ICE uses the host Windows Installer service. The offline sandbox is the installation test.
     Run "$WixDirectory\light.exe" @('-nologo','-sval','-ct','1','-cultures:de-de','-ext',"$WixDirectory\WixUIExtension.dll",'-out',$msi,
         "$BuildDirectory\Product.wixobj","$BuildDirectory\SetupUI.wixobj","$BuildDirectory\Payload.wixobj")
