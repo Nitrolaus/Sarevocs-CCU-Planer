@@ -14,9 +14,9 @@ Benötigt werden Node.js, PowerShell, WiX 3.14.1 mit UI-, Bal- und Util-Erweiter
 ./installer/msi/Build.ps1 -Application 'work/temp/packaged/Sarevocs-CCU-Planer-win32-x64' -BuildDirectory 'work/temp/msi' -WixDirectory 'Pfad/zur/portablen/WiX-Installation'
 ```
 
-Erstelle den MSI-Zwischenbuild für die Produktkennung 0.3.119 mit `Build.ps1 -ProductCode '{142B7731-1211-4ED2-AE86-C572D7053119}'` in einem separaten Build-Ordner. Wende für die Produktkennung 0.3.118 `patch-03118/LegacyMsi120.patch` auf eine Kopie des Tags `v0.3.118-alpha` an und baue dort ein weiteres MSI mit derselben Anwendung. Die Zwischenpakete dienen WiX zur Erzeugung der beiden Transformationspfade.
+Erstelle den MSI-Zwischenbuild für die Produktkennung 0.3.119 mit `Build.ps1 -ProductCode '{142B7731-1211-4ED2-AE86-C572D7053119}'` in einem separaten Build-Ordner. Wende für die Produktkennung 0.3.118 `patch-03118/LegacyMsi120.patch` auf eine Kopie des Tags `v0.3.118-alpha` an und baue dort ein weiteres MSI mit derselben Anwendung. Die Zwischenpakete dienen WiX zur Erzeugung der Transformationen für die beiden Produktkennungen.
 
-`Build-CommonBundle.ps1` erhält das neue MSI für Neuinstallationen, die beiden neuen WiX-Debugpakete und die archivierten WiX-Debugpakete der veröffentlichten MSI 0.3.118 und 0.3.119 Ordnerwechsel-Test. Der Build prüft die SHA-256-Werte der Original-MSI-Dateien neben den Debugpaketen. Die Ausgabe `Sarevocs-CCU-Planer-Setup-0.3.120-Alpha.exe` ist die gemeinsame Installationsdatei.
+`Build-CommonBundle.ps1` erhält das neue MSI für Neuinstallationen und die beiden neuen WiX-Debugpakete. Als Ausgangspunkte verwendet es die archivierten WiX-Debugpakete von 0.3.118, vom Zwischenbuild für das veröffentlichte MSP auf 0.3.119 und vom veröffentlichten 0.3.119 Ordnerwechsel-Test. Die ersten beiden behalten dieselbe Produktkennung. Das neue MSP enthält für beide Versionsstände einen eigenen Transformationspfad und lässt das bereits installierte MSP in seiner Reihenfolge bestehen. Der Build prüft die SHA-256-Werte der MSI-Dateien neben den Debugpaketen. Die Ausgabe `Sarevocs-CCU-Planer-Setup-0.3.120-Alpha.exe` ist die gemeinsame Installationsdatei.
 
 ## Ordnerwahl und Daten
 

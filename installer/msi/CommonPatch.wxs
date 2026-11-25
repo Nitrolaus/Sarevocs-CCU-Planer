@@ -4,8 +4,9 @@
          Description="In-place per-user update" Classification="Update">
     <Media Id="1000" Cabinet="update.cab">
       <PatchBaseline Id="Msi118"/>
+      <PatchBaseline Id="Msi118Patched"/>
       <PatchBaseline Id="Msi119"/>
     </Media>
-    <PatchFamily Id="CcuPlanner" Version="0.3.120" Supersede="yes"/>
+    <PatchFamily Id="CcuPlanner" Version="0.3.120" Supersede="no"/>
   </Patch>
 </Wix>
