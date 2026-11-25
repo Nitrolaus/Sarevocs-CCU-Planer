@@ -7,7 +7,7 @@ import { parseCatalogue, parseOffers, mergeOffers, matchingOffer, offersAreStale
 import { MarketService } from '../src/market/service';
 import { commandSchema } from '../src/main/commands';
 import { creditBudgetLimit } from '../src/planner/credit-budget';
-import { SHOP_PRICE_MAX_AGE, shopPairKey, type ShopPrice } from '../src/market/shop-prices';
+import { SHOP_PRICE_MAX_AGE, shopPairKey, shopPriceReader, type ShopPrice } from '../src/market/shop-prices';
 
 const now = () => new Date().toISOString();
 const source = () => Date.now() - 60_000;
@@ -17,6 +17,38 @@ const offer = (id = 62, p = 400, wb = true) => ({ k: 'ccus', n: 'Upgrade to Synt
 const feed = (items: unknown[] = [offer()]) => ({ at: source(), checkedAt: Date.now(), readEvery: 20, items });
 function directory() { const folder = path.resolve('work/temp/market-unit'); fs.mkdirSync(folder, { recursive: true }); return fs.mkdtempSync(path.join(folder, 'case-')); }
 function snapshot(data = parseOffers(feed(), now())): MarketSnapshot { return { schemaVersion: 1, catalogue: null, offers: data, pending: false, errors: { catalogue: null, offers: null }, refreshSchedule: { hour: 17, timeZone: 'Europe/Berlin' } }; }
+
+test('one inventory refresh recovers from a failed first shop request and publishes the quote', async () => {
+  const pair = { fromId: 62, toId: 206 };
+  const requests: string[] = [];
+  const readShop = shopPriceReader(async body => {
+    const [request] = JSON.parse(body);
+    requests.push(request.operationName);
+    if (requests.length === 1) throw new Error('Temporary network failure');
+    if (request.operationName === 'getShipDetails') {
+      assert.deepEqual(request.variables, { id: pair.toId, fromShipId: pair.fromId });
+      return [{ data: { ship: { id: pair.toId, skus: [
+        { id: 19000, title: 'Standard Edition', upgradePrice: 3000, available: true, unlimitedStock: true, availableStock: 0 },
+      ] } } }];
+    }
+    assert.deepEqual(request.variables, { from: pair.fromId, to: 19000 });
+    return [{ data: { app: { pricing: { currencyCode: 'USD', exponent: 2, taxRate: 0, isTaxInclusive: false } },
+      price: { amount: 3000 } } }];
+  });
+  const service = new MarketService(directory(), async source => source === 'catalogue' ? catalogue() : feed(),
+    undefined, undefined, readShop);
+  try {
+    await service.refresh();
+    const started = service.checkShopPrices([pair]);
+    assert.deepEqual(service.snapshot().shopPrices, []);
+    await started;
+    assert.deepEqual(requests, ['getShipDetails', 'getShipDetails', 'getPrice']);
+    const [quote] = service.snapshot().shopPrices ?? [];
+    assert.equal(quote?.amount.minor, 3000);
+    assert.equal(quote?.edition, 'standard');
+    assert.equal(quote?.amount.currency, 'USD');
+  } finally { service.close(); }
+});
 
 test('inventory quote shares the exact pair already being fetched for the planner', async () => {
   const pair = { fromId: 62, toId: 206 };

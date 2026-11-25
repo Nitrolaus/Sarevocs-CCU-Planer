@@ -36,3 +36,47 @@ test('invalid currency or target identity cannot produce a quote', async () => {
   assert.equal(commandSchema.safeParse({action:'market.shopPrices',pairs:[{...pair,url:'https://example.invalid'}]}).success,false);
   assert.equal(commandSchema.safeParse({action:'market.shopPrices',pairs:[{fromId:46,toId:46}]}).success,false);
 });
+
+test('retries a missing amount for an available SKU without repeating the successful edition', async () => {
+  const requestedSkuIds: number[] = [];
+  const reader = shopPriceReader(async body => {
+    const [request] = JSON.parse(body);
+    if (request.operationName === 'getShipDetails') return [{ data: { ship: { id: pair.toId, skus: [standard, warbond] } } }];
+    const id: number = request.variables.to;
+    const missing = id === warbond.id && !requestedSkuIds.includes(id);
+    requestedSkuIds.push(id);
+    return [{ data: {
+      app: { pricing: { currencyCode: 'USD', exponent: 2, taxRate: 0, isTaxInclusive: false } },
+      price: missing ? null : { amount: id === warbond.id ? 2000 : 2500 },
+    } }];
+  });
+  assert.deepEqual((await reader(pair, signal)).map(({ edition, amount }) => [edition, amount.minor]),
+    [['standard', 2500], ['warbond', 2000]]);
+  assert.deepEqual(requestedSkuIds, [standard.id, warbond.id, warbond.id]);
+});
+
+test('a failed details request is limited to two attempts and a valid unavailable offer needs only one', async () => {
+  let attempts = 0;
+  const failing = shopPriceReader(async () => { attempts++; throw new Error('offline'); });
+  await assert.rejects(failing(pair, signal), /offline/);
+  assert.equal(attempts, 2);
+
+  attempts = 0;
+  const unavailable = shopPriceReader(async () => {
+    attempts++;
+    return [{ data: { ship: { id: pair.toId, skus: [{ ...standard, available: false }] } } }];
+  });
+  assert.deepEqual(await unavailable(pair, signal), []);
+  assert.equal(attempts, 1);
+});
+
+test('cancellation during the retry delay prevents a second request', async () => {
+  const controller = new AbortController();
+  let attempts = 0;
+  const reader = shopPriceReader(async () => { attempts++; throw new Error('offline'); });
+  const quote = reader(pair, controller.signal);
+  await new Promise(resolve => setImmediate(resolve));
+  controller.abort();
+  await assert.rejects(quote, { name: 'AbortError' });
+  assert.equal(attempts, 1);
+});

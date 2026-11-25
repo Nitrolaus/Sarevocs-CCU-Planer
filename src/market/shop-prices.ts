@@ -15,6 +15,7 @@ export const shopPriceSchema = z.object({ fromId: id, toId: id, edition: z.enum(
 export type ShopPrice = z.infer<typeof shopPriceSchema>;
 export type ReadShopPrices = (pair: ShopPair, signal: AbortSignal) => Promise<ShopPrice[]>;
 export const SHOP_PRICE_MAX_AGE = 5 * 60_000;
+const SHOP_QUERY_RETRY_DELAY = 2_000;
 export const MAX_SHOP_PAIRS = 24;
 export const shopPairKey = ({ fromId, toId }: ShopPair) => `${fromId}:${toId}`;
 
@@ -45,32 +46,54 @@ const details = z.array(z.object({ data: z.object({ ship: z.object({ id, skus: z
 const price = z.array(z.object({ data: z.object({ app: z.object({ pricing: z.object({
   currencyCode: z.enum(['EUR', 'USD']), exponent: z.literal(2), taxRate: z.number().int().min(0).max(10_000),
   isTaxInclusive: z.boolean(),
-}) }), price: z.object({ amount: cents }).nullable() }), errors: z.array(z.unknown()).max(0).optional() })).length(1);
+}) }), price: z.object({ amount: cents }) }), errors: z.array(z.unknown()).max(0).optional() })).length(1);
 
 type GraphRequest = (body: string, signal: AbortSignal) => Promise<unknown>;
+
+function waitForShopRetry(signal: AbortSignal): Promise<void> {
+  return new Promise(resolve => {
+    const timer = setTimeout(finish, SHOP_QUERY_RETRY_DELAY);
+    function finish() {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    }
+    signal.addEventListener('abort', finish, { once: true });
+  });
+}
 
 /** Both fixed queries are the read operations used by RSI's Upgrade dialog. */
 export function shopPriceReader(read: GraphRequest): ReadShopPrices {
   return async (pair, signal) => {
     const { fromId, toId } = shopPairSchema.parse(pair);
-    const request = (operationName: string, query: string, variables: Record<string, number>) =>
-      read(JSON.stringify([{ operationName, query, variables }]), signal);
-    const raw = await request('getShipDetails',
+    const request = async <T>(schema: z.ZodType<T>, operationName: string, query: string, variables: Record<string, number>) => {
+      const body = JSON.stringify([{ operationName, query, variables }]);
+      const load = async () => schema.parse(await read(body, signal));
+      signal.throwIfAborted();
+      try { return await load(); }
+      catch {
+        signal.throwIfAborted();
+        await waitForShopRetry(signal);
+        signal.throwIfAborted();
+        return load();
+      }
+    };
+    const result = await request(details, 'getShipDetails',
       'query getShipDetails($id: Int!, $fromShipId: Int) { ship(id: $id, from: $fromShipId) { id skus { id title upgradePrice available unlimitedStock availableStock } } }',
       { id: toId, fromShipId: fromId });
-    const target = details.parse(raw)[0]!.data.ship;
+    const target = result[0]!.data.ship;
     if (target?.id !== toId || signal.aborted) return [];
     const checked: ShopPrice[] = [];
     for (const [edition, title] of [['standard', 'Standard Edition'], ['warbond', 'Warbond Edition']] as const) {
       const offers = target.skus.filter(row => row.title === title && row.available && (row.upgradePrice ?? 0) > 0 &&
         (row.unlimitedStock || (row.availableStock ?? 0) > 0));
       if (offers.length !== 1 || signal.aborted) continue;
-      const reply = price.safeParse(await request('getPrice',
+      const reply = await request(price, 'getPrice',
         'query getPrice($from: Int!, $to: Int!) { app { pricing { currencyCode exponent taxRate isTaxInclusive } } price(from: $from, to: $to) { amount } }',
-        { from: fromId, to: offers[0]!.id }).catch(() => null));
-      if (!reply.success) continue;
-      const { app, price: value } = reply.data[0]!.data;
-      if (value) checked.push({ fromId, toId, edition, checkedAt: Date.now(), amount: { minor: value.amount,
+        { from: fromId, to: offers[0]!.id }).catch(() => null);
+      if (!reply || signal.aborted) continue;
+      const { app, price: value } = reply[0]!.data;
+      checked.push({ fromId, toId, edition, checkedAt: Date.now(), amount: { minor: value.amount,
         currency: app.pricing.currencyCode, taxMode: app.pricing.isTaxInclusive ? 'gross' : 'net', vatBasisPoints: app.pricing.taxRate } });
     }
     return checked;
