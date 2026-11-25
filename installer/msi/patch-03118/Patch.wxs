@@ -1,0 +1,6 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+ <Patch AllowRemoval="no" Manufacturer="Sarevoc" DisplayName="Sarevoc CCU Planer 0.3.119" Description="Compatibility prototype from 0.3.118" Classification="Update">
+  <Media Id="1000" Cabinet="update.cab"><PatchBaseline Id="Msi118"/></Media>
+  <PatchFamily Id="CcuPlanner" Version="0.3.119" Supersede="no"/>
+ </Patch>
+</Wix>

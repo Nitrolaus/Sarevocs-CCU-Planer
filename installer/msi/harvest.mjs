@@ -5,13 +5,21 @@ import {fileURLToPath} from 'node:url';
 
 const source = path.dirname(fileURLToPath(import.meta.url));
 const [application, buildDir] = process.argv.slice(2);
-function readManifest(file) {
-  const rows = fs.readFileSync(path.join(source,file),'utf8').trim().split(/\r?\n/);
-  return new Map(rows.map(row => {
+function readManifest(file, expectedDigest) {
+  const bytes = fs.readFileSync(path.join(source,file));
+  if (expectedDigest && digest(bytes) !== expectedDigest) throw Error('Manifest pin mismatch: ' + file);
+  const rows = bytes.toString('utf8').trim().split(/\r?\n/);
+  const entries = new Map(), names = new Set();
+  for (const row of rows) {
     const [name, size, hash] = row.split('\t');
-    if (!/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(name) || name.split('/').includes('..') || !/^[a-f0-9]{64}$/.test(hash)) throw Error('Invalid manifest record');
-    return [name,{size:Number(size), hash}];
-  }));
+    if (!/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(name) ||
+        name.split('/').some(segment => segment === '.' || segment === '..') ||
+        !/^\d+$/.test(size) || !Number.isSafeInteger(Number(size)) ||
+        !/^[a-f0-9]{64}$/.test(hash) || names.has(name.toLowerCase())) throw Error('Invalid manifest record: ' + file);
+    names.add(name.toLowerCase());
+    entries.set(name,{size:Number(size), hash});
+  }
+  return entries;
 }
 function digest(value) { return createHash('sha256').update(value).digest('hex'); }
 function identifier(type, name) { return type + digest(name.toLowerCase()).slice(0,24); }
@@ -20,21 +28,30 @@ function guid(name) {
   const h = digest('SarevocsCCUPlaner|file|' + name.toLowerCase());
   return `{${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}}`;
 }
-const manifest = readManifest('msi118.tsv'), legacy = readManifest('cab117.tsv');
+const manifest = readManifest('msi119.tsv');
+const pins = JSON.parse(fs.readFileSync(path.join(source, 'cab-manifests.json'), 'utf8'));
+const legacy = new Map(Object.entries(pins).map(([build, expectedDigest]) => {
+  if (!/^[1-9]\d{1,2}$/.test(build) || !/^[a-f0-9]{64}$/.test(expectedDigest)) throw Error('Invalid legacy manifest pin');
+  return [build, readManifest(`cab${build}.tsv`, expectedDigest)];
+}));
 const header = [
   '#pragma once',
   'struct KnownFile { const wchar_t* path; long long size; const char* sha; };',
+  'struct KnownCabBuild { const wchar_t* version; std::span<const KnownFile> files; };',
 ];
-for(const [id,entries] of [['cab117',legacy],['msi118',manifest]]) {
+for(const [id,entries] of [['msi119',manifest], ...Array.from(legacy, ([build,files]) => [`cab${build}`,files])]) {
   header.push('constexpr KnownFile '+id+'[] = {');
   for(const [name,item] of entries) {
     header.push('    { L"'+name.replaceAll('/','\\\\')+'", '+item.size+'LL, "'+item.hash+'" },');
   }
   header.push('};');
 }
+header.push('constexpr KnownCabBuild knownCabBuilds[] = {');
+for (const build of legacy.keys()) header.push(`    { L"0.3.${build}", cab${build} },`);
+header.push('};');
 fs.writeFileSync(path.join(buildDir,'FileManifest.h'),header.join('\n')+'\n');
 const directories = new Map([['','CcuRoot']]);
-const components = [], definitions = [], migration = [], relocation = [];
+const components = [], definitions = [], legacyComponents = [];
 for (const [name, file] of manifest) {
   const marker = name === 'install-product.txt';
   const diskFile = path.join(marker ? source : application,name);
@@ -56,7 +73,7 @@ for (const [name, file] of manifest) {
   definitions.push(`<DirectoryRef Id="${directories.get(parent)}"><Component Id="${component}" Guid="${guid(name)}" Win64="yes"><File Id="${identifier('F',name)}" Source="${wixSource}" KeyPath="yes"/></Component></DirectoryRef>`);
 }
 const legacyDirectories = new Map([['', 'CcuLegacyRoot']]);
-for(const [name, old] of legacy) {
+function removalDirectory(name) {
   const parent=path.posix.dirname(name);
   let relative = '';
   for (const segment of parent === '.' ? [] : parent.split('/')) {
@@ -68,12 +85,23 @@ for(const [name, old] of legacy) {
     }
     relative = child;
   }
-  const row = `<RemoveFile Id="${identifier('R',name)}" Name="${path.posix.basename(name)}" Directory="${legacyDirectories.get(relative)}" On="install"/>`;
-  if (manifest.get(name)?.hash === old.hash) relocation.push(row);
-  else migration.push(row);
+  return legacyDirectories.get(relative);
+}
+for(const [build, files] of legacy) {
+  const migration = [], relocation = [];
+  for(const [name, previous] of files) {
+    const row = `<RemoveFile Id="${identifier('R',`${build}:${name}`)}" Name="${path.posix.basename(name)}" Directory="${removalDirectory(name)}" On="install"/>`;
+    (manifest.get(name)?.hash === previous.hash ? relocation : migration).push(row);
+  }
+  for (const [phase, rows, onlyOnMove] of [['Migration',migration,false],['Relocation',relocation,true]]) {
+    if (!rows.length) continue;
+    const id = `Cab${build}${phase}Files`;
+    const when = `CcuLegacyVersion = "0.3.${build}"` + (onlyOnMove ? ' AND CcuLegacyMoved = "1"' : '');
+    definitions.push(`<DirectoryRef Id="CcuRoot"><Component Id="${id}" Guid="${guid(id)}" Win64="yes"><Condition>${when}</Condition><RegistryValue Root="HKCU" Key="Software\\Sarevoc\\SarevocsCCUPlaner" Name="${id}" Type="integer" Value="1" KeyPath="yes"/>\n${rows.join('\n')}\n</Component></DirectoryRef>`);
+    legacyComponents.push(id);
+  }
 }
 const ns='xmlns="http://schemas.microsoft.com/wix/2006/wi"';
-fs.writeFileSync(path.join(buildDir,'Payload.wxs'), `<Wix ${ns}><Fragment>\n${definitions.join('\n')}\n<ComponentGroup Id="Payload">\n${components.map(id=>`<ComponentRef Id="${id}"/>`).join('\n')}\n</ComponentGroup>\n</Fragment></Wix>\n`);
-fs.writeFileSync(path.join(buildDir,'Migration.wxi'), `<Include ${ns}>\n${migration.join('\n')}\n</Include>\n`);
-fs.writeFileSync(path.join(buildDir,'Relocation.wxi'), `<Include ${ns}>\n${relocation.join('\n')}\n</Include>\n`);
-console.log(`${manifest.size} verified payload files; ${migration.length} exact legacy rows and ${relocation.length} relocation rows`);
+const reference = ids => ids.map(id => `<ComponentRef Id="${id}"/>`).join('\n');
+fs.writeFileSync(path.join(buildDir,'Payload.wxs'), `<Wix ${ns}><Fragment>\n${definitions.join('\n')}\n<ComponentGroup Id="Payload">\n${reference(components)}\n</ComponentGroup>\n<ComponentGroup Id="LegacyFiles">\n${reference(legacyComponents)}\n</ComponentGroup>\n</Fragment></Wix>\n`);
+console.log(`${manifest.size} verified payload files; verified legacy manifests for ${[...legacy.keys()].map(build => '0.3.' + build).join(', ')}`);

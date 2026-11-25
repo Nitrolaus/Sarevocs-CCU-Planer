@@ -1,3 +1,4 @@
 # These files are verified byte for byte by the MSI build.
 *.tsv -text whitespace=cr-at-eol
 install-product.txt -text whitespace=cr-at-eol
+patch-03118/LegacyMsi119.patch -text whitespace=cr-at-eol

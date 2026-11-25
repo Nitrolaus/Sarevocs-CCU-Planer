@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.119 · Alpha
+
+Das MSI übernimmt frühere veröffentlichte EXE-Installationen direkt im bisherigen Programmordner. Für MSI 0.3.118 gibt es ein eigenes Windows-Installer-Updatepaket (MSP), das die bestehende Installation aktualisiert. Profile, Hangarbestand und die gespeicherte RSI-Sitzung bleiben im Benutzerprofil.
+
+Die direkten Updates von EXE 0.3.103 und 0.3.110 sowie Update und Rücksicherung von MSI 0.3.118 wurden in der Offline-Windows-Sandbox geprüft.
+
 ## 0.3.118 · Alpha
 
 Der WiX-MSI-Installer zeigt den bisherigen Programmordner als Vorschlag. Über „Durchsuchen …“ lässt sich ein anderer geeigneter Ordner auswählen. Die Bestätigung der Nutzungsbedingungen schaltet die Installation frei.

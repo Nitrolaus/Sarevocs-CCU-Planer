@@ -15,6 +15,7 @@
 #include <array>
 #include <set>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 #include "FileManifest.h"
@@ -87,13 +88,19 @@ wstring readString(HKEY key,const wchar_t* name) {
             size>=2 && buffer[size/2-1]==0 && wcslen(buffer.data())==size/2-1,L"Invalid registry string.");
     return buffer.data();
 }
-void checkLegacyKey(HKEY key,const wstring& root) {
+const KnownCabBuild* findCabBuild(const wstring& version) {
+    for(const auto& build:knownCabBuilds) if(version==build.version) return &build;
+    return nullptr;
+}
+const KnownCabBuild& checkLegacyKey(HKEY key,const wstring& root) {
     DWORD subkeys=0,values=0;
     require(RegQueryInfoKeyW(key,nullptr,nullptr,nullptr,&subkeys,nullptr,nullptr,&values,nullptr,nullptr,nullptr,nullptr)==ERROR_SUCCESS &&
             !subkeys && values==9,L"Unknown CAB uninstall registration.");
+    const auto* build=findCabBuild(readString(key,L"DisplayVersion"));
+    require(build!=nullptr,L"Diese Altversion kann das Setup nicht direkt übernehmen. Aktualisiere den Planer zuerst mit dem offiziellen EXE-Installer 0.3.117.");
     wstring uninstall=L"\""+(fs::path(root)/L"Uninstall.exe").wstring()+L"\"";
     const std::pair<const wchar_t*,wstring> expected[]={
-        {L"DisplayName",L"Sarevoc\u00b4s CCU Planer"},{L"DisplayVersion",L"0.3.117"},{L"Publisher",L"Sarevoc"},
+        {L"DisplayName",L"Sarevoc\u00b4s CCU Planer"},{L"DisplayVersion",build->version},{L"Publisher",L"Sarevoc"},
         {L"InstallLocation",root},{L"DisplayIcon",(fs::path(root)/appName).wstring()+L",0"},
         {L"UninstallString",uninstall},{L"QuietUninstallString",uninstall+L" /S"}
     };
@@ -102,6 +109,7 @@ void checkLegacyKey(HKEY key,const wstring& root) {
         DWORD value=0,size=sizeof(value);
         require(RegGetValueW(key,nullptr,name,RRF_RT_REG_DWORD,nullptr,&value,&size)==ERROR_SUCCESS && value==1,L"Invalid CAB uninstall flags.");
     }
+    return *build;
 }
 DWORD attributes(const fs::path& path) {
     DWORD a=GetFileAttributesW(path.c_str());
@@ -216,7 +224,11 @@ void resolveRoot(MSIHANDLE s) {
     const bool accepted=property(s,L"CCUACCEPTTERMS")==L"1";
     const bool fullUi=property(s,L"CCUUIREQUESTED")==L"1";
     require(installed || accepted || (!fullUi && terms==receipt),L"Bestätige zuerst die Nutzungsbedingungen.");
-    if(arp) {require(!installed,L"Conflicting MSI and CAB registrations.");checkLegacyKey(arp.get(),previous);}
+    wstring legacyVersion;
+    if(arp) {
+        require(!installed,L"Conflicting MSI and CAB registrations.");
+        legacyVersion=checkLegacyKey(arp.get(),previous).version;
+    }
     else require(installed || registered.empty(),L"Unrecognized previous installation.");
     require(!product || installed || arp || (registered.empty() && terms==receipt),L"Unrecognized product registration.");
     wstring root=choice.empty() ? previous : canonical(choice,token.get());
@@ -228,6 +240,7 @@ void resolveRoot(MSIHANDLE s) {
         require(accepted,L"Bestätige die Nutzungsbedingungen für den Ordnerwechsel.");
     }
     setProperty(s,L"CcuLegacy",arp?L"1":L"");
+    setProperty(s,L"CcuLegacyVersion",legacyVersion);
     setProperty(s,L"CcuLegacyMoved",moving?L"1":L"");
     setProperty(s,L"CcuOldNormalizedRoot",arp?previous:root);
     setProperty(s,L"CcuLegacyRoot",(arp?previous:root)+L"\\");
@@ -338,8 +351,7 @@ void verifyShortcut(const fs::path& directory,const wstring& root,bool mayExist)
     require(SUCCEEDED(link->GetPath(target,32768,nullptr,SLGP_RAWPATH)) && SUCCEEDED(link->GetArguments(args,2048)) &&
         !args[0] && same(target,(fs::path(root)/appName).wstring()),L"Foreign shortcut target.");
 }
-template<size_t N,size_t M>
-void verifyFiles(const fs::path& root,const KnownFile (&expected)[N],const KnownFile (&other)[M],bool mayBeMissing) {
+void verifyFiles(const fs::path& root,std::span<const KnownFile> expected,std::span<const KnownFile> other,bool mayBeMissing) {
     std::set<wstring> names;
     for(const auto& f:expected) {
         names.emplace(f.path);auto path=root/f.path;
@@ -349,6 +361,30 @@ void verifyFiles(const fs::path& root,const KnownFile (&expected)[N],const Known
     for(const auto& f:other) if(!names.count(f.path))
         require(attributes(root/f.path)==INVALID_FILE_ATTRIBUTES,L"Foreign file collision: "+wstring(f.path));
 }
+enum class PlannerState { unreadable, running, stopped };
+
+PlannerState plannerState() {
+    Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));
+    PROCESSENTRY32W process{};
+    process.dwSize=sizeof(process);
+    if(snapshot.get()==INVALID_HANDLE_VALUE || !Process32FirstW(snapshot.get(),&process))
+        return PlannerState::unreadable;
+    do {
+        if(same(process.szExeFile,appName)) return PlannerState::running;
+    } while(Process32NextW(snapshot.get(),&process));
+    return GetLastError()==ERROR_NO_MORE_FILES?PlannerState::stopped:PlannerState::unreadable;
+}
+
+void checkPlannerBeforeUpdate(MSIHANDLE s) {
+    const auto state=plannerState();
+    setProperty(s,L"CcuPlannerReady",state==PlannerState::stopped?L"1":L"");
+    const bool unreadable=state==PlannerState::unreadable;
+    setProperty(s,L"CcuPlannerTitle",L"Bitte CCU-Planer schließen");
+    setProperty(s,L"CcuPlannerHint",unreadable?
+        L"Das Setup konnte laufende Prozesse nicht prüfen. Beende den Planer im Windows-Infobereich und klicke auf „Erneut prüfen“.":
+        L"Klicke unten rechts im Windows-Infobereich mit der rechten Maustaste auf das Planer-Symbol und wähle „Beenden“. Das X kann den Planer im Hintergrund weiterlaufen lassen.");
+}
+
 void verifyOwnership(MSIHANDLE s) {
     auto token=effectiveToken();
     wstring root=property(s,L"CcuNormalizedRoot");
@@ -366,15 +402,21 @@ void verifyOwnership(MSIHANDLE s) {
         require(fs::is_empty(root),L"Wähle einen leeren Programmordner.");
     verifyTree(root,token.get());
     if(moving) verifyTree(oldRoot,token.get());
-    if(legacy) verifyFiles(oldRoot,cab117,msi118,false);
-    if(installed) verifyFiles(root,msi118,cab117,true);
+    if(legacy) {
+        HKEY current=nullptr;
+        require(RegOpenCurrentUser(KEY_READ,&current)==ERROR_SUCCESS,L"Cannot read user's registry.");
+        Key user(current), arp=openKey(current,legacyArp);
+        require(arp!=nullptr,L"Die registrierte Altinstallation fehlt.");
+        const auto& build=checkLegacyKey(arp.get(),oldRoot);
+        require(property(s,L"CcuLegacyVersion")==build.version,L"Die Altversion hat sich während des Setups geändert.");
+        verifyFiles(oldRoot,build.files,msi119,false);
+    }
+    if(installed) verifyFiles(root,msi119,cab117,true);
     const wstring& shortcutRoot=legacy?oldRoot:root;
     verifyShortcut(desktop,shortcutRoot,legacy||installed);verifyShortcut(menu,shortcutRoot,legacy||installed);
-    Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));
-    PROCESSENTRY32W process{};process.dwSize=sizeof(process);
-    require(snapshot.get()!=INVALID_HANDLE_VALUE && Process32FirstW(snapshot.get(),&process),L"Cannot check running processes.");
-    do {require(!same(process.szExeFile,appName),L"Close the planner before continuing.");} while(Process32NextW(snapshot.get(),&process));
-    require(GetLastError()==ERROR_NO_MORE_FILES,L"Cannot finish process check.");
+    const auto state=plannerState();
+    require(state!=PlannerState::unreadable,L"Das Setup konnte laufende Prozesse nicht prüfen.");
+    require(state==PlannerState::stopped,L"Beende den CCU-Planer unten rechts im Windows-Infobereich über „Beenden“ und starte das Setup erneut.");
 }
 UINT run(MSIHANDLE s,void(*action)(MSIHANDLE)) noexcept {
     wstring message;
@@ -394,3 +436,4 @@ UINT run(MSIHANDLE s,void(*action)(MSIHANDLE)) noexcept {
 extern "C" __declspec(dllexport) UINT __stdcall ResolveCcuRoot(MSIHANDLE s) {return run(s,resolveRoot);}
 extern "C" __declspec(dllexport) UINT __stdcall VerifyCcuOwnership(MSIHANDLE s) {return run(s,verifyOwnership);}
 extern "C" __declspec(dllexport) UINT __stdcall PrepareCcuUi(MSIHANDLE s) {return run(s,prepareUi);}
+extern "C" __declspec(dllexport) UINT __stdcall CheckCcuPlanner(MSIHANDLE s) {return run(s,checkPlannerBeforeUpdate);}

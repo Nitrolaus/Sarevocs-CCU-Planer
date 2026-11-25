@@ -25,8 +25,7 @@ function Run([string]$exe, [string[]]$parameters) {
 try {
     $env:TEMP = $scratch
     $env:TMP = $scratch
-    if ((Get-FileHash "$PSScriptRoot\cab117.tsv").Hash -ne 'EEB66F82CBF5FC48206B3D118C9358C0B861B16DE314E5D0A5811DD1597C80ED' -or
-        (Get-FileHash "$PSScriptRoot\msi118.tsv").Hash -ne 'D2F936592648BDE945D10051E75E0CFB49AE234C5C1C51B22339CFDA23C4716D') { throw 'Manifest pin mismatch' }
+    if ((Get-FileHash "$PSScriptRoot\msi119.tsv").Hash -ne 'B82F41034B0D1F12BDCB4C5B8F480396B86E3C60C4695D4755D42B483B1AD126') { throw 'Manifest pin mismatch' }
     Run 'node.exe' @("$PSScriptRoot\harvest.mjs", $Application, $BuildDirectory)
     & "$PSScriptRoot\Build-DialogResources.ps1" -BuildDirectory $BuildDirectory
     $flags = @('/nologo','/std:c++20','/EHsc','/O2','/MT','/LD','/utf-8',"/I$BuildDirectory","/I$($vc.FullName)\include")
@@ -37,7 +36,7 @@ try {
     Run "$($vc.FullName)\bin\Hostx64\x64\cl.exe" $flags
     Run "$WixDirectory\candle.exe" @('-nologo','-arch','x64',"-dMsiSources=$PSScriptRoot","-dBuildDir=$BuildDirectory",
         "-dAppDir=$Application","-I$BuildDirectory",'-out',"$BuildDirectory\","$PSScriptRoot\Product.wxs","$PSScriptRoot\SetupUI.wxs","$BuildDirectory\Payload.wxs")
-    $msi = Join-Path $BuildDirectory 'Sarevocs-CCU-Planer-0.3.118-MSI-Dialog-Test.msi'
+    $msi = Join-Path $BuildDirectory 'Sarevocs-CCU-Planer-Setup-0.3.119-Alpha.msi'
     # ICE uses the host Windows Installer service. The offline sandbox is the installation test.
     Run "$WixDirectory\light.exe" @('-nologo','-sval','-ct','1','-cultures:de-de','-ext',"$WixDirectory\WixUIExtension.dll",'-out',$msi,
         "$BuildDirectory\Product.wixobj","$BuildDirectory\SetupUI.wixobj","$BuildDirectory\Payload.wixobj")

@@ -43,7 +43,22 @@
           <Condition Action="disable">NOT (CCUACCEPTTERMS = "1")</Condition>
           <Publish Event="SetTargetPath" Value="CcuRoot" Order="1">CCUACCEPTTERMS = "1"</Publish>
           <Publish Property="CCUINSTALLDIR" Value="[CcuRoot]" Order="2">CCUACCEPTTERMS = "1"</Publish>
-          <Publish Event="EndDialog" Value="Return" Order="3">CCUACCEPTTERMS = "1"</Publish>
+          <Publish Event="DoAction" Value="CheckCcuPlanner" Order="3">CCUACCEPTTERMS = "1"</Publish>
+          <Publish Event="NewDialog" Value="CcuPlannerRunningDlg" Order="4">CCUACCEPTTERMS = "1" AND NOT CcuPlannerReady</Publish>
+          <Publish Event="EndDialog" Value="Return" Order="5">CCUACCEPTTERMS = "1" AND CcuPlannerReady = "1"</Publish>
+        </Control>
+      </Dialog>
+
+      <Dialog Id="CcuPlannerRunningDlg" Width="320" Height="120" Title="[ProductName]">
+        <Control Id="Heading" Type="Text" X="17" Y="14" Width="286" Height="17" Text="{\CcuHeading}[CcuPlannerTitle]" TabSkip="yes"/>
+        <Control Id="Hint" Type="Text" X="17" Y="36" Width="286" Height="43" Text="[CcuPlannerHint]" TabSkip="yes"/>
+        <Control Id="FooterLine" Type="Line" X="0" Y="82" Width="320" Height="0"/>
+        <Control Id="Back" Type="PushButton" X="132" Y="90" Width="72" Height="20" Cancel="yes" Text="Zurück">
+          <Publish Event="NewDialog" Value="CcuSetupDlg">1</Publish>
+        </Control>
+        <Control Id="Retry" Type="PushButton" X="212" Y="90" Width="91" Height="20" Default="yes" Text="Erneut prüfen">
+          <Publish Event="DoAction" Value="CheckCcuPlanner" Order="1">1</Publish>
+          <Publish Event="EndDialog" Value="Return" Order="2">CCUACCEPTTERMS = "1" AND CcuPlannerReady = "1"</Publish>
         </Control>
       </Dialog>
     </UI>
