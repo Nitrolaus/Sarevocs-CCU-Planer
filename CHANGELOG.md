@@ -6,7 +6,7 @@ Der Planer prüft einen verspätet sichtbaren RSI-Kontonamen erneut und zeigt an
 
 Die Kettenbauhistorie zeigt bekannte Bauschritte, Baudaten und belegte Preise. Die Abschlusskarte fasst Start, Ziel, Gesamtpreis und Ersparnis zusammen, soweit diese Werte belegt sind.
 
-Ein MSI übernimmt Neuinstallationen und Updates. Beim erneuten Öffnen desselben MSI stehen Reparatur und Deinstallation zur Auswahl.
+Ein MSI übernimmt Neuinstallationen und Updates. Beim Wechsel von einem älteren MSI wird 0.3.121 zunächst in einem Unterordner installiert. Erst nach Abschluss wird die alte Programmversion entfernt. Beim erneuten Öffnen desselben MSI stehen Reparatur und Deinstallation zur Auswahl.
 
 ## 0.3.120 · Alpha
 

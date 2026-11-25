@@ -3,7 +3,7 @@
   <Product Id="$(var.ProductCode)" Name="Sarevoc´s CCU Planer"
            Codepage="65001" Manufacturer="Sarevoc" Language="1031" Version="0.3.121" UpgradeCode="{6458FCD5-BD95-42AB-86D7-9C136FA4439D}">
     <Package SummaryCodepage="1252" Description="Sarevocs CCU Planer" Comments="Sarevocs CCU Planer 0.3.121" InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64"/>
-    <MajorUpgrade Schedule="afterInstallInitialize" MigrateFeatures="no"
+    <MajorUpgrade Schedule="afterInstallFinalize" MigrateFeatures="no"
                   DowngradeErrorMessage="Eine neuere Version des CCU-Planers ist bereits installiert."/>
     <MediaTemplate EmbedCab="yes" CompressionLevel="mszip"/>
     <Property Id="CCUINSTALLDIR" Secure="yes"/>
@@ -22,16 +22,18 @@
       <Directory Id="ProgramMenuFolder"><Directory Id="CcuMenu" Name="Sarevoc"/></Directory>
     </Directory>
     <DirectoryRef Id="CcuRoot">
-      <Component Id="Registration" Guid="{493DE28B-A8CE-43AF-9225-9A22E7CC1EEF}" Win64="yes">
-        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="InstallLocation" Type="string" Value="[CcuNormalizedRoot]" KeyPath="yes"/>
-        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="TermsAcceptance" Type="string" Value="2026-11-18.2:5438e49d354058b32007d2ed20e189391af6a96150bd9fa7ced6b3823c0e2e73"/>
-        <Shortcut Id="PlannerDesktop" Directory="DesktopFolder" Name="Sarevoc´s CCU Planer" Target="[CcuRoot]Sarevocs-CCU-Planer.exe" WorkingDirectory="CcuRoot" Icon="Planner.ico" Advertise="no"/>
-        <Shortcut Id="PlannerStart" Directory="CcuMenu" Name="Sarevoc´s CCU Planer" Target="[CcuRoot]Sarevocs-CCU-Planer.exe" WorkingDirectory="CcuRoot" Icon="Planner.ico" Advertise="no"/>
+      <Component Id="Registration" Guid="{AA062386-A52E-471C-A74B-CB0E59306D7F}" Win64="yes">
+        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlanerMSI" Name="InstallLocation" Type="string" Value="[CcuNormalizedRoot]" KeyPath="yes"/>
+        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlanerMSI" Name="TermsAcceptance" Type="string" Value="2026-11-18.2:5438e49d354058b32007d2ed20e189391af6a96150bd9fa7ced6b3823c0e2e73"/>
+        <Shortcut Id="PlannerDesktop" Directory="DesktopFolder" Name="Sarevoc´s CCU Planer Alpha" Target="[CcuRoot]Sarevocs-CCU-Planer.exe" WorkingDirectory="CcuRoot" Icon="Planner.ico" Advertise="no"/>
+        <Shortcut Id="PlannerStart" Directory="CcuMenu" Name="Sarevoc´s CCU Planer Alpha" Target="[CcuRoot]Sarevocs-CCU-Planer.exe" WorkingDirectory="CcuRoot" Icon="Planner.ico" Advertise="no"/>
         <RemoveFolder Id="RemoveEmptyMenu" Directory="CcuMenu" On="uninstall"/>
       </Component>
-      <Component Id="CabMigration" Guid="{BECFC7EB-F426-437F-B90F-E188E32E0DE8}" Win64="yes">
+      <Component Id="CabMigration" Guid="{D325872A-DD47-4EC2-87CB-55A323A1B2D9}" Win64="yes">
         <Condition>CcuLegacy = "1"</Condition>
-        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="MigratedCabVersion" Type="string" Value="[CcuLegacyVersion]" KeyPath="yes"/>
+        <RegistryValue Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlanerMSI" Name="MigratedCabVersion" Type="string" Value="[CcuLegacyVersion]" KeyPath="yes"/>
+        <RemoveRegistryValue Id="RemoveCabInstallLocation" Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="InstallLocation"/>
+        <RemoveRegistryValue Id="RemoveCabTermsAcceptance" Root="HKCU" Key="Software\Sarevoc\SarevocsCCUPlaner" Name="TermsAcceptance"/>
         <RemoveRegistryKey Id="RemoveExactCabArp" Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\SarevocsCCUPlaner.Selectable" Action="removeOnInstall"/>
         <RemoveFile Id="OldDesktop" Directory="DesktopFolder" Name="Sarevoc´s CCU Planer.lnk" On="install"/>
         <RemoveFile Id="OldMenu" Directory="CcuMenu" Name="Sarevoc´s CCU Planer.lnk" On="install"/>

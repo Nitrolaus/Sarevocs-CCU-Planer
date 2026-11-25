@@ -24,8 +24,8 @@ function readManifest(file, expectedDigest) {
 function digest(value) { return createHash('sha256').update(value).digest('hex'); }
 function identifier(type, name) { return type + digest(name.toLowerCase()).slice(0,24); }
 function guid(name) {
-  if(name === 'install-product.txt') return '{A9E970CA-6C7E-44D7-A98E-075C4903CC27}';
-  const h = digest('SarevocsCCUPlaner|file|' + name.toLowerCase());
+  if(name === 'install-product.txt') return '{1BC71A73-24CC-4AC1-BFE9-CCB7B4F36C63}';
+  const h = digest('SarevocsCCUPlanerMSI|file|' + name.toLowerCase());
   return `{${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}}`;
 }
 const manifest = readManifest('msi121.tsv','b69d8831b06345be07b5ff1e83b6e04fefe5c2c577211e2b118eb53b941111ca');
@@ -101,7 +101,7 @@ for(const [build, files] of legacy) {
     if (!rows.length) continue;
     const id = `Cab${build}${phase}Files`;
     const when = `CcuLegacyVersion = "0.3.${build}" AND NOT CcuLegacyKeepFiles` + (onlyOnMove ? ' AND CcuLegacyMoved = "1"' : '');
-    definitions.push(`<DirectoryRef Id="CcuRoot"><Component Id="${id}" Guid="${guid(id)}" Win64="yes"><Condition>${when}</Condition><RegistryValue Root="HKCU" Key="Software\\Sarevoc\\SarevocsCCUPlaner" Name="${id}" Type="integer" Value="1" KeyPath="yes"/>\n${rows.join('\n')}\n</Component></DirectoryRef>`);
+    definitions.push(`<DirectoryRef Id="CcuRoot"><Component Id="${id}" Guid="${guid(id)}" Win64="yes"><Condition>${when}</Condition><RegistryValue Root="HKCU" Key="Software\\Sarevoc\\SarevocsCCUPlanerMSI" Name="${id}" Type="integer" Value="1" KeyPath="yes"/>\n${rows.join('\n')}\n</Component></DirectoryRef>`);
     legacyComponents.push(id);
   }
 }

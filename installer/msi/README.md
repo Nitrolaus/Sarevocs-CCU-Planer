@@ -2,7 +2,7 @@
 
 Dieses Verzeichnis enthält den Quellcode des MSI-Installers für Windows x64. `SetupUI.wxs` beschreibt den Dialog mit Ordnerwahl und Zustimmungs-Checkbox. Der Kopfbereich verwendet das Planer-Logo. Der Build übernimmt die Nutzungsbedingungen aus `installer/SetupWindow.cs` und vergleicht den vollständigen Text mit dem Hash im Zustimmungsbeleg.
 
-`Product.wxs` beschreibt Dateien, Komponenten und Registrierung. `NativePreflight.cpp` prüft die vorhandene Installation, den Ordner und die bekannten Programmdateien. Bei einem Wechsel von MSI 0.3.118 bis 0.3.120 ersetzt Windows Installer das alte Produkt innerhalb derselben Transaktion. Die Wartung für 0.3.121 bietet Reparatur und Deinstallation.
+`Product.wxs` beschreibt Dateien, Komponenten und Registrierung. `NativePreflight.cpp` prüft die vorhandene Installation, den Ordner und die bekannten Programmdateien. Beim Wechsel von MSI 0.3.118 bis 0.3.120 installiert Windows Installer zuerst die neue Version. Er entfernt die bestätigte Altversion nach Abschluss der Installation. So bleiben ihre Dateien und ihre MSI-Registrierung während des Updates verfügbar. Die Wartung für 0.3.121 bietet Reparatur und Deinstallation.
 
 ## Paket bauen
 
@@ -20,4 +20,4 @@ Das Setup schlägt den registrierten Ordner vor. Beim Wechsel in einen anderen O
 
 Beim Wechsel von einem veröffentlichten EXE-Installer prüft das Setup die registrierte Version und die Dateigrößen und SHA-256-Prüfsummen aus der zugehörigen Liste `cab<Build>.tsv`. Die Zuordnung ist in `cab-manifests.json` hinterlegt. `harvest.mjs` erzeugt aus jeder Liste eigene bedingte MSI-Komponenten für die zugehörigen Altdateien. Die Dateilisten stammen aus Installationen der öffentlich veröffentlichten EXE-Dateien in der Offline-Windows-Sandbox.
 
-Für eine bestehende MSI-Installation benutzt das Setup den registrierten Programmordner. Bei einer EXE-Altinstallation mit unzureichenden Ordnerrechten kann der Nutzer einen geeigneten neuen Ordner auswählen. Der unsichere Altordner bleibt dabei erhalten.
+Bei einem MSI-Update schlägt das Setup den Unterordner `CCU_Planer-Programm` im bisherigen Programmordner vor. Über „Durchsuchen …“ lässt sich auch ein anderer geeigneter leerer Ordner wählen. Die neue Desktop-Verknüpfung heißt „Sarevoc´s CCU Planer Alpha“. Bei einer EXE-Altinstallation mit unzureichenden Ordnerrechten bleibt die Wahl eines geeigneten neuen Ordners möglich. Der unsichere Altordner bleibt dabei erhalten.
