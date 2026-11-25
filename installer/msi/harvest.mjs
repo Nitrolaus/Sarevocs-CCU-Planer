@@ -96,7 +96,7 @@ for(const [build, files] of legacy) {
   for (const [phase, rows, onlyOnMove] of [['Migration',migration,false],['Relocation',relocation,true]]) {
     if (!rows.length) continue;
     const id = `Cab${build}${phase}Files`;
-    const when = `CcuLegacyVersion = "0.3.${build}"` + (onlyOnMove ? ' AND CcuLegacyMoved = "1"' : '');
+    const when = `CcuLegacyVersion = "0.3.${build}" AND NOT CcuLegacyKeepFiles` + (onlyOnMove ? ' AND CcuLegacyMoved = "1"' : '');
     definitions.push(`<DirectoryRef Id="CcuRoot"><Component Id="${id}" Guid="${guid(id)}" Win64="yes"><Condition>${when}</Condition><RegistryValue Root="HKCU" Key="Software\\Sarevoc\\SarevocsCCUPlaner" Name="${id}" Type="integer" Value="1" KeyPath="yes"/>\n${rows.join('\n')}\n</Component></DirectoryRef>`);
     legacyComponents.push(id);
   }

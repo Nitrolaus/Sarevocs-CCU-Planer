@@ -178,6 +178,15 @@ wstring suggestedFolder(HANDLE token) {
     return (fs::path(folder(FOLDERID_Profile,token))/L"CCU_Planer").wstring();
 }
 
+struct UnsafeFolderPermissions { wstring message; };
+void verifyTree(const fs::path& root,HANDLE token);
+
+bool unsafeLegacyFolder(const wstring& root,HANDLE token) {
+    try { verifyTree(root,token); }
+    catch (const UnsafeFolderPermissions&) { return true; }
+    return false;
+}
+
 void prepareUi(MSIHANDLE s) {
     auto token=effectiveToken();
     HKEY current=nullptr;
@@ -186,7 +195,13 @@ void prepareUi(MSIHANDLE s) {
     wstring previous=readString(product.get(),L"InstallLocation");
     if(previous.empty()) previous=readString(arp.get(),L"InstallLocation");
     const bool update=!previous.empty();
-    const wstring target=update?trimSlash(previous):suggestedFolder(token.get());
+    const bool keepLegacy=arp && update && unsafeLegacyFolder(canonical(previous,token.get()),token.get());
+    wstring target=update?trimSlash(previous):suggestedFolder(token.get());
+    if(keepLegacy) {
+        const auto home=fs::path(folder(FOLDERID_Profile,token.get()));
+        target=(home/L"CCU_Planer-Neu").wstring();
+        if(within(target,previous)||within(previous,target)) target=(home/L"Sarevocs-CCU-Planer").wstring();
+    }
     wstring version=property(s,L"ProductVersion");
     wstring previousVersion=readString(arp.get(),L"DisplayVersion");
     setProperty(s,L"CcuRoot",target+L"\\");
@@ -194,7 +209,8 @@ void prepareUi(MSIHANDLE s) {
     setProperty(s,L"CcuUiBanner",update?L"CcuSetupBannerUpdate":L"CcuSetupBannerFresh");
     setProperty(s,L"CcuUiButton",update?L"Update installieren":L"Installieren");
     setProperty(s,L"CcuUiVersion",update&&!previousVersion.empty()?L"Version "+previousVersion+L" \u2192 "+version:L"Version "+version);
-    setProperty(s,L"CcuUiHint",update?L"Dein bisheriger Programmordner ist vorausgewählt.":L"Wähle einen leeren Programmordner.");
+    setProperty(s,L"CcuUiHint",keepLegacy?L"Neuer Ordner nötig. Die alten Programmdateien bleiben erhalten.":
+        update?L"Dein bisheriger Programmordner ist vorausgewählt.":L"Wähle einen leeren Programmordner.");
     setProperty(s,L"CCUACCEPTTERMS",L"");
     setProperty(s,L"CCUUIREQUESTED",L"1");
 }
@@ -234,6 +250,8 @@ void resolveRoot(MSIHANDLE s) {
     wstring root=choice.empty() ? previous : canonical(choice,token.get());
     if(root.empty()) root=canonical(suggestedFolder(token.get()),token.get());
     const bool moving=arp && !same(previous,root);
+    const bool keepLegacy=arp && unsafeLegacyFolder(previous,token.get());
+    require(!keepLegacy || moving,L"Der bisherige Programmordner darf von weiteren Konten geändert werden. Wähle einen anderen Programmordner.");
     require(!installed || same(previous,root),L"Die vorhandene MSI-Installation verwendet ihren registrierten Programmordner.");
     if(moving) {
         require(!within(root,previous) && !within(previous,root),L"Wähle einen Programmordner außerhalb des bisherigen Ordners.");
@@ -242,8 +260,9 @@ void resolveRoot(MSIHANDLE s) {
     setProperty(s,L"CcuLegacy",arp?L"1":L"");
     setProperty(s,L"CcuLegacyVersion",legacyVersion);
     setProperty(s,L"CcuLegacyMoved",moving?L"1":L"");
+    setProperty(s,L"CcuLegacyKeepFiles",keepLegacy?L"1":L"");
     setProperty(s,L"CcuOldNormalizedRoot",arp?previous:root);
-    setProperty(s,L"CcuLegacyRoot",(arp?previous:root)+L"\\");
+    setProperty(s,L"CcuLegacyRoot",(arp&&!keepLegacy?previous:root)+L"\\");
     setProperty(s,L"CcuNormalizedRoot",root);
     setProperty(s,L"CcuRoot",root+L"\\");
     setProperty(s,L"ARPINSTALLLOCATION",root);
@@ -282,7 +301,7 @@ void verifyAccess(const fs::path& p,PSID user,DWORD directMask,bool checkInherit
         bool direct=!(header->AceFlags&INHERIT_ONLY_ACE) && (rights&directMask);
         bool inherited=checkInheritance && (header->AceFlags&(CONTAINER_INHERIT_ACE|OBJECT_INHERIT_ACE)) &&
             (rights&changeRights) && !IsWellKnownSid(sid,WinCreatorOwnerSid);
-        require(!direct && !inherited,L"Unsafe target permissions: "+p.filename().wstring());
+        if(direct||inherited) throw UnsafeFolderPermissions{L"Unsafe target permissions: "+p.filename().wstring()};
     }
 }
 void verifyTree(const fs::path& root,HANDLE token) {
@@ -391,8 +410,10 @@ void verifyOwnership(MSIHANDLE s) {
     const wstring oldRoot=property(s,L"CcuOldNormalizedRoot");
     const bool legacy=property(s,L"CcuLegacy")==L"1", installed=!property(s,L"Installed").empty();
     const bool moving=property(s,L"CcuLegacyMoved")==L"1";
+    const bool keepLegacy=property(s,L"CcuLegacyKeepFiles")==L"1";
+    require(!keepLegacy || (legacy && moving),L"Unexpected request to retain legacy files.");
     require(same(root,trimSlash(property(s,L"CcuRoot",true))),L"Unexpected MSI target.");
-    require(same(oldRoot,trimSlash(property(s,L"CcuLegacyRoot",true))),L"Unexpected MSI migration source.");
+    require(same(keepLegacy?root:oldRoot,trimSlash(property(s,L"CcuLegacyRoot",true))),L"Unexpected MSI migration source.");
     wstring desktop=folder(FOLDERID_Desktop,token.get()),menu=(fs::path(folder(FOLDERID_Programs,token.get()))/L"Sarevoc").wstring();
     require(same(desktop,trimSlash(property(s,L"DesktopFolder",true))) && same(menu,trimSlash(property(s,L"CcuMenu",true))),
         L"Unexpected MSI shortcut directory.");
@@ -401,7 +422,7 @@ void verifyOwnership(MSIHANDLE s) {
     if((!legacy || moving) && !installed && attr!=INVALID_FILE_ATTRIBUTES)
         require(fs::is_empty(root),L"Wähle einen leeren Programmordner.");
     verifyTree(root,token.get());
-    if(moving) verifyTree(oldRoot,token.get());
+    if(moving&&!keepLegacy) verifyTree(oldRoot,token.get());
     if(legacy) {
         HKEY current=nullptr;
         require(RegOpenCurrentUser(KEY_READ,&current)==ERROR_SUCCESS,L"Cannot read user's registry.");
@@ -409,7 +430,7 @@ void verifyOwnership(MSIHANDLE s) {
         require(arp!=nullptr,L"Die registrierte Altinstallation fehlt.");
         const auto& build=checkLegacyKey(arp.get(),oldRoot);
         require(property(s,L"CcuLegacyVersion")==build.version,L"Die Altversion hat sich während des Setups geändert.");
-        verifyFiles(oldRoot,build.files,msi119,false);
+        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi119,false);
     }
     if(installed) verifyFiles(root,msi119,cab117,true);
     const wstring& shortcutRoot=legacy?oldRoot:root;
@@ -421,6 +442,7 @@ void verifyOwnership(MSIHANDLE s) {
 UINT run(MSIHANDLE s,void(*action)(MSIHANDLE)) noexcept {
     wstring message;
     try {action(s);return ERROR_SUCCESS;}
+    catch(const UnsafeFolderPermissions& error){message=error.message;}
     catch(const wstring& error){message=error;}
     catch(...){message=L"Unable to verify installation ownership.";}
     MSIHANDLE record=MsiCreateRecord(1);
