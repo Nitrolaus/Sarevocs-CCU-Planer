@@ -3,6 +3,8 @@
   <Fragment>
     <Binary Id="CcuSetupBannerUpdate" SourceFile="$(var.BuildDir)\SetupBannerUpdate.bmp"/>
     <Binary Id="CcuSetupBannerFresh" SourceFile="$(var.BuildDir)\SetupBannerFresh.bmp"/>
+    <WixVariable Id="WixUIBannerBmp" Value="$(var.BuildDir)\SetupProgress.bmp"/>
+    <WixVariable Id="WixUIDialogBmp" Value="$(var.BuildDir)\SetupFinished.bmp"/>
     <UI Id="CcuSetupUI">
       <TextStyle Id="CcuDefault" FaceName="Segoe UI" Size="9"/>
       <TextStyle Id="CcuHeading" FaceName="Segoe UI" Size="10" Bold="yes"/>
@@ -14,6 +16,7 @@
       <DialogRef Id="BrowseDlg"/>
       <DialogRef Id="ProgressDlg"/>
       <DialogRef Id="ExitDialog"/>
+      <DialogRef Id="CancelDlg"/>
       <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
 
       <Dialog Id="CcuSetupDlg" Width="426" Height="294" Title="[ProductName] – [CcuUiTitle]">
@@ -59,6 +62,22 @@
         <Control Id="Retry" Type="PushButton" X="212" Y="90" Width="91" Height="20" Default="yes" Text="Erneut prüfen">
           <Publish Event="DoAction" Value="CheckCcuPlanner" Order="1">1</Publish>
           <Publish Event="EndDialog" Value="Return" Order="2">CCUACCEPTTERMS = "1" AND CcuPlannerReady = "1"</Publish>
+        </Control>
+      </Dialog>
+      <Dialog Id="CcuMaintenanceDlg" Width="426" Height="194" Title="[ProductName] – Wartung">
+        <Control Id="Banner" Type="Bitmap" X="0" Y="0" Width="426" Height="64" Text="CcuSetupBannerUpdate" TabSkip="yes"/>
+        <Control Id="Heading" Type="Text" X="17" Y="78" Width="392" Height="18" Text="{\CcuHeading}CCU-Planer reparieren oder deinstallieren" TabSkip="yes"/>
+        <Control Id="Hint" Type="Text" X="17" Y="104" Width="392" Height="30" Text="Beende den Planer vor der Wartung vollständig. Profile und Hangardaten bleiben in deinem Windows-Benutzerprofil." TabSkip="yes"/>
+        <Control Id="Cancel" Type="PushButton" X="17" Y="155" Width="88" Height="21" Cancel="yes" Text="Abbrechen">
+          <Publish Event="EndDialog" Value="Exit">1</Publish>
+        </Control>
+        <Control Id="Repair" Type="PushButton" X="216" Y="155" Width="88" Height="21" Default="yes" Text="Reparieren">
+          <Publish Property="REINSTALL" Value="ALL" Order="1">1</Publish>
+          <Publish Event="EndDialog" Value="Return" Order="2">1</Publish>
+        </Control>
+        <Control Id="Remove" Type="PushButton" X="312" Y="155" Width="97" Height="21" Text="Deinstallieren">
+          <Publish Property="REMOVE" Value="ALL" Order="1">1</Publish>
+          <Publish Event="EndDialog" Value="Return" Order="2">1</Publish>
         </Control>
       </Dialog>
     </UI>

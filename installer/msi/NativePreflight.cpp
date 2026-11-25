@@ -29,6 +29,11 @@ constexpr wchar_t receipt[] = L"2026-11-18.2:5438e49d354058b32007d2ed20e189391af
 constexpr wchar_t appName[] = L"Sarevocs-CCU-Planer.exe";
 constexpr wchar_t linkName[] = L"Sarevoc\u00b4s CCU Planer.lnk";
 constexpr wchar_t markerGuid[] = L"{A9E970CA-6C7E-44D7-A98E-075C4903CC27}";
+constexpr const wchar_t* previousProducts[] = {
+    L"{142B7731-1211-4ED2-AE86-C572D7053118}",
+    L"{142B7731-1211-4ED2-AE86-C572D7053119}",
+    L"{142B7731-1211-4ED2-AE86-C572D7053120}",
+};
 
 void require(bool test, const wstring& reason) { if (!test) throw reason; }
 bool same(const wstring& a, const wstring& b) {
@@ -187,12 +192,46 @@ bool unsafeLegacyFolder(const wstring& root,HANDLE token) {
     return false;
 }
 
+struct MsiInstall {
+    wstring code, version, root;
+};
+
+MsiInstall registeredMsi(const wstring& code) {
+    wchar_t marker[1024]{},version[32]{};
+    DWORD size=static_cast<DWORD>(std::size(marker)),versionSize=static_cast<DWORD>(std::size(version));
+    const auto state=MsiGetComponentPathW(code.c_str(),markerGuid,marker,&size);
+    require((state==INSTALLSTATE_LOCAL || state==INSTALLSTATE_ABSENT) && same(fs::path(marker).filename().wstring(),L"install-product.txt"),
+        L"Der registrierte MSI-Programmordner konnte nicht geprüft werden.");
+    require(MsiGetProductInfoW(code.c_str(),INSTALLPROPERTY_VERSIONSTRING,version,&versionSize)==ERROR_SUCCESS,
+        L"Die installierte MSI-Version konnte nicht geprüft werden.");
+    return {code,version,fs::path(marker).parent_path().wstring()};
+}
+
+MsiInstall upgradeSource(MSIHANDLE s) {
+    wstring found;
+    for(const auto code:previousProducts) {
+        if(MsiQueryProductStateW(code)!=INSTALLSTATE_DEFAULT) continue;
+        require(found.empty(),L"Mehrere ältere MSI-Installationen gefunden.");
+        found=code;
+    }
+    require(same(found,property(s,L"WIX_UPGRADE_DETECTED")),L"Die gefundene MSI-Installation konnte nicht eindeutig geprüft werden.");
+    return found.empty()?MsiInstall{}:registeredMsi(found);
+}
+
+std::span<const KnownFile> installedFiles(const MsiInstall& installation) {
+    if(installation.version==L"0.3.118" && same(installation.code,previousProducts[0])) return msi118;
+    if(installation.version==L"0.3.119" && (same(installation.code,previousProducts[0]) || same(installation.code,previousProducts[1]))) return msi119;
+    if(installation.version==L"0.3.120") return msi120;
+    throw wstring(L"Unerwartete installierte Programmversion.");
+}
+
 void prepareUi(MSIHANDLE s) {
     auto token=effectiveToken();
     HKEY current=nullptr;
     require(RegOpenCurrentUser(KEY_READ,&current)==ERROR_SUCCESS,L"Die Windows-Benutzereinstellungen sind nicht lesbar.");
     Key user(current), product=openKey(current,registration), arp=openKey(current,legacyArp);
-    wstring previous=readString(product.get(),L"InstallLocation");
+    const auto msi=upgradeSource(s);
+    wstring previous=msi.root.empty()?readString(product.get(),L"InstallLocation"):msi.root;
     if(previous.empty()) previous=readString(arp.get(),L"InstallLocation");
     const bool update=!previous.empty();
     const bool keepLegacy=arp && update && unsafeLegacyFolder(canonical(previous,token.get()),token.get());
@@ -203,7 +242,7 @@ void prepareUi(MSIHANDLE s) {
         if(within(target,previous)||within(previous,target)) target=(home/L"Sarevocs-CCU-Planer").wstring();
     }
     wstring version=property(s,L"ProductVersion");
-    wstring previousVersion=readString(arp.get(),L"DisplayVersion");
+    wstring previousVersion=msi.version.empty()?readString(arp.get(),L"DisplayVersion"):msi.version;
     setProperty(s,L"CcuRoot",target+L"\\");
     setProperty(s,L"CcuUiTitle",update?L"Update installieren":L"Planer installieren");
     setProperty(s,L"CcuUiBanner",update?L"CcuSetupBannerUpdate":L"CcuSetupBannerFresh");
@@ -225,13 +264,9 @@ void resolveRoot(MSIHANDLE s) {
     Key user(current), product=openKey(current,registration), arp=openKey(current,legacyArp);
     wstring registered=readString(product.get(),L"InstallLocation"), terms=readString(product.get(),L"TermsAcceptance");
     wstring choice=property(s,L"CCUINSTALLDIR"), previous;
-    if(installed) {
-        wchar_t marker[1024]{};DWORD size=1024;
-        auto state=MsiGetComponentPathW(property(s,L"ProductCode").c_str(),markerGuid,marker,&size);
-        require((state==INSTALLSTATE_LOCAL || state==INSTALLSTATE_ABSENT) && same(fs::path(marker).filename().wstring(),L"install-product.txt"),
-            L"Cannot verify registered MSI component location.");
-        previous=fs::path(marker).parent_path().wstring();
-    } else if (arp) {
+    const auto msi=installed?registeredMsi(property(s,L"ProductCode")):upgradeSource(s);
+    if(!msi.root.empty()) previous=msi.root;
+    else if (arp) {
         previous=readString(arp.get(),L"InstallLocation");
         require(!previous.empty(),L"Der Programmordner der vorhandenen Installation fehlt.");
     }
@@ -242,17 +277,17 @@ void resolveRoot(MSIHANDLE s) {
     require(installed || accepted || (!fullUi && terms==receipt),L"Bestätige zuerst die Nutzungsbedingungen.");
     wstring legacyVersion;
     if(arp) {
-        require(!installed,L"Conflicting MSI and CAB registrations.");
+        require(msi.root.empty(),L"Conflicting MSI and CAB registrations.");
         legacyVersion=checkLegacyKey(arp.get(),previous).version;
     }
-    else require(installed || registered.empty(),L"Unrecognized previous installation.");
-    require(!product || installed || arp || (registered.empty() && terms==receipt),L"Unrecognized product registration.");
+    else require(!msi.root.empty() || registered.empty(),L"Unrecognized previous installation.");
+    require(!product || !msi.root.empty() || arp || (registered.empty() && terms==receipt),L"Unrecognized product registration.");
     wstring root=choice.empty() ? previous : canonical(choice,token.get());
     if(root.empty()) root=canonical(suggestedFolder(token.get()),token.get());
     const bool moving=arp && !same(previous,root);
     const bool keepLegacy=arp && unsafeLegacyFolder(previous,token.get());
     require(!keepLegacy || moving,L"Der bisherige Programmordner darf von weiteren Konten geändert werden. Wähle einen anderen Programmordner.");
-    require(!installed || same(previous,root),L"Die vorhandene MSI-Installation verwendet ihren registrierten Programmordner.");
+    require(msi.root.empty() || same(previous,root),L"Die vorhandene MSI-Installation verwendet ihren registrierten Programmordner.");
     if(moving) {
         require(!within(root,previous) && !within(previous,root),L"Wähle einen Programmordner außerhalb des bisherigen Ordners.");
         require(accepted,L"Bestätige die Nutzungsbedingungen für den Ordnerwechsel.");
@@ -411,6 +446,8 @@ void verifyOwnership(MSIHANDLE s) {
     const bool legacy=property(s,L"CcuLegacy")==L"1", installed=!property(s,L"Installed").empty();
     const bool moving=property(s,L"CcuLegacyMoved")==L"1";
     const bool keepLegacy=property(s,L"CcuLegacyKeepFiles")==L"1";
+    const auto previousMsi=installed?MsiInstall{}:upgradeSource(s);
+    const bool msiUpgrade=!previousMsi.root.empty();
     require(!keepLegacy || (legacy && moving),L"Unexpected request to retain legacy files.");
     require(same(root,trimSlash(property(s,L"CcuRoot",true))),L"Unexpected MSI target.");
     require(same(keepLegacy?root:oldRoot,trimSlash(property(s,L"CcuLegacyRoot",true))),L"Unexpected MSI migration source.");
@@ -419,7 +456,7 @@ void verifyOwnership(MSIHANDLE s) {
         L"Unexpected MSI shortcut directory.");
     DWORD attr=attributes(root);
     require(attr==INVALID_FILE_ATTRIBUTES || (attr&FILE_ATTRIBUTE_DIRECTORY),L"Target is a file.");
-    if((!legacy || moving) && !installed && attr!=INVALID_FILE_ATTRIBUTES)
+    if((!legacy || moving) && !installed && !msiUpgrade && attr!=INVALID_FILE_ATTRIBUTES)
         require(fs::is_empty(root),L"Wähle einen leeren Programmordner.");
     verifyTree(root,token.get());
     if(moving&&!keepLegacy) verifyTree(oldRoot,token.get());
@@ -430,21 +467,19 @@ void verifyOwnership(MSIHANDLE s) {
         require(arp!=nullptr,L"Die registrierte Altinstallation fehlt.");
         const auto& build=checkLegacyKey(arp.get(),oldRoot);
         require(property(s,L"CcuLegacyVersion")==build.version,L"Die Altversion hat sich während des Setups geändert.");
-        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi120,false);
+        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi121,false);
+    }
+    if(msiUpgrade) {
+        require(same(root,canonical(previousMsi.root,token.get())),L"Der registrierte MSI-Programmordner hat sich geändert.");
+        verifyFiles(root,installedFiles(previousMsi),msi121,false);
     }
     if(installed) {
-        wchar_t version[32]{};
-        DWORD count=static_cast<DWORD>(std::size(version));
-        require(MsiGetProductInfoW(property(s,L"ProductCode").c_str(),INSTALLPROPERTY_VERSIONSTRING,version,&count)==ERROR_SUCCESS,
-                L"Die installierte MSI-Version konnte nicht geprüft werden.");
-        if(wstring(version)==L"0.3.119") verifyFiles(root,msi119,cab117,false);
-        else {
-            require(wstring(version)==L"0.3.120",L"Unerwartete installierte Programmversion.");
-            verifyFiles(root,msi120,cab117,true);
-        }
+        const auto own=registeredMsi(property(s,L"ProductCode"));
+        require(own.version==L"0.3.121",L"Unerwartete installierte Programmversion.");
+        verifyFiles(root,msi121,cab117,true);
     }
     const wstring& shortcutRoot=legacy?oldRoot:root;
-    verifyShortcut(desktop,shortcutRoot,legacy||installed);verifyShortcut(menu,shortcutRoot,legacy||installed);
+    verifyShortcut(desktop,shortcutRoot,legacy||installed||msiUpgrade);verifyShortcut(menu,shortcutRoot,legacy||installed||msiUpgrade);
     const auto state=plannerState();
     require(state!=PlannerState::unreadable,L"Das Setup konnte laufende Prozesse nicht prüfen.");
     require(state==PlannerState::stopped,L"Beende den CCU-Planer unten rechts im Windows-Infobereich über „Beenden“ und starte das Setup erneut.");

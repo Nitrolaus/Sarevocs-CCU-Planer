@@ -20,6 +20,23 @@ try {
         $canvas.FillRectangle($accent,0,125,852,3)
         $banner.Save((Join-Path $BuildDirectory ('SetupBanner'+$entry.Key+'.bmp')),[Drawing.Imaging.ImageFormat]::Bmp)
     }
+    foreach ($art in @(@{File='SetupProgress.bmp';Height=58},@{File='SetupFinished.bmp';Height=312})) {
+        $bitmap=[Drawing.Bitmap]::new(493,$art.Height,[Drawing.Imaging.PixelFormat]::Format24bppRgb)
+        $graphics=[Drawing.Graphics]::FromImage($bitmap)
+        try {
+            $graphics.Clear([Drawing.Color]::White)
+            $graphics.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            if ($art.Height -eq 58) { $graphics.DrawImage($logo,439,5,48,48) }
+            else {
+                $graphics.FillRectangle($fill,0,0,116,$art.Height)
+                $graphics.DrawImage($logo,16,31,84,84)
+            }
+            $bitmap.Save((Join-Path $BuildDirectory $art.File),[Drawing.Imaging.ImageFormat]::Bmp)
+        } finally {
+            $graphics.Dispose()
+            $bitmap.Dispose()
+        }
+    }
 } finally {
     $headlineFont.Dispose()
     $headlineBrush.Dispose()

@@ -1,5 +1,13 @@
 # Änderungen
 
+## 0.3.121 · Alpha
+
+Der Planer prüft einen verspätet sichtbaren RSI-Kontonamen erneut und zeigt an, ob Windows die Sitzung gespeichert hat. Belegte Euro-Beträge werden auch erkannt, wenn der Beleg nur das Eurozeichen enthält. Ein gemeinsames Preisfeld für ein Mehrschiffpaket bleibt auch bei fehlendem Kaufbeleg als Paketgesamtpreis erkennbar.
+
+Die Kettenbauhistorie zeigt bekannte Bauschritte, Baudaten und belegte Preise. Die Abschlusskarte fasst Start, Ziel, Gesamtpreis und Ersparnis zusammen, soweit diese Werte belegt sind.
+
+Ein MSI übernimmt Neuinstallationen und Updates. Beim erneuten Öffnen desselben MSI stehen Reparatur und Deinstallation zur Auswahl.
+
 ## 0.3.120 · Alpha
 
 Eine Setup-Datei wählt den Installationsweg für Neuinstallationen und vorhandene Planer-Installationen. Der Concierge-Rang kann beim Lesen des Hangars aus derselben laufenden RSI-Sitzung gelesen werden. Windows Hello schützt die Pledge-Summe weiterhin.

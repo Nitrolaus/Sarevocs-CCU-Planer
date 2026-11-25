@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="$(var.ProductCode)" Name="Sarevoc´s CCU Planer"
-           Codepage="65001" Manufacturer="Sarevoc" Language="1031" Version="0.3.120" UpgradeCode="{6458FCD5-BD95-42AB-86D7-9C136FA4439D}">
-    <Package SummaryCodepage="1252" Description="Sarevocs CCU Planer" Comments="Sarevocs CCU Planer 0.3.120" InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64"/>
-    <Upgrade Id="{6458FCD5-BD95-42AB-86D7-9C136FA4439D}">
-      <UpgradeVersion Minimum="0.3.118" IncludeMinimum="yes" Maximum="0.3.118" IncludeMaximum="yes"
-                      OnlyDetect="yes" Property="CCUPATCHREQUIRED"/>
-      <UpgradeVersion Minimum="0.3.119" IncludeMinimum="yes" OnlyDetect="yes" Property="CCUUPTODATE"/>
-    </Upgrade>
-    <Condition Message="Eine MSI-Installation ist bereits vorhanden. Öffne für das Update das gemeinsame Setup.">Installed OR NOT CCUPATCHREQUIRED</Condition>
-    <Condition Message="Eine MSI-Installation ist bereits vorhanden. Öffne für das Update das gemeinsame Setup.">Installed OR NOT CCUUPTODATE</Condition>
+           Codepage="65001" Manufacturer="Sarevoc" Language="1031" Version="0.3.121" UpgradeCode="{6458FCD5-BD95-42AB-86D7-9C136FA4439D}">
+    <Package SummaryCodepage="1252" Description="Sarevocs CCU Planer" Comments="Sarevocs CCU Planer 0.3.121" InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64"/>
+    <MajorUpgrade Schedule="afterInstallInitialize" MigrateFeatures="no"
+                  DowngradeErrorMessage="Eine neuere Version des CCU-Planers ist bereits installiert."/>
     <MediaTemplate EmbedCab="yes" CompressionLevel="mszip"/>
     <Property Id="CCUINSTALLDIR" Secure="yes"/>
     <Property Id="CCUACCEPTTERMS" Secure="yes"/>
@@ -57,6 +52,7 @@
     <InstallUISequence>
       <Custom Action="PrepareCcuUi" Before="CostInitialize">NOT Installed AND UILevel = 5</Custom>
       <Show Dialog="CcuSetupDlg" Before="ProgressDlg">NOT Installed AND UILevel = 5</Show>
+      <Show Dialog="CcuMaintenanceDlg" After="CcuSetupDlg">Installed AND NOT RESUME AND NOT Preselected AND UILevel = 5 AND NOT REMOVE AND NOT REINSTALL</Show>
     </InstallUISequence>
     <InstallExecuteSequence>
       <Custom Action="ResolveCcuRoot" Before="CostInitialize">1</Custom>
