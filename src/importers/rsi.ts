@@ -1,13 +1,13 @@
 import { BrowserWindow, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { allowedRsiNavigation, evaluateRsiSessionRequest, insecureRsiTransport, isPledgesPage, isRsiLoginPage, rsiCaptchaFrame, rsiReturnCandidate, RSI_HANGAR_URL, RSI_LOGIN_URL, RSI_ORIGIN } from '../main/policy';
-import { UserError, type ImportCandidate } from '../domain/model';
+import { id as referenceSchema, UserError, type ImportCandidate } from '../domain/model';
 import { HangarPageError, readHangarPages, type HangarRefreshProgress } from './hangar-read';
 import { SessionVault, type StoredCookie } from '../security/session-vault';
 import { captureRsiCookie, hasAuthenticationCookie, isAuthenticationCookieName } from '../security/rsi-cookies';
 import { isDeepStrictEqual } from 'node:util';
 import { connectionResource, connectionTarget, diagnosticLabel, networkErrorName, protectNavigationWarnings, HANGAR_OBSERVATIONS, type ConnectionEvent, type DiagnosticSink } from '../diagnostics/connection';
-import { RSI_PAGE_PROBE, RSI_CONNECTION_PROBE, rsiFetchPageProbe } from './rsi-page';
+import { RSI_PAGE_PROBE, RSI_CONNECTION_PROBE, RSI_HANDLE_PROBE, rsiFetchPageProbe } from './rsi-page';
 import { CREDIT_URL, CREDIT_CSRF_PROBE, readStoreCredit } from './rsi-credit';
 import { buybackFetchProbe, buybackPageUrl, isBuybackListRead, readBuybacks } from './rsi-buyback';
 import { poundRateFor, type PoundRate } from '../pricing/pound-history';
@@ -26,10 +26,13 @@ export class BackgroundRestoreError extends UserError {
   }
 }
 type RsiIdentity = ImportCandidate['document']['account'];
+type SessionSaveIssue = 'missing-handle' | 'profile-mismatch' | 'missing-auth' | 'auth-changed';
+export type SessionSaveResult = 'saved' | 'not-requested' | SessionSaveIssue;
 type RsiSession = { session: Electron.Session; remember: boolean; closing: boolean;
-  verified?: { identity: RsiIdentity; cookies: StoredCookie[] }; closeTask: Promise<void> | null; failure: string | null;
+  verified?: { identity: RsiIdentity; cookies: StoredCookie[] }; saveIssue?: SessionSaveIssue;
+  closeTask: Promise<SessionSaveResult> | null; failure: string | null;
   automatic: boolean; returnPending: object | null; hangarTransitioned: boolean;
-  background: boolean; hideHangar: boolean; loginDocument: boolean;
+  background: boolean; hideHangar: boolean; loginDocument: boolean; navigationRevision: number;
   restoreFailure: BackgroundRestoreCode | null; buybackListUrl?: string };
 type ConnectionAttempt = { cancelled: boolean; done: Promise<void>; finish: () => void; timedOut?: boolean };
 type RestoreAttempt = ConnectionAttempt & { timedOut: boolean };
@@ -200,7 +203,7 @@ export class RsiLogin {
     } catch (error) { await isolated.clearStorageData(); await isolated.clearCache(); throw error; }
     const state: RsiSession = { session: isolated, remember: background ? false : remember, closing: false, closeTask: null, failure: null,
       automatic, returnPending: null, hangarTransitioned: false, background, hideHangar,
-      loginDocument: false, restoreFailure: null };
+      loginDocument: false, navigationRevision: 0, restoreFailure: null };
     this.sessions.set(accountId, state);
     isolated.setPermissionCheckHandler(() => false);
     isolated.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
@@ -257,6 +260,7 @@ export class RsiLogin {
       if (state.loginDocument) state.hangarTransitioned = false;
     });
     win.webContents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) state.navigationRevision++;
       if (details.isMainFrame && allowedRsiNavigation(details.url)) state.returnPending = null;
     });
     win.webContents.on('did-navigate-in-page', (_event, _url, main) => {
@@ -326,7 +330,7 @@ export class RsiLogin {
   } = {}): Promise<ImportCandidate> {
     let attempt: ConnectionAttempt | undefined;
     let aborted = options.signal?.aborted ?? false;
-    let abortCleanup: Promise<void> | undefined;
+    let abortCleanup: Promise<SessionSaveResult | undefined> | undefined;
     const abort = () => {
       aborted = true;
       if (attempt) attempt.cancelled = true;
@@ -477,22 +481,28 @@ export class RsiLogin {
     const active = this.sessions.get(accountId);
     if (!active || active.closing) throw new UserError('Verbindung beendet.');
     active.verified = undefined;
+    active.saveIssue = undefined;
+    const startUrl = win.webContents.getURL();
+    const navigationRevision = active.navigationRevision;
+    const checkWindow = () => {
+      if (win.isDestroyed() || this.sessions.get(accountId) !== active || active.closing || this.stopping ||
+          this.attempts.get(accountId)?.cancelled || active.navigationRevision !== navigationRevision ||
+          win.webContents.getURL() !== startUrl || !isPledgesPage(startUrl)) {
+        throw new UserError('Seite während der Prüfung gewechselt oder Fenster geschlossen. Keine Übernahme.');
+      }
+    };
     const snapshot = await this.cookies(active.session).catch(() => []);
+    checkWindow();
     const auth = (items: StoredCookie[]) => items.filter(c => isAuthenticationCookieName(c.name))
       .map(c => [c.name, c.domain, c.path, c.value]).sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     const raw = await win.webContents.executeJavaScript(RSI_PAGE_PROBE);
+    checkWindow();
     if (!raw || raw.ok !== true) {
       this.frozen.delete(accountId);
       this.statuses.set(accountId, { state: 'login-required', message: 'Anmeldung oder Cookie-Auswahl noch nicht abgeschlossen; kein Bestand importiert.' });
       if (raw?.reason === 'cookie-consent') throw new UserError('Bitte zuerst den Cookie-Hinweis im RSI-Fenster beantworten, zum Beispiel „Use necessary cookies only“. Danach Hangarseite erneut prüfen.');
       throw new UserError('Die Hangarliste ist noch nicht eindeutig lesbar. Kein Bestand übernommen.');
     }
-    const startUrl = win.webContents.getURL();
-    const checkWindow = () => {
-      if (win.isDestroyed() || this.sessions.get(accountId)?.closing || this.stopping || this.attempts.get(accountId)?.cancelled || win.webContents.getURL() !== startUrl || !isPledgesPage(startUrl)) {
-        throw new UserError('Seite während der Prüfung gewechselt oder Fenster geschlossen. Keine Übernahme.');
-      }
-    };
     this.record({ event: 'hangar-observation', target: 'hangar', resource: 'xhr', observation: 'reading-pages' });
     const {candidate,pagesRead}=await readHangarPages({accountId,initial:raw,restartAtFirst:!!new URL(startUrl).search,
       assertActive:checkWindow,loadPage:page=>win.webContents.executeJavaScriptInIsolatedWorld(1, [{ code: rsiFetchPageProbe(page,startUrl) }]),
@@ -538,6 +548,20 @@ export class RsiLogin {
       }
     } catch { observeSupplement('buyback-page-unreadable'); }
     checkWindow();
+    // The account sidebar can finish rendering while the hangar pages are being read.
+    if (candidate.document.account.identityKind === 'manual-reference' && hasAuthenticationCookie(snapshot)) {
+      const handle: unknown = await win.webContents.executeJavaScriptInIsolatedWorld(1, [{code: RSI_HANDLE_PROBE}]).catch(() => null);
+      checkWindow();
+      const read = referenceSchema.safeParse(handle);
+      if (read.success && !read.data.startsWith('rsi-local:')) {
+        const observed: RsiIdentity = { reference: read.data, identityKind: 'rsi-handle' };
+        const latest = await this.cookies(active.session).catch(() => []);
+        checkWindow();
+        if (isDeepStrictEqual(auth(snapshot), auth(latest)) && this.canRemember(accountId, observed)) {
+          candidate.document.account = observed;
+        }
+      }
+    }
     const identity = candidate.document.account;
     const matchedProfile = identity.identityKind === 'rsi-handle' && this.canRemember(accountId, identity);
     const manualReference = identity.identityKind === 'manual-reference';
@@ -575,10 +599,16 @@ export class RsiLogin {
       } catch { /* Purchase data is optional and is never included in connection diagnostics. */ }
     }
     checkWindow();
-    if ((active.remember || active.background) && hasAuthenticationCookie(snapshot) && matchedProfile) {
-      const latest = await this.cookies(active.session);
-      checkWindow();
-      if (isDeepStrictEqual(auth(snapshot), auth(latest))) active.verified = {identity, cookies: latest};
+    if (active.remember || active.background) {
+      if (!hasAuthenticationCookie(snapshot)) active.saveIssue = 'missing-auth';
+      else if (manualReference) active.saveIssue = 'missing-handle';
+      else if (!matchedProfile) active.saveIssue = 'profile-mismatch';
+      else {
+        const latest = await this.cookies(active.session);
+        checkWindow();
+        if (isDeepStrictEqual(auth(snapshot), auth(latest))) active.verified = {identity, cookies: latest};
+        else active.saveIssue = 'auth-changed';
+      }
     }
     // A user-authorized hangar read can report rank from the same temporary session.
     // Do not persist its cookies, and do not read the billing page here.
@@ -614,6 +644,7 @@ export class RsiLogin {
     // Also finish a still-running restore before an application exit can terminate it.
     const [result] = await Promise.allSettled([closing, attempt.done]);
     if (result!.status === 'rejected') throw result!.reason;
+    return result!.value;
   }
   private async closeSession(accountId: string, discard = false) {
     const state = this.sessions.get(accountId); if (!state) return;
@@ -624,12 +655,13 @@ export class RsiLogin {
     state.closeTask = this.finishClose(accountId, state);
     return state.closeTask;
   }
-  private async finishClose(accountId: string, state: RsiSession) {
+  private async finishClose(accountId: string, state: RsiSession): Promise<SessionSaveResult> {
     this.windows.get(accountId)?.webContents.stop();
-    let saved = false;
+    let result: SessionSaveResult = state.remember ? state.saveIssue ?? 'missing-auth' : 'not-requested';
     if (state.remember && state.verified) {
       try {
-        if (this.canRemember(accountId, state.verified.identity)) saved = await this.vault.save(accountId, state.verified.cookies);
+        result = !this.canRemember(accountId, state.verified.identity) ? 'profile-mismatch'
+          : await this.vault.save(accountId, state.verified.cookies) ? 'saved' : 'missing-auth';
         state.failure = null;
       }
       catch { state.failure = 'Sitzung konnte beim Schließen nicht sicher gespeichert werden. Keine Klartext-Ersatzspeicherung.'; }
@@ -638,8 +670,9 @@ export class RsiLogin {
     this.windows.get(accountId)?.destroy();
     await state.session.clearStorageData(); await state.session.clearCache();
     this.sessions.delete(accountId);
-    this.statuses.set(accountId, { state: failure ? 'error' : 'closed', message: failure ?? (state.remember ? saved ? 'Anmeldecookies Windows-verschlüsselt gespeichert; Gültigkeit bestimmt RSI.' : 'Keine neue Anmeldung gespeichert.' : 'Fenster geschlossen; flüchtige Sitzung verworfen.') });
+    this.statuses.set(accountId, { state: failure ? 'error' : 'closed', message: failure ?? (state.remember ? result === 'saved' ? 'Anmeldecookies Windows-verschlüsselt gespeichert; Gültigkeit bestimmt RSI.' : 'Keine neue Anmeldung gespeichert.' : 'Fenster geschlossen; flüchtige Sitzung verworfen.') });
     if (failure) throw new UserError(failure);
+    return result;
   }
   async remove(accountId: string) {
     await this.close(accountId, true); await this.vault.remove(accountId);
@@ -649,7 +682,9 @@ export class RsiLogin {
     this.stopping = true;
     const attempts = [...this.attempts.values()];
     for (const attempt of attempts) attempt.cancelled = true;
-    const results = await Promise.allSettled([...this.sessions.keys()].map(id => this.close(id)).concat(attempts.map(attempt => attempt.done)));
+    const results = await Promise.allSettled([
+      ...[...this.sessions.keys()].map(id => this.close(id)), ...attempts.map(attempt => attempt.done),
+    ]);
     return results.every(r => r.status === 'fulfilled');
   }
 }

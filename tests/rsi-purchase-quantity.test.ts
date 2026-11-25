@@ -43,3 +43,15 @@ test('An old GBP order keeps its currency and matched purchase date while a docu
     status:'documented',source:'log',minor:2000,currency:'GBP',purchaseDate:'2019-05-12',
   });
 });
+
+test('A euro symbol alone identifies a documented amount, while an ambiguous or conflicting currency does not', () => {
+  const log = (value: string) => purchaseMatches([{...basePledge('1'),name:title}],
+    [{id:'1',title,owner:'Synthetic',order:order.id,value}],'Synthetic');
+  assert.deepEqual(purchasePrices(log('€19.99'), []).get('1'),
+    {status:'documented',source:'log',minor:1999,currency:'EUR'});
+  assert.deepEqual(purchasePrices(evidence(1), [{...order,discount:'€0.00',lines:[{title,quantity:'2',total:'€39.98'}]}]).get('1'),
+    {status:'documented',source:'order',minor:1999,currency:'EUR'});
+  for (const value of ['$19.99', '€19.99 GBP', '19.99']) {
+    assert.notEqual(purchasePrices(log(value), []).get('1')?.status, 'documented');
+  }
+});

@@ -6,7 +6,7 @@ import { APP_VERSION, type Account, type AccountInventory, type Insurance, type 
 import {hasInventoryReadIssue} from '../domain/inventory-issues';
 import type { BridgeResult, Command } from '../main/commands';
 import type { ReleaseUpdate } from '../main/release-updates';
-import type { BackgroundSnapshot } from '../main/background-inventory';
+import type { AuthorizationSnapshot, BackgroundSnapshot } from '../main/background-inventory';
 import type { LastSeen } from '../storage/last-seen';
 import type { UpgradeHistoryResult } from '../domain/upgrade-history';
 import { HistoryTooltipCache, historyKey, upgradeHistoryTitle } from './upgrade-history';
@@ -259,10 +259,25 @@ function App() {
     if (!account || account.mode !== 'real') return false;
     const id = account.id, epoch = selectionEpoch.current;
     backgroundEpoch.current++; pendingRef.current = true; setBackgroundPending(true); connectionStatus('connecting'); setError('');
+    if (authorize) setMessage('');
     try {
-      const snapshot = await call<BackgroundSnapshot>(authorize ? { action: 'rsi.authorize', accountId: id, remember: keepSession } : { action: 'rsi.refresh', accountId: id });
-      if (current(id, epoch)) { backgroundEpoch.current++; applyBackground(snapshot, id, epoch); return true; }
-      return false;
+      const snapshot: BackgroundSnapshot & Partial<Pick<AuthorizationSnapshot, 'sessionSave'>> = authorize
+        ? await call<AuthorizationSnapshot>({ action: 'rsi.authorize', accountId: id, remember: keepSession })
+        : await call<BackgroundSnapshot>({ action: 'rsi.refresh', accountId: id });
+      if (!current(id, epoch)) return false;
+      backgroundEpoch.current++; applyBackground(snapshot, id, epoch);
+      if (snapshot.sessionSave) {
+        const notice = {
+          saved: 'RSI-Sitzung für den nächsten Programmstart gespeichert.',
+          'not-requested': 'Die neue RSI-Sitzung wurde nicht gespeichert.',
+          'missing-handle': 'RSI-Sitzung nicht gespeichert. Der Kontoname war im RSI-Hangar nicht eindeutig lesbar.',
+          'profile-mismatch': 'RSI-Sitzung nicht gespeichert. Das RSI-Konto konnte diesem Profil nicht zugeordnet werden.',
+          'missing-auth': 'RSI-Sitzung nicht gespeichert. RSI hat keine wiederverwendbare Anmeldung bereitgestellt.',
+          'auth-changed': 'RSI-Sitzung nicht gespeichert. Die Anmeldung hat sich beim Lesen geändert.',
+        }[snapshot.sessionSave];
+        setMessage(t(notice));
+      }
+      return true;
     } catch (e) {
       if (current(id, epoch)) { backgroundEpoch.current++; connectionStatus(authorize ? 'auth-required' : 'unavailable'); setError(e instanceof Error ? e.message : 'Verbindung konnte nicht aktualisiert werden.'); }
       return false;

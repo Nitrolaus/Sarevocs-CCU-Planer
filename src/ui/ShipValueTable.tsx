@@ -173,7 +173,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
           {index===0&&<td className="ship-price ship-purchase" rowSpan={values.length} title={purchaseTitle}>
             <strong>{purchaseAmount??t('Nicht belegt')}</strong>
             {poundPurchase&&<small className="ship-package-total">{converted.minor===null?t('Umrechnung offen'):money(converted.minor,display.settings.currency,true)}</small>}
-            {purchaseAmount&&packageRows>1&&<small className="ship-package-total">{t('Paketgesamt')} ({packageRows})</small>}
+            {packageRows>1&&<small className="ship-package-total">{t('Paketgesamt')} ({packageRows})</small>}
             {purchaseAmount&&packageRows===1&&(originalPrice||packagePrice||fromLog)&&<small className="ship-package-total">
               {t(originalPrice?'Ursprungspreis':packagePrice?'Paketpreis beim Erwerb':'RSI-Protokollwert')}
             </small>}

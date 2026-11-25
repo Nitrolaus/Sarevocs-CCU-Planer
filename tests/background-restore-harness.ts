@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { BackgroundRestoreError, RsiLogin, RSI_CONNECTION_PROBE } from '../src/importers/rsi';
-import { RSI_PAGE_PROBE } from '../src/importers/rsi-page';
+import { RSI_HANDLE_PROBE, RSI_PAGE_PROBE } from '../src/importers/rsi-page';
 import { SessionVault, type StoredCookie } from '../src/security/session-vault';
 
 const root = path.resolve(process.argv.find(x => x.startsWith('--test-root='))!.slice(12));
@@ -18,7 +18,8 @@ const hangar = 'https://robertsspaceindustries.com/account/pledges', loginUrl = 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 const cookie = (value = 'SYNTHETIC_AUTH_ONLY'): StoredCookie => ({ name: 'Rsi-Token', value, domain: 'robertsspaceindustries.com', path: '/', secure: true, httpOnly: true, hostOnly: true, session: false, expirationDate: Date.now() / 1000 + 3600, sameSite: 'lax' });
 const ready = `<ul class="list-items"><li><input class="js-pledge-id" value="synthetic-ccu"><input class="js-pledge-name" value="SYNTHETIC CCU"><input class="js-upgrade-data" value='{&quot;match_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC FROM&quot;}],&quot;target_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC TO&quot;}]}'><div class="items-col">SYNTHETIC ONLY</div></li></ul>`;
-type Scenario = 'ready' | 'redirect' | 'login' | 'consent' | 'challenge' | 'missing-handle' | 'different-handle' | 'rotation-during-probe';
+type Scenario = 'ready' | 'redirect' | 'login' | 'consent' | 'challenge' | 'missing-handle' | 'different-handle' | 'rotation-during-probe'
+  | 'delayed-handle' | 'conflicting-delayed-handles' | 'delayed-handle-after-navigation';
 let scenario: Scenario = 'ready', phase = 'INIT', rotate = false;
 const requests: string[] = [], readFlags: boolean[] = [], saves: StoredCookie[][] = [], values: RsiLogin[] = [], results: string[] = [];
 let loadGate: { entered: boolean; release: () => void; promise: Promise<void> } | undefined;
@@ -65,7 +66,7 @@ app.whenReady().then(async () => {
       return;
     }
     let body = url === loginUrl || scenario === 'login' ? '<input type="password">' : scenario === 'consent' ? '<button>Use necessary cookies only</button>' + ready : scenario === 'challenge' ? '<p>SYNTHETIC CHALLENGE</p>' : ready;
-    if (scenario !== 'missing-handle') body = '<span class="c-account-sidebar__profile-info-handle">' + (scenario === 'different-handle' ? 'SYNTHETIC_OTHER' : 'SYNTHETIC_OWNER') + '</span>' + body;
+    if (scenario !== 'missing-handle' && !scenario.includes('delayed-handle')) body = '<span class="c-account-sidebar__profile-info-handle">' + (scenario === 'different-handle' ? 'SYNTHETIC_OTHER' : 'SYNTHETIC_OWNER') + '</span>' + body;
     const protocol = this.webContents.session.protocol;
     if (protocol.isProtocolHandled('https')) protocol.unhandle('https');
     protocol.handle('https', request => request.url === url
@@ -75,6 +76,20 @@ app.whenReady().then(async () => {
     await originalLoad.call(this, url);
     const rotateCookie = () => this.webContents.session.cookies.set({ url: 'https://robertsspaceindustries.com/', name: 'Rsi-Token', value: 'SYNTHETIC_ROTATED_ONLY', secure: true, httpOnly: true });
     if (rotate) await rotateCookie();
+    if (scenario.includes('delayed-handle') && url === hangar) {
+      const execute = this.webContents.executeJavaScriptInIsolatedWorld.bind(this.webContents);
+      this.webContents.executeJavaScriptInIsolatedWorld = async (world, scripts) => {
+        if (scripts[0]?.code === RSI_HANDLE_PROBE) {
+          const handles = scenario === 'conflicting-delayed-handles' ? ['SYNTHETIC_OWNER', 'SYNTHETIC_OTHER'] : ['SYNTHETIC_OWNER'];
+          const markup = handles.map(handle => '<span class="c-account-sidebar__profile-info-handle">' + handle + '</span>').join('');
+          await this.webContents.executeJavaScript('document.body.insertAdjacentHTML("afterbegin", ' + JSON.stringify(markup) + ')');
+          if (scenario === 'delayed-handle-after-navigation') this.webContents.emit('did-start-navigation', {
+            url: hangar, isMainFrame: true, isSameDocument: false,
+          });
+        }
+        return execute(world, scripts);
+      };
+    }
     if (scenario === 'rotation-during-probe' || phase === 'PURCHASE_EVIDENCE_REQUIRES_STABLE_AUTH') {
       const execute = this.webContents.executeJavaScript.bind(this.webContents);
       this.webContents.executeJavaScript = async script => {
@@ -231,7 +246,7 @@ app.whenReady().then(async () => {
         const task = outcome(login.connect(id, parent, true, { hideHangar: true, ...(withSignal ? { signal: controller.signal } : {}) }));
         await until(() => !!cookieReadGate?.entered, 'LAST_COOKIE_GATE_MISSING');
         assert.equal(login.status(id).state, 'page-ready', 'The actual structured probe must finish before the held final cookie read');
-        let closing: Promise<void> | undefined;
+        let closing: ReturnType<RsiLogin['close']> | undefined;
         if (withSignal) controller.abort(); else closing = login.close(id);
         cookieReadGate.release();
         const result = await task; await closing;
@@ -246,7 +261,46 @@ app.whenReady().then(async () => {
       const login = value(), id = randomUUID(); await login.connect(id, parent, true, { hideHangar: true });
       noPresentation(); assert.equal(native.created[0]!.show, false);
       native.actions.length = 0; await login.connect(id, parent, true, { hideHangar: true });
-      assert.equal(native.created.length, 1); noPresentation(); await login.close(id);
+      assert.equal(native.created.length, 1); noPresentation(); assert.equal(await login.close(id), 'saved');
+    });
+    await check('DELAYED_HANDLE_SAVES_NEW_SESSION_AND_RESTORES_WITHOUT_SIGN_IN', async () => {
+      scenario = 'delayed-handle';
+      const login = value(vault), id = randomUUID();
+      const task = outcome(login.connect(id, parent, true, { hideHangar: true }));
+      try {
+        await until(() => native.created[0]?.win.webContents.getURL() === loginUrl, 'LOGIN_FIXTURE_MISSING');
+        const { win } = native.created[0]!;
+        await win.webContents.session.cookies.set({
+          url: loginUrl, name: cookie().name, value: cookie().value, secure: true, httpOnly: true, path: '/',
+        });
+        win.webContents.getURL = () => 'https://robertsspaceindustries.com/';
+        const { result, error } = await task;
+        assert.equal(error, undefined);
+        assert.deepEqual(result?.document.account, { identityKind:'rsi-handle', reference:'SYNTHETIC_OWNER' });
+        assert.equal(await login.close(id), 'saved');
+        assert.equal((await vault.load(id, false))[0]?.value, cookie().value);
+        scenario = 'ready'; requests.length = 0;
+        assert.equal((await value(vault).resume(id, parent))?.document.account.reference, 'SYNTHETIC_OWNER');
+        assert.deepEqual(requests, [hangar]);
+      } finally { await login.close(id); await task; }
+    });
+    await check('AMBIGUOUS_IDENTITY_OR_AUTH_CHANGE_RETURNS_REASON_AND_NEVER_SAVES', async () => {
+      for (const [fixture, expected] of [
+        ['missing-handle', 'missing-handle'], ['conflicting-delayed-handles', 'missing-handle'],
+        ['different-handle', 'profile-mismatch'], ['rotation-during-probe', 'auth-changed'],
+      ] as const) {
+        scenario = fixture;
+        const login = value(), id = randomUUID();
+        assert.ok(await login.connect(id, parent, true, { hideHangar: true }));
+        assert.equal(await login.close(id), expected);
+      }
+      scenario = 'delayed-handle-after-navigation';
+      const login = value(), id = randomUUID();
+      const { error } = await outcome(login.connect(id, parent, true, { hideHangar: true }));
+      assert.match(error?.message ?? '', /Seite während der Prüfung gewechselt/);
+      await login.close(id);
+      assert.equal(saves.length, 0);
+      noPresentation();
     });
     await check('AUTHORIZE_LOGIN_VISIBLE_INTENT_HANGAR_HIDDEN', async () => {
       const login = value(fakeVault([])), id = randomUUID();

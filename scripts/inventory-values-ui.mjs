@@ -5,6 +5,8 @@ for(const name of ['app.svg','app.png'])fs.copyFileSync('assets/'+name,path.join
 let main=fs.readFileSync('tests/fixtures/upgrade-history-ui-main.cjs','utf8'),anchor='  fixture.commands.push(copy(command));';assert.equal(main.split(anchor).length,2);main=main.replace(anchor,anchor+`
   if(command.action==='market.status')return {ok:true,data:copy(fixture.market)};
   if(command.action==='pricing.status')return {ok:true,data:copy(fixture.pricing)};
+  if(command.action==='help.checkUpdate')return {ok:true,data:null};
+  if(command.action==='rsi.conciergeRank')return {ok:true,data:{status:'session-required'}};
   if(command.action==='inventory.giveaways'){
     const byAccount=fixture.giveaways??={};
     const notes=byAccount[command.accountId]??={};
@@ -50,6 +52,20 @@ await check('PACKAGE_UPGRADE_REWARDS_AND_UNRESOLVED_VARIANTS_NEVER_INVENT_SHIP_P
 await check('CROWN_UPGRADE_ONLY_AND_ORIGINAL_HISTORY_TOOLTIP_REMAIN',async()=>{const name=row('1001').locator('td').first();assert.equal(await name.getByRole('img',{name:'Spielkopie im Pledge'}).count(),1);assert.match(await row('1001').locator('.inventory-kind').innerText(),/Nur upgraden/);await name.focus();await app.evaluate(async()=>{for(let n=0;n<100;n++){if(globalThis.fixture.pending.some(p=>!p.done&&p.command.pledgeId==='1001'))return;await new Promise(r=>setTimeout(r,10));}throw Error('HISTORY_REQUEST_MISSING');});await app.evaluate(()=>globalThis.resolveHistory({accountId:'11111111-1111-4111-8111-111111111111',pledgeId:'1001',revision:'33333333-3333-4333-8333-333333333333'},{status:'loaded',steps:[{from:'Hornet Ghost',to:'Prospector',appliedAt:null}],partial:false}));await page.waitForFunction(()=>document.querySelector('.ship-value-table tr[data-pledge="1001"] td').title.includes('Hornet Ghost → Prospector'));assert.match(await name.getAttribute('title'),/Nicht einschmelzen|nicht einschmelzen/);});
 await check('PROFILE_SWITCH_DOES_NOT_REUSE_PURCHASE_VALUES',async()=>{await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(b);await row('2001').waitFor();assert.match(await row('2001').locator('.ship-purchase').innerText(),/30,02/);assert.equal(await row('1001').count(),0);await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(a);await row('1001').waitFor();});
 await check('MANUFACTURER_BETWEEN_CURRENT_MODEL_AND_INSURANCE_WITH_COMPACT_RSI_DATE',async()=>{const headings=await table.locator('thead th').allTextContents();assert.deepEqual(headings.slice(0,3),['Schiff / Fahrzeug','Hersteller','Versicherung']);assert.equal(await row('1001').locator('.ship-manufacturer').innerText(),'MISC');assert.equal(await row('1002').locator('.ship-manufacturer').innerText(),'RSI');assert.match(await row('1001').locator('.ship-source').innerText(),/14\.11\.26/);const first=table.locator('tbody tr').first();assert.equal(await first.locator('td').count(),7);await table.screenshot({path:path.join(folder,'manufacturer-table.png')});});
+await check('UNPRICED_PACKAGE_STILL_IDENTIFIES_THE_SHARED_CELL',async()=>{
+  await app.evaluate(()=>{
+    const view=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];
+    const bundle=view.document.pledges.find(p=>p.pledgeId==='1002');
+    bundle.acquisitionCost=null;
+    view.revision='88888888-8888-4888-8888-888888888888';
+    view.observedAt=new Date().toISOString();
+  });
+  const shared=table.locator('tr[data-pledge="1002"] .ship-purchase');
+  await shared.getByText('Nicht belegt',{exact:true}).waitFor();
+  assert.equal(await shared.count(),1);
+  assert.equal(await shared.getAttribute('rowspan'),'2');
+  assert.equal(await shared.getByText('Paketgesamt (2)',{exact:true}).count(),1);
+});
 await check('GIVEAWAY_PENCIL_ONLY_AND_LOCAL_DONOR_SURVIVES_INVENTORY_POLL',async()=>{
   const ship=row('1005'),source=ship.locator('.ship-source');
   const marked=row('1003').locator('.ship-source');
@@ -125,7 +141,7 @@ await check('TWO_HUNDRED_SHIPS_STAY_COMPACT_AT_1440_1024_AND_125_PERCENT',async(
 await check('NO_LOGIN_MUTATION_NETWORK_OR_REAL_USER_DATA',async()=>{
   assert.equal(await page.locator('dialog[open]').count(),0);
   const commands=await app.evaluate(()=>globalThis.fixture.commands);
-  const allowed=['state','inventory','inventory.giveaways','rsi.background','rsi.settings','rsi.upgradeHistory','account.select','pricing.status','market.status','loaners.status'];
+  const allowed=['state','inventory','inventory.giveaways','rsi.background','rsi.settings','rsi.upgradeHistory','rsi.conciergeRank','account.select','pricing.status','market.status','loaners.status','help.checkUpdate'];
   const unexpected=commands.filter(command=>!allowed.includes(command.action)&&!(command.action==='table.widths'&&command.widths===undefined));
   assert.deepEqual([...new Set(unexpected.map(command=>command.action))],[]);
   assert.equal(await app.evaluate(()=>globalThis.blockedRequests),0);

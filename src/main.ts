@@ -7,7 +7,7 @@ import { InventoryStore } from './storage/database';
 import { APP_NAME, APP_VERSION, UserError, type ImportCandidate, type Preview } from './domain/model';
 import { giveawayShip } from './domain/giveaway';
 import { MAX_FILE_BYTES, parseImport } from './importers/files';
-import { RsiLogin } from './importers/rsi';
+import { RsiLogin, type SessionSaveResult } from './importers/rsi';
 import { readConcierge } from './importers/rsi-concierge';
 import type { ObservedConciergeRank } from './domain/concierge';
 import { requestHello } from './main/windows-hello';
@@ -453,6 +453,7 @@ async function start() {
         case 'rsi.authorize': {
           if (store.account(cmd.accountId).mode !== 'real') throw new UserError('RSI-Anmeldung nur für ein Echtdaten-Profil öffnen.');
           const task = beginInteractive(cmd.accountId);
+          let sessionSave: SessionSaveResult | undefined;
           try {
             await prepareInteractive(cmd.accountId, task);
             let rank: ObservedConciergeRank | undefined;
@@ -462,8 +463,8 @@ async function start() {
             });
             ensureInteractive(cmd.accountId, task);
             background.observe(cmd.accountId, candidate, rank);
-          } finally { try { await login.close(cmd.accountId); } finally { finishInteractive(cmd.accountId, task); } }
-          data = background.snapshot(cmd.accountId);
+          } finally { try { sessionSave = await login.close(cmd.accountId); } finally { finishInteractive(cmd.accountId, task); } }
+          data = { ...background.snapshot(cmd.accountId), sessionSave: sessionSave ?? 'not-requested' };
           if (win.isVisible() && !win.isMinimized()) win.focus();
           break;
         }

@@ -4,6 +4,8 @@ let prefix=template.slice(0,template.indexOf(marker)).replaceAll('work/temp/inve
 prefix=prefix.replace("fs.writeFileSync(path.join(folder,'fixture.json')",String.raw`
 let code=fs.readFileSync(path.join(folder,'fixture-main.cjs'),'utf8');code=code.replace('  fixture.commands.push(copy(command));',
  '  fixture.commands.push(copy(command));'+
+ "\n  if(command.action==='rsi.background'&&fixture.signInRequired)return {ok:true,data:{status:'auth-required',revision:null,changed:false}};"+
+ "\n  if(command.action==='rsi.authorize'&&fixture.signInRequired){fixture.signInRequired=false;return {ok:true,data:{status:'connected',revision:null,changed:false,sessionSave:fixture.sessionSave}};}"+
  "\n  if(command.action==='account.create'){if(fixture.failCreate)return {ok:false,error:'SYNTHETIC_CREATE_FAILED'};const finish=()=>{const id=require('node:crypto').randomUUID(),created={id,name:command.name,mode:command.mode,reference:null,identityKind:null,identityStatus:'unbound',lastComplete:null};fixture.state.accounts.push(created);fixture.inventories[id]={account:created,items:[],buybacks:[]};return {ok:true,data:copy(created)};};if(fixture.holdCreate)return new Promise(resolve=>{globalThis.finishCreate=()=>resolve(finish());});return finish();}"+
  "\n  if(command.action==='account.select'&&fixture.failSelect)return {ok:false,error:'SYNTHETIC_SELECT_FAILED'};"+
  "\n  if(command.action==='import.choose')return {ok:true,data:fixture.nextPreview??null};"+
@@ -35,6 +37,21 @@ await check('SELECTION_FAILURE_AFTER_CREATION_CLOSES_WITH_RECOVERABLE_PROFILE_IN
 await check('CANCELLED_CHOOSER_OPENS_NO_EMPTY_REVIEW_AND_REVIEW_REQUIRES_CONFIRMATION',async()=>{await page.getByRole('button',{name:'Datei importieren',exact:true}).click();await page.waitForFunction(()=>globalThis===window&&document.querySelectorAll('dialog[open]').length===0);await app.evaluate(()=>{globalThis.fixture.nextPreview={token:'synthetic-preview',accountId:globalThis.fixture.state.selectedAccountId,dataMode:'real',adapter:'sarevocs-json/1',reference:'synthetic-reference',completeness:'partial',pledges:[],buybacks:[],changes:{added:0,changed:0,missing:0,unchanged:0},warnings:[],bindingRequired:false};});await page.getByRole('button',{name:'Datei importieren',exact:true}).click();const review=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'Bestand vor der Übernahme prüfen',exact:true})});await review.waitFor();const commit=review.getByRole('button',{name:'Geprüften Import übernehmen',exact:true});assert.equal(await commit.isDisabled(),true);await review.getByRole('checkbox').check();await commit.click();await review.waitFor({state:'hidden'});assert.equal(await page.locator('dialog[open]').count(),0);});
 await check('FIRST_FILE_IMPORT_CREATES_PROFILE_THEN_CHOOSER_AND_LEAVES_NO_UNUSED_DIALOG',async()=>{await app.evaluate(()=>{globalThis.fixture.state.accounts=[];globalThis.fixture.state.selectedAccountId=null;globalThis.fixture.nextPreview=null;});await page.reload();await createProfileButton.waitFor();await page.getByRole('button',{name:'Datei importieren',exact:true}).click();await profile.waitFor({state:'visible'});await input.fill('Synthetic First Profile');const before=await app.evaluate(()=>globalThis.fixture.commands.filter(c=>c.action==='import.choose').length);await create.click();await profile.waitFor({state:'hidden'});await page.waitForFunction(()=>document.querySelectorAll('dialog[open]').length===0);assert.equal(await app.evaluate(()=>globalThis.fixture.commands.filter(c=>c.action==='import.choose').length),before+1);});
 await check('ENGLISH_PROFILE_AND_NO_LOGIN_OR_NETWORK',async()=>{await app.evaluate(()=>{globalThis.fixture.pricing.settings.language='en';});await page.getByRole('button',{name:'Create account profile',exact:true}).click();await page.getByText('Give your hangar a name.',{exact:true}).waitFor();await page.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal(await page.locator('dialog[open]').count(),0);const actions=await app.evaluate(()=>globalThis.fixture.commands.map(c=>c.action));assert.ok(!actions.some(a=>['rsi.open','rsi.connect','rsi.authorize','rsi.delete','rsi.refresh'].includes(a)));assert.equal(await app.evaluate(()=>globalThis.blockedRequests),0);assert.deepEqual(errors,[]);});
+await check('CONNECTED_AND_SESSION_SAVED_ARE_REPORTED_SEPARATELY',async()=>{
+  await app.evaluate(()=>{globalThis.fixture.pricing.settings.language='de';});
+  for(const [result,message] of [
+    ['missing-handle','RSI-Sitzung nicht gespeichert. Der Kontoname war im RSI-Hangar nicht eindeutig lesbar.'],
+    ['saved','RSI-Sitzung für den nächsten Programmstart gespeichert.'],
+  ]){
+    await app.evaluate(({},result)=>Object.assign(globalThis.fixture,{signInRequired:true,sessionSave:result}),result);
+    await page.getByRole('button',{name:'Anmelden',exact:true}).click();
+    const notice=page.locator('main .message');
+    await notice.filter({hasText:message}).waitFor();
+    assert.match(await page.locator('.connection-status').innerText(),/^Verbunden/);
+  }
+  assert.equal(await app.evaluate(()=>globalThis.blockedRequests),0);
+  assert.deepEqual(errors,[]);
+});
 fs.writeFileSync(path.join(folder,'results.json'),JSON.stringify({status:'PASS',version,packagedRenderer:!!packaged,checks,errors,syntheticOnly:true,newRsiLogin:false,realUserDataRead:false},null,2));console.log('REPORT: '+path.join(folder,'results.json'));
 }catch(error){fs.writeFileSync(path.join(folder,'results.json'),JSON.stringify({status:'FAIL',checks,error:String(error.stack),errors},null,2));console.log('REPORT: '+path.join(folder,'results.json'));throw error;}finally{if(app)await app.close();}
 `;

@@ -153,6 +153,10 @@ const extractPage = String.raw`(root, live, pageUrl) => {
 }`;
 
 export const RSI_PAGE_PROBE = `(() => { const extract = ${extractPage}; return extract(document, true, location.href); })()`;
+export const RSI_HANDLE_PROBE = `(() => {
+  const handles = document.querySelectorAll('.c-account-sidebar__profile-info-handle');
+  return handles.length === 1 ? handles[0].textContent.trim() : null;
+})()`;
 export const RSI_CONNECTION_PROBE = `(() => {
   const result = (${RSI_PAGE_PROBE});
   if (result.ok) return 'ready';

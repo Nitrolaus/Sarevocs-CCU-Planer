@@ -8,7 +8,7 @@ function amount(value: string): { minor: number; currency: 'USD' | 'EUR' | 'GBP'
   const match = /^([$€£])?\s*((?:0|[1-9]\d{0,6}|[1-9]\d{0,2}(?:,\d{3}){1,2}))(?:\.(\d{2}))?(?:\s+(USD|EUR|GBP))?$/.exec(value);
   if (!match) return null;
   const [, symbol, dollars, cents, code] = match;
-  const currency = code==='USD'||code==='EUR'||code==='GBP'?code:symbol==='£'?'GBP':null;
+  const currency = code==='USD'||code==='EUR'||code==='GBP'?code:symbol==='£'?'GBP':symbol==='€'?'EUR':null;
   if (!currency || symbol && symbol !== {EUR:'€',USD:'$',GBP:'£'}[currency]) return null;
   const minor = Number(dollars!.replaceAll(',', '')) * 100 + Number(cents ?? 0);
   return minor <= 100_000_000 ? { minor, currency } : null;
