@@ -12,6 +12,7 @@ const historyTime = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/).refine(v
 export const upgradeHistoryStepSchema = z.object({
   from: historyName,
   to: historyName,
+  ccuPledgeId: z.string().regex(/^[1-9]\d{0,19}$/).optional(),
   // RSI's displayed local time; no timezone or UTC conversion is inferred.
   appliedAt: historyTime.nullable(),
 }).strict();

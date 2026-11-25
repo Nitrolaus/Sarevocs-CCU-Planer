@@ -463,6 +463,17 @@ Object.assign(english, {
   'Vorteil bei Nutzung': 'Savings in chain',
   'Aktueller RSI-Standardpreis abzüglich des Warbond-Preises für dieses Upgrade.': 'Current RSI standard price minus the Warbond price for this upgrade.',
   'Heutiger Standardpreis oder Richtwert für dieses Upgrade abzüglich des belegten Kaufpreises.': 'Current standard price or estimate for this upgrade minus its documented purchase price.',
+  'Kettenbauhistorie': 'Chain build history',
+  'Für die Kettenbauhistorie wird ein aktuell gelesener RSI-Hangar benötigt.': 'Chain build history requires a current RSI hangar read.',
+  'Weitere RSI-Protokolle konnten nicht geladen werden.': 'The remaining RSI logs could not be loaded.',
+  'RSI-Protokolle werden gelesen …': 'Reading RSI logs …',
+  'In den gelesenen RSI-Protokollen wurden keine angewendeten CCUs gefunden.': 'No applied CCUs were found in the retrieved RSI logs.',
+  '{count} angewendetes CCU': '{count} applied CCU',
+  '{count} angewendete CCUs': '{count} applied CCUs',
+  'RSI-Protokoll unvollständig.': 'Incomplete RSI log.',
+  'Baudatum, älteste Schritte zuerst': 'Build date, oldest steps first',
+  'Gebaut am': 'Applied on',
+  'Datum offen': 'Date unknown',
 });
 export function translate(language:'de'|'en',text:string):string{
   const exports:Record<string,string>={'LOKALER EXPORT':'LOCAL EXPORT','Exportieren':'Export','Exportieren …':'Export …','Dateiformat':'File format','Inhalt':'Contents','Bestand dieses Profils':'Inventory of this profile','Aktuelle CCU-Kette':'Current CCU chain','Vorschau wird erstellt …':'Preparing preview …','Zeilen':'rows','Lokale Momentaufnahme':'Local snapshot','Währung und Mehrwertsteuersatz aus deinen Einstellungen. Offene Werte bleiben offen.':'Currency and VAT from your settings. Unknown values remain unknown.','Hinweise zum Datenstand':'Data notes','Speicherort wählen …':'Choose save location …','Wird gespeichert …':'Saving …','Export gespeichert.':'Export saved.','Export fehlgeschlagen.':'Export failed.','Zuerst eine CCU-Kette mit Startbasis anzeigen.':'First display a CCU chain with a start base.'};

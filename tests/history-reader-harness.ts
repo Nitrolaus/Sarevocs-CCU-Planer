@@ -102,7 +102,8 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       const before = served, value = await reader().read(randomUUID(), 123, randomUUID());
       native.firstStatus = value.status;
       assert.deepEqual(value, { status: 'loaded', partial: false, steps: [
-        { from: 'Alpha', to: 'Beta', appliedAt: '2023-11-26 05:44' }, { from: 'Beta', to: 'Gamma', appliedAt: '2023-11-26 18:02' }] });
+        { from: 'Alpha', to: 'Beta', appliedAt: '2023-11-26 05:44', ccuPledgeId: '1' },
+        { from: 'Beta', to: 'Gamma', appliedAt: '2023-11-26 18:02', ccuPledgeId: '2' }] });
       assert.equal(served - before, 1); assert.equal(verifiedRequests, served); assert.equal(upgradeHistoryResultSchema.safeParse(value).success, true);
     });
     await check('CACHE_ISOLATES_PROFILE_PLEDGE_AND_REVISION', async () => {
@@ -196,8 +197,8 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     });
     await check('LEGACY_AND_MODERN_STEPS_FORM_COMPLETE_ORDERED_CHAIN', async () => {
       assert.deepEqual(await parseOnly(mixed), { status: 'loaded', partial: false, steps: [
-        { from: 'Synthetic Alpha', to: 'Synthetic Beta', appliedAt: '2023-11-26 05:44' },
-        { from: 'Synthetic Beta', to: 'Synthetic Gamma', appliedAt: '2023-11-26 18:02' },
+        { from: 'Synthetic Alpha', to: 'Synthetic Beta', appliedAt: '2023-11-26 05:44', ccuPledgeId: '1' },
+        { from: 'Synthetic Beta', to: 'Synthetic Gamma', appliedAt: '2023-11-26 18:02', ccuPledgeId: '2' },
       ] });
     });
     await check('LONG_MIXED_CHAIN_PRESERVES_EVERY_STEP_AND_DATE', async () => {

@@ -29,12 +29,12 @@ import type {DraftEditor} from './usePlannerDrafts';import {useText} from './i18
 import './chain.css';import './workbench.css';
 type Drag={scope:string;signature:string;anchor:DraftAnchor;step:ChainStep;index?:number};
 type DropTarget={token:string;index:number;replace:boolean};
-export function ChainWorkbench({accountId,inventory,target,market,display,editor,onShopError,onExportContext,blockedResources=[],reservationsReady=true,pendingHigher=[],exclusions,advisors,fairOffer}:{accountId:string|null;inventory:PlannerInventory|null;
-  target?:CatalogueShip;market?:MarketSnapshot;display:PricingSnapshot;editor:DraftEditor;onShopError?:(message:string)=>void;onExportContext?:(context:ExportContext)=>void;blockedResources?:readonly ResourceClaim[];reservationsReady?:boolean;pendingHigher?:readonly string[];exclusions:ReturnType<typeof useCcuExclusions>;advisors?:AdvisorContext;fairOffer?:FairOfferRequest|null}){
+export function ChainWorkbench({accountId,inventory,target,market,display,editor,onShopError,onExportContext,blockedResources=[],reservationsReady=true,pendingHigher=[],exclusions,advisors,fairOffer,chainHistory}:{accountId:string|null;inventory:PlannerInventory|null;
+  target?:CatalogueShip;market?:MarketSnapshot;display:PricingSnapshot;editor:DraftEditor;onShopError?:(message:string)=>void;onExportContext?:(context:ExportContext)=>void;blockedResources?:readonly ResourceClaim[];reservationsReady?:boolean;pendingHigher?:readonly string[];exclusions:ReturnType<typeof useCcuExclusions>;advisors?:AdvisorContext;fairOffer?:FairOfferRequest|null;chainHistory?:React.ReactNode}){
   const t=useText(),rail=useRef<HTMLDivElement>(null),drag=useRef<Drag|null>(null),[query,setQuery]=useState(''),[detail,setDetail]=useState<string|null>(null),[notice,setNotice]=useState(''),[opening,setOpening]=useState(false);
   const [stockView,setStockView]=useState<'grid'|'band'>('grid'),[stockColumns,setStockColumns]=useState(5);
   const [includeHigher,setIncludeHigher]=useState(false),[showLocked,setShowLocked]=useState(false);
-  const [advisorTab,setAdvisorTab]=useState<'chain'|'priority'|'purchase'>('chain');
+  const [advisorTab,setAdvisorTab]=useState<'chain'|'priority'|'purchase'|'history'>('chain');
   const advisorPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!fairOffer) return;
@@ -242,6 +242,16 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     <th scope="row">{index===undefined?label:<button aria-label={t('Variante ansehen')+' '+(index+1)} onClick={()=>chooseComparison(index)}>{label}</button>}<small>{value.base?.model.name??t('Basis ungeprüft')} · {value.ownedCount} {t('Bestand')} · {value.gapCount} {t('Lücken')}</small></th>
     <td>{total(c.paid,true)}</td><td>{conflicted?t('Ressourcenkonflikt'):c.invalid?t('Anschluss prüfen'):total(c.additional)}{scan.result?.fallbackUsd&&index!==undefined&&<small>≈ {formatMinor(scan.result.plans[index]!.score[0],'USD',display.settings.language)} · {t('Vergleich vor Steuer')}</small>}</td>
     <td>{conflicted?t('Ressourcenkonflikt'):money(c.investment,c.paid.approximate||c.additional.approximate)}</td><td>{t(c.paid.missing?'Kaufpreise unvollständig':c.additional.approximate?'Altpreise belegt':'Kaufpreise belegt')}{(c.additional.approximate||c.additional.missing>0)&&<small>{t('Zukauf ungeprüft')}</small>}{c.paid.approximate&&<small>{t('Altpreise als Richtwert')}</small>}</td></tr>;}
+  const tabOptions: [typeof advisorTab, string][] = [['chain','Kette bauen']];
+  if (advisors) tabOptions.push(['priority','Vorrang & freie CCUs'], ['purchase','CCU-Kaufoptimierer']);
+  if (chainHistory) tabOptions.push(['history','Kettenbauhistorie']);
+  const tabs = tabOptions.length > 1 && <div className="advisor-tabs" role="tablist" aria-label={t('Planungsbereich')}>
+    {tabOptions.map(([key,label]) => <button key={key} role="tab" aria-selected={advisorTab===key}
+      onClick={() => {endDrag();setAdvisorTab(key);}}>{t(label)}</button>)}
+  </div>;
+  if (advisorTab === 'history' && chainHistory) return <section className="panel market-chain ccu-builder ccu-workbench" aria-label={t('Kettenbauhistorie')}>
+    <h2>{t('Kettenbauhistorie')}</h2>{tabs}{chainHistory}
+  </section>;
   return <section className={'panel market-chain ccu-builder ccu-workbench'+(dragVisual?' is-dragging':'')} aria-label={t('Kettenbauer')}>
     <div className="ccu-builder-head"><h2>{t('CCU-Kette')}{target?' → '+target.name:''}</h2>
       <div className="ccu-price-cards">
@@ -271,7 +281,7 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
           {display.settings.currency==='EUR'&&<> · {planningRateLabel(display)}</>}</p></div>
         <button aria-label={t('CCU-Details schließen')} onClick={()=>{setDetail(null);costToggle.current?.focus();}}>×</button></>}
     </div>
-    {advisors&&<div className="advisor-tabs" role="tablist" aria-label={t('Planungsbereich')}>{([['chain','Kette bauen'],['priority','Vorrang & freie CCUs'],['purchase','CCU-Kaufoptimierer']] as const).map(([key,label])=><button key={key} role="tab" aria-selected={advisorTab===key} onClick={()=>{endDrag();setAdvisorTab(key);}}>{t(label)}</button>)}</div>}
+    {tabs}
     <div>
     <div className="ccu-start-base"><label><strong>{t('LTI-Startbasis selbst wählen')}</strong><small>{t('Günstige Tokens zuerst. Keine automatische Vorauswahl.')}</small></label><select aria-label={t('Startbasis für die Kette')} aria-describedby={blockedBase?'ccu-start-base-reserved':undefined} disabled={!editor.ready||!reservationsReady||!target||!ready} value={blockedBase?'':chosenBase?.key??''} onChange={event=>{const base=freePool.bases.find(b=>b.key===event.target.value);if(!base)return;chooseComparison(null);editor.change(approveStartBase(freePool,editor.value,base.key));}}>
       <option value="" disabled>{t('Bitte LTI-Startbasis auswählen …')}</option>{baseChoices.map(b=><option key={b.key} value={b.key}>{b.model.name} · LTI · {money(b.model.nominalUsd===null?null:estimatePlanningMinor(b.model.nominalUsd,{...display.settings,taxMode:'net'},display.rate&&!euroRateIsStale(display.rate)?display.rate:null),true)} · {b.pledgeName}</option>)}</select>

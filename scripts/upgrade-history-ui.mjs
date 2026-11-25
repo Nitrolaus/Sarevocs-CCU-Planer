@@ -46,7 +46,7 @@ let application, page;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate, code) { for (let n = 0; n < 400; n++) { if (await predicate()) return; await wait(20); } throw new Error(code); }
 async function check(name, run) { await run(); checks.push(name); console.log('PASS: ' + name); }
-const cell = pledgeId => page.locator('tbody tr').filter({ hasText: 'Pledge: ' + pledgeId }).locator('td').first();
+const cell = pledgeId => page.locator(`tbody tr[data-pledge="${pledgeId}"]`).locator('td').first();
 const key = (accountId, revision, pledgeId) => ({ accountId, revision, pledgeId });
 const histories = () => application.evaluate(() => globalThis.fixture.commands.filter(c => c.action === 'rsi.upgradeHistory'));
 const requestCount = async target => (await histories()).filter(c => c.accountId === target.accountId && c.revision === target.revision && c.pledgeId === target.pledgeId).length;
@@ -70,7 +70,7 @@ try {
     assert.ok(titles.singleShip.includes('Pledge: Standalone Ships - Shiv\nAktuell: Paladin'));
     assert.ok(titles.singleShip.includes('01.11.2026 23:30') && titles.singleShip.includes('02.11.2026 00:15'));
     assert.ok(titles.singleShip.indexOf('Shiv →') < titles.singleShip.indexOf('Alpha →'));
-    assert.equal(await cell('1001').locator('small').count(), 1);
+    assert.equal(await cell('1001').locator('.ship-current-model').count(), 1);
     await page.locator('h1').first().hover(); await cell('1001').hover(); assert.equal(await requestCount(target), 1);
   });
   await check('PACKAGE_PARTIAL_AND_EMPTY_RESULTS_ARE_EXPLICIT', async () => {
@@ -95,10 +95,10 @@ try {
   });
   await check('CCU_UNRESOLVED_UNKNOWN_AND_CANONICAL_IMPORTS_NEVER_FETCH_HISTORY', async () => {
     const before = (await histories()).length;
-    for (const pledgeId of ['1007', '1008', '1009']) { await cell(pledgeId).hover(); assert.equal(await cell(pledgeId).getAttribute('tabindex'), null); }
+    for (const pledgeId of ['1007', '1008', '1009']) { await cell(pledgeId).hover(); await cell(pledgeId).focus(); }
     assert.equal((await histories()).length, before);
     await page.getByRole('combobox', { name: 'Lokales Kontoprofil', exact: true }).selectOption(ids.c); await cell('2001').waitFor();
-    assert.equal(await cell('2001').getAttribute('title'), 'Pledge: Synthetic canonical ship'); await cell('2001').hover();
+    assert.match(await cell('2001').getAttribute('title'), /Pledge: Synthetic canonical ship\nPledge: 2001$/); await cell('2001').hover();
     assert.equal((await histories()).length, before);
   });
   await check('LATE_ACCOUNT_REPLY_NEVER_APPEARS_IN_OTHER_PROFILE', async () => {
@@ -140,6 +140,37 @@ try {
     await dialog.getByRole('button', { name: 'Schließen', exact: true }).click();
     await cell('1001').focus(); await titleContains('1001', 'gültige RSI-Sitzung');
     assert.equal(await page.locator('dialog[open]').count(), 0);
+  });
+  await check('CHAIN_BUILD_HISTORY_SHOWS_BUILD_DATES_AND_ONLY_DOCUMENTED_PRICES', async () => {
+    const archive = pledge('7001', 'Upgrade - Shiv to Synthetic Alpha', [], {
+      ccus: [{ instanceId: '7001:ccu', from: 'Shiv', to: 'Synthetic Alpha', status: 'unverified', applicability: 'unverified', insurance }],
+      rsiPurchase: { status: 'documented', source: 'order', minor: 910, currency: 'EUR' },
+    });
+    await application.evaluate((_electron, { id, revision, archive }) => {
+      const fixture = globalThis.fixture;
+      fixture.sessionSaved = true;
+      const snapshot = fixture.views[id];
+      snapshot.revision = revision;
+      snapshot.document.pledges = snapshot.document.pledges.slice(0, 1);
+      snapshot.document.scope = { kind: 'full-hangar', exportComplete: true, expectedPledges: 1, pagesExpected: 1, pagesRead: 1 };
+      fixture.inventories[id].items = [{ pledge: archive, availability: 'removed', source: 'rsi-dom-probe/1', importedAt: '2026-11-01T00:00:00Z' }];
+    }, { id: ids.a, revision: revisions.next, archive });
+    const profiles = page.getByRole('combobox', { name: 'Lokales Kontoprofil', exact: true });
+    await profiles.selectOption(ids.c);
+    await profiles.selectOption(ids.a);
+    await cell('1001').waitFor();
+    await page.getByRole('button', { name: 'CCU-Planer', exact: true }).click();
+    await page.getByRole('tab', { name: 'Kettenbauhistorie', exact: true }).click();
+    const target = key(ids.a, revisions.next, '1001');
+    await until(async () => await requestCount(target) === 1, 'CHAIN_HISTORY_REQUEST_MISSING');
+    await resolve(target, loaded([mainSteps[1], { ...mainSteps[0], ccuPledgeId: '7001' }]));
+    const cards = page.locator('.chain-history-card');
+    await until(async () => await cards.count() === 2, 'CHAIN_HISTORY_CARDS_MISSING');
+    assert.deepEqual(await cards.locator('time').evaluateAll(times => times.map(time => time.dateTime)), ['2026-11-01T23:30', '2026-11-02T00:15']);
+    assert.match(await cards.nth(0).locator('.chain-history-price').innerText(), /9,10\s€/);
+    assert.match(await cards.nth(1).locator('.chain-history-price').innerText(), /Preis offen/);
+    await profiles.selectOption(ids.b);
+    await until(async () => await cards.count() === 0, 'OTHER_PROFILE_HISTORY_RETAINED');
   });
   assert.equal(await application.evaluate(() => globalThis.fixture.commands.some(c => ['rsi.open', 'rsi.connect', 'rsi.authorize', 'rsi.refresh', 'import.commit'].includes(c.action))), false);
   assert.equal(await application.evaluate(() => globalThis.blockedRequests), 0); assert.deepEqual(pageErrors, []);

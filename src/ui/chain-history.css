@@ -1,0 +1,19 @@
+.chain-history { min-width: 0; display: grid; gap: 14px }
+.chain-history-row { min-width: 0; padding: 14px 16px; border: 1px solid #2f4655; border-radius: 10px; background: #17232d }
+.chain-history-row header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px }
+.chain-history-row h3 { margin: 0 }
+.chain-history-row header span,.chain-history-status { color: #a9c3cd }
+.chain-history-status { margin: 0 0 8px }
+.chain-history-rail { display: flex; list-style: none; overflow-x: auto; padding: 2px 3px 10px; margin: 0; scrollbar-color: #647d86 #12202a }
+.chain-history-rail li { display: flex; flex: 0 0 auto; align-items: stretch }
+.chain-history-link { width: 42px; display: grid; place-items: center }
+.chain-history-link .ccu-silver-chain { width: 42px; height: 20px }
+.chain-history-card { width: 191px; min-width: 0; padding: 10px 11px 12px; background: linear-gradient(158deg,#0b3a40,#0c2d36); border: 1px solid #35a99e; border-left: 4px solid #29d6be; border-radius: 8px; display: flex; flex-direction: column }
+.chain-history-date { display: grid; gap: 2px; padding: 6px 9px; margin-bottom: 11px; background: #12494d; border: 1px solid #277073; border-radius: 6px; color: #d0fff5 }
+.chain-history-date time,.chain-history-date strong { font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums }
+.chain-history-card dl { margin: 0 0 11px }
+.chain-history-card dd { margin: 0 0 8px; font-weight: 650; overflow-wrap: anywhere }
+.chain-history-card dd:last-child { margin-bottom: 0 }
+.chain-history-card dt,.chain-history-date span,.chain-history-price span { color: #a9c9cf; font-size: .82em }
+.chain-history-price { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; margin-top: auto; border-top: 1px solid #2f5d65; padding-top: 8px }
+.chain-history-price strong { white-space: nowrap; font-weight: 650 }

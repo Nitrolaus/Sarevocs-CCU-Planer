@@ -8,7 +8,9 @@ import type { BridgeResult, Command } from '../main/commands';
 import type { ReleaseUpdate } from '../main/release-updates';
 import type { AuthorizationSnapshot, BackgroundSnapshot } from '../main/background-inventory';
 import type { LastSeen } from '../storage/last-seen';
-import type { UpgradeHistoryResult } from '../domain/upgrade-history';
+import { unavailableHistory, type UpgradeHistoryResult } from '../domain/upgrade-history';
+import { historicCcuPurchases } from '../domain/applied-ccu-price';
+import { ChainHistory } from './ChainHistory';
 import { HistoryTooltipCache, historyKey, upgradeHistoryTitle } from './upgrade-history';
 import { gameAccessEvidence } from '../domain/game-access';
 import {gameContentKind} from '../domain/game-content';
@@ -215,6 +217,18 @@ function App() {
   const liveBuybacks = account?.mode === 'real' && lastSeen?.accountId === accountId && lastSeen.document.buybackObservation
     && (!account.reference || (account.reference === lastSeen.document.account.reference && account.identityKind === lastSeen.document.account.identityKind)) ? lastSeen.document : null;
   const viewingBuybacks = page === 'inventory' && filter === 'Buy Back';
+  const historyPledges = useMemo(() => observed?.document.pledges.filter(pledge => historyKey(pledge, account, observed)) ?? [], [account, observed]);
+  const historyPurchases = useMemo(() => historicCcuPurchases(
+    observed?.document.scope.exportComplete ? acceptedInventory?.items ?? [] : [],
+    observed?.document.pledges ?? []), [acceptedInventory, observed]);
+  const readChainHistory = useCallback(async (pledge: Pledge): Promise<UpgradeHistoryResult> => {
+    const key = historyKey(pledge, account, observed), epoch = selectionEpoch.current;
+    if (!key || !current(key.accountId, epoch) || knownRevision.current !== key.revision) return unavailableHistory('cancelled');
+    try {
+      const result = await call<UpgradeHistoryResult>({ action: 'rsi.upgradeHistory', ...key });
+      return current(key.accountId, epoch) && knownRevision.current === key.revision ? result : unavailableHistory('cancelled');
+    } catch { return unavailableHistory('unavailable'); }
+  }, [account, observed]);
   async function loadUpgradeHistory(pledge: Pledge) {
     const key = historyKey(pledge, account, observed), epoch = selectionEpoch.current;
     if (!key || !current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
@@ -368,6 +382,8 @@ function App() {
         hasInventory={!!lastSeen || !!acceptedInventory?.items.length} />}
       {page === 'help' && <HelpView />}
       {(page === 'market' || page === 'fleet') && <MarketView accountId={accountId || null} display={display} inventory={plannerInventory} storeCredit={storeCredit}
+        chainHistory={<ChainHistory key={`${accountId}:${observed?.revision ?? ''}`} pledges={historyPledges}
+          read={readChainHistory} purchases={historyPurchases} language={display.settings.language} />}
         buybacks={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} buybackObservation={liveBuybacks?.buybackObservation}
         fleet={page === 'fleet'} onOpenPlanner={() => { setPage('market'); window.scrollTo(0, 0); }}
         onExportContext={receiveExportContext} onExport={()=>setExportKind(exportContext?.accountId===accountId?'chain':'offers')}/>}

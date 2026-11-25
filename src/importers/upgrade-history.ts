@@ -31,8 +31,8 @@ export function historyParserProbe(html: string): string {
     };
     for (const row of rows.slice(0, 128)) {
       const text = clean(row.querySelector('span')?.textContent);
-      const applied = /^upgrade applied:\\s*(?:#\\d{1,20}\\s+)?(.+?)\\s*,\\s*new value:\\s*.+$/i.exec(text);
-      const offer = applied?.[1] || '';
+      const applied = /^upgrade applied:\\s*(?:#(\\d{1,20})\\s+)?(.+?)\\s*,\\s*new value:\\s*.+$/i.exec(text);
+      const offer = applied?.[2] || '';
       // Old applied-CCU names end in "Upgrade" instead of starting with "Upgrade -".
       // Never reinterpret a malformed modern offer through the legacy branch, and do not
       // strip an "Upgrade" word from a modern target's actual name.
@@ -46,7 +46,8 @@ export function historyParserProbe(html: string): string {
       if (!safe(from) || !safe(to) || /\\s+to\\s+/i.test(from) || /\\s+to\\s+/i.test(to) || from === to) { partial = true; continue; }
       const appliedAt = date(clean(row.firstChild?.textContent));
       if (appliedAt === null) partial = true;
-      steps.push({from,to,appliedAt});
+      const ccuPledgeId = applied?.[1];
+      steps.push({from,to,appliedAt,...(ccuPledgeId && /^[1-9]/.test(ccuPledgeId) ? {ccuPledgeId} : {})});
     }
     // An empty fragment alone is not an independently proven complete empty history.
     if (!rows.length) partial = true;
