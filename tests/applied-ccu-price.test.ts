@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { InventoryItem } from '../src/domain/model';
 import type { CatalogueShip } from '../src/market/model';
-import { appliedCcuPrice, historicCcuPurchases } from '../src/domain/applied-ccu-price';
+import { appliedCcuPrice, historicCcuPurchases, sameHistoryModelName } from '../src/domain/applied-ccu-price';
 import { basePledge } from './fixtures';
 
 test('applied CCU price requires the exact documented purchase from this RSI account', () => {
@@ -25,4 +25,16 @@ test('applied CCU price requires the exact documented purchase from this RSI acc
   assert.equal(appliedCcuPrice({ ...step, to: 'Nova' }, purchases, [{ ...nova, id: 155 }]), undefined);
   assert.equal(appliedCcuPrice(step, historicCcuPurchases([item], [pledge])), undefined);
   assert.equal(appliedCcuPrice(step, historicCcuPurchases([{ ...item, source: 'sarevocs-json/1' }], [])), undefined);
+});
+
+test('matches the Firebird subscriber title only to the verified Firebird model', () => {
+  const firebird: CatalogueShip = { id: 267, name: 'Sabre Firebird', chassisId: null, manufacturer: 'Aegis Dynamics',
+    manufacturerCode: 'AEGS', status: 'unknown', focus: '', length: null };
+  const title = 'Sabre Firebird Imperator Subscribers Edition';
+  const sabre = { ...firebird, id: 103, name: 'Sabre' };
+  assert.ok(sameHistoryModelName(title, firebird.name, [firebird, sabre]));
+  assert.equal(sameHistoryModelName(title, sabre.name, [firebird, sabre]), false);
+  assert.ok(sameHistoryModelName(title, firebird.name, []));
+  assert.equal(sameHistoryModelName(title, sabre.name, []), false);
+  assert.equal(sameHistoryModelName(title, firebird.name, [firebird, { ...firebird, id: 268, name: title }]), false);
 });

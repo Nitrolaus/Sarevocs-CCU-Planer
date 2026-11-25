@@ -63,7 +63,8 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('rsi.background'), accountId: z.uuid(), knownRevision: z.uuid().optional() }).strict(),
   z.object({ action: z.literal('rsi.refresh'), accountId: z.uuid() }).strict(),
   z.object({ action: z.literal('rsi.upgradeHistory'), accountId: z.uuid(), revision: z.uuid(),
-    pledgeId: z.string().regex(/^[1-9][0-9]{0,15}$/).refine(value => Number.isSafeInteger(Number(value))) }).strict(),
+    pledgeId: z.string().regex(/^[1-9][0-9]{0,15}$/).refine(value => Number.isSafeInteger(Number(value))),
+    lookupPurchases: z.literal(true).optional() }).strict(),
   z.object({ action: z.literal('import.commit'), accountId: z.uuid(), token: z.uuid(), bindingConfirmed: z.boolean(), reviewed: z.literal(true) }).strict(),
   z.object({ action: z.literal('import.cancel'), token: z.uuid() }).strict(),
 ]);

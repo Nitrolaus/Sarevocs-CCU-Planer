@@ -7,6 +7,7 @@ import { LastSeenStore } from '../src/storage/last-seen';
 import { parseImport } from '../src/importers/files';
 import { demoDocument } from './fixtures';
 import type { Account, ImportCandidate } from '../src/domain/model';
+import type { UpgradeHistoryResult } from '../src/domain/upgrade-history';
 
 const root = path.resolve('work/temp/last-seen-tests', randomUUID());
 function profile(name = 'Synthetic profile'): Account {
@@ -18,6 +19,32 @@ function candidate(account: Account, reference = `rsi-local:${account.id}`, kind
   const value = parseImport(JSON.stringify(document)); value.adapter = 'rsi-dom-probe/1'; return value;
 }
 function cache() { return new LastSeenStore(path.join(root, randomUUID())); }
+
+test('retains only verified applied-CCU receipts for the same RSI profile and ship after refresh and restart', () => {
+  const store = cache(), account = profile();
+  const source = candidate(account, 'SYNTHETIC_OWNER', 'rsi-handle');
+  const original = source.document.pledges.find(pledge => pledge.ships.length === 1 && !pledge.ccus.length)!;
+  original.pledgeId = '1060'; original.name = 'Standalone Ships - MDC'; original.ships[0]!.modelName = 'Sabre Firebird';
+  const view = store.save(account, source);
+  const history: UpgradeHistoryResult = { status: 'loaded', partial: false,
+    steps: [{ from: 'MDC', to: 'Sabre Firebird Imperator Subscribers Edition', appliedAt: '2026-02-03 09:17', ccuPledgeId: '9901' }],
+    purchases: [{ ccuPledgeId: '9901', price: { status: 'documented', source: 'order', minor: 9980, currency: 'EUR' } }],
+  };
+  assert.equal(store.rememberAppliedPurchases(account, view, original.pledgeId, { ...history, purchases: [] }), view);
+  assert.equal(store.rememberAppliedPurchases(account, view, original.pledgeId, { ...history, partial: true }), view);
+  const recorded = store.rememberAppliedPurchases(account, view, original.pledgeId, history);
+  assert.deepEqual(recorded.appliedPurchaseHistories?.['1060'], history);
+  const restarted = new LastSeenStore(store.directory);
+  assert.deepEqual(restarted.load(account)?.appliedPurchaseHistories?.['1060'], history);
+  const refreshed = restarted.save(account, source);
+  assert.notEqual(refreshed.revision, view.revision);
+  assert.deepEqual(refreshed.appliedPurchaseHistories?.['1060'], history);
+  assert.equal('appliedPurchaseHistories' in JSON.parse(fs.readFileSync(path.join(store.directory, `${account.id}.json`), 'utf8')), false);
+  const other = profile();
+  assert.equal(store.save(other, source).appliedPurchaseHistories, undefined);
+  original.ships[0]!.modelName = 'A different ship';
+  assert.equal(restarted.save(account, source).appliedPurchaseHistories, undefined);
+});
 
 test('Letzter Stand überlebt Neustart mit stabiler Revision und vollständigem Cache-Payload', () => {
   const account = profile(), first = cache(), source = candidate(account);

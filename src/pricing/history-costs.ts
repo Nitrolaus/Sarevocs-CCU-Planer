@@ -1,7 +1,7 @@
 import type { Pledge, RsiPurchase } from '../domain/model';
 import type { UpgradeHistoryStep } from '../domain/upgrade-history';
 import type { MarketSnapshot } from '../market/model';
-import { sameModelName } from '../market/ship-values';
+import { sameHistoryModelName } from '../domain/applied-ccu-price';
 import { convertPurchaseValue, currentShipValues, RSI_ORDER_PRICE, standaloneModel } from './inventory-values';
 import type { PricingSnapshot } from './model';
 import { estimatePlanningMinor, euroRateIsStale } from './money';
@@ -15,10 +15,10 @@ export function historyCosts(pledge: Pledge, steps: readonly { step: UpgradeHist
   const start = steps[0]?.step.from;
   const last = steps.at(-1)?.step.to;
   const ship = pledge.ships.length === 1 ? pledge.ships[0] : undefined;
-  const target = ship && last && sameModelName(last, ship.modelName, catalogue) ? ship.modelName : undefined;
-  const baseMatches = !!ship && !!start && !!original && sameModelName(original, start, catalogue);
+  const target = ship && last && sameHistoryModelName(last, ship.modelName, catalogue) ? ship.modelName : undefined;
+  const baseMatches = !!ship && !!start && !!original && sameHistoryModelName(original, start, catalogue);
   const continuous = !partial && !!target && steps.every(({ step }, index) =>
-    step.appliedAt && (index === 0 || sameModelName(steps[index - 1]!.step.to, step.from, catalogue)));
+    step.appliedAt && (index === 0 || sameHistoryModelName(steps[index - 1]!.step.to, step.from, catalogue)));
 
   let knownMinor = 0;
   let approximate = false;

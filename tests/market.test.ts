@@ -28,7 +28,7 @@ test('one inventory refresh recovers from a failed first shop request and publis
     if (request.operationName === 'getShipDetails') {
       assert.deepEqual(request.variables, { id: pair.toId, fromShipId: pair.fromId });
       return [{ data: { ship: { id: pair.toId, skus: [
-        { id: 19000, title: 'Standard Edition', upgradePrice: 3000, available: true, unlimitedStock: true, availableStock: 0 },
+        { id: 19000, title: 'Standard Upgrade', upgradePrice: 3000, available: true, unlimitedStock: true, availableStock: 0 },
       ] } } }];
     }
     assert.deepEqual(request.variables, { from: pair.fromId, to: 19000 });

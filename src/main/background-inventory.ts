@@ -3,6 +3,7 @@ import { LastSeenStore, type LastSeen } from '../storage/last-seen';
 import type { HangarRefreshProgress } from '../importers/hangar-read';
 import type { ObservedConciergeRank } from '../domain/concierge';
 import type { SessionSaveResult } from '../importers/rsi';
+import type { UpgradeHistoryResult } from '../domain/upgrade-history';
 
 export type BackgroundStatus = 'idle' | 'connecting' | 'connected' | 'auth-required' | 'unavailable';
 export type BackgroundSnapshot = { status: BackgroundStatus; revision: string | null; changed: boolean; view?: LastSeen | null; progress?: HangarRefreshProgress };
@@ -39,6 +40,12 @@ export class BackgroundInventory {
   conciergeRank(id: string): ObservedConciergeRank | undefined {
     const state = this.state(id);
     return state.status === 'connected' ? state.conciergeRank : undefined;
+  }
+  rememberAppliedPurchases(id: string, revision: string, pledgeId: string, result: UpgradeHistoryResult): void {
+    const state = this.state(id);
+    if (state.view?.revision !== revision) return;
+    try { state.view = this.cache.rememberAppliedPurchases(this.account(id), state.view, pledgeId, result); }
+    catch { /* The verified response still goes to the active table if local caching fails. */ }
   }
   observe(id: string, candidate: ImportCandidate, conciergeRank?: ObservedConciergeRank): LastSeen {
     // Manual publishers must first await cancel(), as the main-process authorizer does.

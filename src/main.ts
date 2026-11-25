@@ -394,12 +394,24 @@ async function start() {
           break;
         }
         case 'rsi.upgradeHistory': {
-          const permitted = () => !shuttingDown && !sessionBusy(cmd.accountId) &&
+          const epoch = selectionEpoch;
+          const current = () => !shuttingDown && epoch === selectionEpoch && selectedAccountId === cmd.accountId &&
+            !sessionBusy(cmd.accountId) && background.snapshot(cmd.accountId, cmd.revision).revision === cmd.revision;
+          const permitted = () => current() &&
             mayReadUpgradeHistory(selectedAccountId, store.inventory(cmd.accountId), background.snapshot(cmd.accountId).view, cmd);
           if (!permitted()) { data = { status: 'unavailable', steps: [], partial: false }; break; }
-          const epoch = selectionEpoch;
-          const result = await upgradeHistory.read(cmd.accountId, Number(cmd.pledgeId), cmd.revision);
-          data = epoch === selectionEpoch && permitted() ? result : { status: 'cancelled', steps: [], partial: false };
+          const view = background.snapshot(cmd.accountId).view;
+          const saved = view?.appliedPurchaseHistories?.[cmd.pledgeId];
+          if (saved) { data = saved; break; }
+          const identity = view?.document.account;
+          const purchaseLookup = cmd.lookupPurchases ? {
+            owner: identity?.identityKind === 'rsi-handle' ? identity.reference : null,
+            assertActive() { if (!current()) throw new Error('HISTORY_CONTEXT_CHANGED'); },
+          } : undefined;
+          const result = await upgradeHistory.read(cmd.accountId, Number(cmd.pledgeId), cmd.revision, purchaseLookup);
+          if (!permitted()) { data = { status: 'cancelled', steps: [], partial: false }; break; }
+          if (cmd.lookupPurchases) background.rememberAppliedPurchases(cmd.accountId, cmd.revision, cmd.pledgeId, result);
+          data = result;
           break;
         }
         case 'inventory': data = store.inventory(cmd.accountId); break;

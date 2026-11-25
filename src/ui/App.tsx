@@ -224,18 +224,25 @@ function App() {
   const readChainHistory = useCallback(async (pledge: Pledge): Promise<UpgradeHistoryResult> => {
     const key = historyKey(pledge, account, observed), epoch = selectionEpoch.current;
     if (!key || !current(key.accountId, epoch) || knownRevision.current !== key.revision) return unavailableHistory('cancelled');
+    const cached = inventoryHistory(pledge);
+    if (cached?.status === 'loaded' && cached.purchases) return cached;
     try {
       const result = await call<UpgradeHistoryResult>({ action: 'rsi.upgradeHistory', ...key });
       return current(key.accountId, epoch) && knownRevision.current === key.revision ? result : unavailableHistory('cancelled');
     } catch { return unavailableHistory('unavailable'); }
   }, [account, observed]);
-  async function loadUpgradeHistory(pledge: Pledge) {
+  function inventoryHistory(pledge: Pledge) {
+    const key = historyKey(pledge, account, observed);
+    return key ? observed?.appliedPurchaseHistories?.[key.pledgeId] ?? historyTooltips.current.get(key) : undefined;
+  }
+  async function loadUpgradeHistory(pledge: Pledge, lookupPurchases = false) {
     const key = historyKey(pledge, account, observed), epoch = selectionEpoch.current;
-    if (!key || !current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
-    const ticket = historyTooltips.current.begin(key); if (!ticket) return;
+    if (!key || observed?.appliedPurchaseHistories?.[key.pledgeId] || !current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
+    const ticket = historyTooltips.current.begin(key, lookupPurchases); if (!ticket) return;
     redrawHistory(value => value + 1);
     let result: UpgradeHistoryResult;
-    try { result = await call<UpgradeHistoryResult>({ action: 'rsi.upgradeHistory', ...key }); }
+    try { result = await call<UpgradeHistoryResult>({ action: 'rsi.upgradeHistory', ...key,
+      ...(lookupPurchases ? { lookupPurchases: true } : {}) }); }
     catch { result = { status: 'unavailable', steps: [], partial: false }; }
     if (!current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
     if (historyTooltips.current.finish(ticket, result)) redrawHistory(value => value + 1);
@@ -447,7 +454,7 @@ function App() {
             .replace('{total}', inventoryCount.total.toLocaleString(display.settings.language))}</output>
         </div>
         {viewingBuybacks ? <BuybackTable {...inventorySearchProps} entries={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} observation={liveBuybacks?.buybackObservation} display={display} balance={storeCredit} />
-          : filter === 'Loaner & Beiboote' ? <LoanerTable {...inventorySearchProps} accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable {...inventorySearchProps} key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} onHistory={p=>void loadUpgradeHistory(p)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={p=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,key?historyTooltips.current.get(key):undefined),gameAccessEvidence(p));}}/>}</section>
+          : filter === 'Loaner & Beiboote' ? <LoanerTable {...inventorySearchProps} accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable {...inventorySearchProps} key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} historyFor={inventoryHistory} historyPurchases={historyPurchases} onHistory={p=>void loadUpgradeHistory(p)} lookupPurchases={p=>void loadUpgradeHistory(p,true)} canLookUpPurchases={p=>!!historyKey(p,account,observed)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={(p,catalogue)=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,key?historyTooltips.current.get(key):undefined,catalogue),gameAccessEvidence(p));}}/>}</section>
       <div className="bottom" id="data-location"><span>Letzter vollständiger Import: {account?.lastComplete ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(account.lastComplete)) : 'noch keiner'}<br />Datenordner: {state?.dataDir ?? 'wird geladen'}</span>
         <span><button className="text-button" disabled={busy || !account?.reference} onClick={() => void run(async () => { const r = await call<{ exported: boolean; backup: string } | null>({ action: 'export', accountId }); if (r) setMessage(`Inventar exportiert. Konsistente Datenbanksicherung: ${r.backup}`); })}>{t("Sicherung / Export")}</button>
           <button className="text-button" disabled={busy || !account || account.mode !== 'real'} onClick={() => void run(rsi)}>{t("Sitzung & Sicherheit")}</button>

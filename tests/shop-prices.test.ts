@@ -37,6 +37,24 @@ test('invalid currency or target identity cannot produce a quote', async () => {
   assert.equal(commandSchema.safeParse({action:'market.shopPrices',pairs:[{fromId:46,toId:46}]}).success,false);
 });
 
+test('recognizes Upgrade titles without guessing when a tier has two available SKUs', async () => {
+  const requestedSkus: number[] = [];
+  const reader = shopPriceReader(async body => {
+    const [request] = JSON.parse(body);
+    if (request.operationName === 'getShipDetails') return [{ data: { ship: { id: pair.toId, skus: [
+      standard, { ...standard, id: 16325, title: 'Standard Upgrade' },
+      { ...warbond, title: 'Warbond Upgrade' }, { ...warbond, id: 16326, title: 'Warbond Upgrade Special' },
+    ] } } }];
+    requestedSkus.push(request.variables.to);
+    return [{ data: {
+      app: { pricing: { currencyCode: 'USD', exponent: 2, taxRate: 0, isTaxInclusive: false } },
+      price: { amount: 2000 },
+    } }];
+  });
+  assert.deepEqual((await reader(pair, signal)).map(({ edition, amount }) => [edition, amount.minor]), [['warbond', 2000]]);
+  assert.deepEqual(requestedSkus, [warbond.id]);
+});
+
 test('retries a missing amount for an available SKU without repeating the successful edition', async () => {
   const requestedSkuIds: number[] = [];
   const reader = shopPriceReader(async body => {

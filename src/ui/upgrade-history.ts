@@ -1,9 +1,11 @@
 import type { Account, Pledge } from '../domain/model';
 import type { UpgradeHistoryResult } from '../domain/upgrade-history';
 import type { LastSeen } from '../storage/last-seen';
+import type { CatalogueShip } from '../market/model';
+import { sameHistoryModelName } from '../domain/applied-ccu-price';
 
 export type HistoryKey = { accountId: string; revision: string; pledgeId: string };
-export type HistoryTooltipState = UpgradeHistoryResult | { status: 'loading' };
+export type HistoryTooltipState = UpgradeHistoryResult | { status: 'loading'; lookupPurchases?: true };
 type Ticket = { context: string; generation: number; pledgeId: string; state: HistoryTooltipState };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const contextKey = (accountId: string, revision: string) => accountId + ':' + revision;
@@ -22,10 +24,12 @@ export class HistoryTooltipCache {
   get(key: HistoryKey): HistoryTooltipState | undefined {
     return this.context === contextKey(key.accountId, key.revision) ? this.values.get(key.pledgeId) : undefined;
   }
-  begin(key: HistoryKey): Ticket | null {
-    if (this.context !== contextKey(key.accountId, key.revision) || this.values.has(key.pledgeId)) return null;
+  begin(key: HistoryKey, lookupPurchases = false): Ticket | null {
+    if (this.context !== contextKey(key.accountId, key.revision)) return null;
+    const previous = this.values.get(key.pledgeId);
+    if (lookupPurchases ? previous?.status === 'loading' && previous.lookupPurchases : previous) return null;
     if (this.values.size >= MAX_HISTORY_TOOLTIPS) this.values.delete(this.values.keys().next().value!);
-    const state: HistoryTooltipState = { status: 'loading' };
+    const state: HistoryTooltipState = lookupPurchases ? { status: 'loading', lookupPurchases: true } : { status: 'loading' };
     this.values.set(key.pledgeId, state);
     return { context: this.context, generation: this.generation, pledgeId: key.pledgeId, state };
   }
@@ -47,7 +51,7 @@ function rsiDate(value: string): string {
   // RSI supplies displayed local time. Preserve it without inventing a timezone conversion.
   return match ? `${match[3]}.${match[2]}.${match[1]} ${match[4]}` : 'Datum nicht lesbar';
 }
-export function upgradeHistoryTitle(pledge: Pledge, eligible: boolean, state?: HistoryTooltipState): string {
+export function upgradeHistoryTitle(pledge: Pledge, eligible: boolean, state?: HistoryTooltipState, catalogue: readonly CatalogueShip[] = []): string {
   const original = 'Pledge: ' + pledge.name;
   if (!eligible) return original;
   const lines = [original, 'Aktuell: ' + pledge.ships.map(ship => ship.modelName).join(', ')];
@@ -61,7 +65,9 @@ export function upgradeHistoryTitle(pledge: Pledge, eligible: boolean, state?: H
     if (state.partial) lines.push('Unvollständiges RSI-Pledge-Protokoll.');
     if (!state.steps.length) lines.push('Keine Upgrade-Schritte im abgerufenen RSI-Protokoll.');
     else {
-      if (pledge.ships.length === 1 && state.steps.at(-1)?.to !== pledge.ships[0]?.modelName) lines.push('Protokollende passt nicht eindeutig zum aktuellen Modell.');
+      if (pledge.ships.length === 1 && !sameHistoryModelName(state.steps.at(-1)!.to, pledge.ships[0]!.modelName, catalogue)) {
+        lines.push('Protokollende passt nicht eindeutig zum aktuellen Modell.');
+      }
       lines.push('Upgrade-Schritte im RSI-Pledge-Protokoll (älteste zuerst):');
       for (const step of state.steps) lines.push(`${step.from} → ${step.to}${step.appliedAt ? ' · ' + rsiDate(step.appliedAt) : ' · Datum unbekannt'}`);
     }

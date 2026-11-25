@@ -1,9 +1,10 @@
 import { BrowserWindow, session, type Session } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Pledge, RsiPurchase } from '../domain/model';
+import type { UpgradeHistoryStep } from '../domain/upgrade-history';
 import { RSI_ORIGIN } from '../main/policy';
 import { captureRsiCookie, isAuthenticationCookieName } from '../security/rsi-cookies';
-import { purchaseMatches, purchaseParserProbe, purchasePrices, type PurchaseLogRow, type PurchaseOrder } from './rsi-purchase-data';
+import { appliedOrderPrices, appliedPurchaseMatches, purchaseMatches, purchaseParserProbe, purchasePrices, type PurchaseLogRow, type PurchaseOrder } from './rsi-purchase-data';
 
 export const PURCHASE_LOG_URL = RSI_ORIGIN + '/api/account/pledgeLog';
 export const purchaseOrdersUrl = (page: number) => RSI_ORIGIN + `/en/account/billing?storefront=2&page=${page}&pagesize=100`;
@@ -32,7 +33,18 @@ async function responseText(response: Response, maxBytes: number) {
 export async function readPurchases(active: Session, pledges: readonly Pledge[], owner: string | null, assertActive: () => void,
   createTransport = () => session.fromPartition('purchase-read-' + randomUUID(), { cache: false }),
   report: (problem: PurchaseReadProblem) => void = () => {}) {
-  const ids = pledges.map(p => p.pledgeId).filter(id => /^[1-9]\d{0,19}$/.test(id));
+  return readPurchaseEvidence(active, pledges, undefined, owner, assertActive, createTransport, report);
+}
+
+export function readAppliedCcuPurchases(active: Session, steps: readonly UpgradeHistoryStep[], owner: string | null, assertActive: () => void,
+  createTransport = () => session.fromPartition('purchase-read-' + randomUUID(), { cache: false }),
+  report: (problem: PurchaseReadProblem) => void = () => {}) {
+  return readPurchaseEvidence(active, [], steps, owner, assertActive, createTransport, report);
+}
+
+async function readPurchaseEvidence(active: Session, pledges: readonly Pledge[], steps: readonly UpgradeHistoryStep[] | undefined,
+  owner: string | null, assertActive: () => void, createTransport: () => Session, report: (problem: PurchaseReadProblem) => void) {
+  const ids = (steps ? steps.flatMap(step => step.ccuPledgeId ?? []) : pledges.map(p => p.pledgeId)).filter(id => /^[1-9]\d{0,19}$/.test(id));
   const empty = new Map<string, RsiPurchase>();
   if (!ids.length) return empty;
 
@@ -43,7 +55,7 @@ export async function readPurchases(active: Session, pledges: readonly Pledge[],
     controller.abort();
     if (parser && !parser.isDestroyed()) parser.destroy();
   };
-  const timer = setTimeout(stop, 14_000);
+  const timer = setTimeout(stop, steps ? 120_000 : 14_000);
   let windowChanged = false;
   const watch = setInterval(() => {
     try { assertActive(); }
@@ -124,8 +136,9 @@ export async function readPurchases(active: Session, pledges: readonly Pledge[],
     };
     const seenPages = new Set<string>();
     // Reserve time for order confirmation even when the private log has many pages.
-    const logDeadline = Date.now() + 7500;
-    for (let page = 1; page <= MAX_LOG_PAGES && Date.now() < logDeadline; page++) {
+    let logComplete = false;
+    const logDeadline = Date.now() + (steps ? 90_000 : 7500);
+    for (let page = 1; page <= (steps ? 512 : MAX_LOG_PAGES) && Date.now() < logDeadline; page++) {
       let response;
       try { response = JSON.parse(await read('log', page)); }
       catch { report(phase); break; }
@@ -141,13 +154,14 @@ export async function readPurchases(active: Session, pledges: readonly Pledge[],
       if (seenPages.has(fingerprint)) break;
       seenPages.add(fingerprint);
       log.push(...await parse('log', html, ids));
-      if (page === count) break;
+      if (page === count) { logComplete = true; break; }
     }
-    const evidence = purchaseMatches(pledges, log, owner);
+    if (steps && !logComplete) { report(phase); return empty; }
+    const evidence = steps ? appliedPurchaseMatches(steps, log, owner) : purchaseMatches(pledges, log, owner);
     const wantedOrders = [...new Set([...evidence.matches.values()].map(purchase => purchase.order))];
     phase = 'purchase-orders-unavailable';
     seenPages.clear();
-    for (let page = 1; wantedOrders.length && page <= MAX_ORDER_PAGES; page++) {
+    for (let page = 1; wantedOrders.length && page <= (steps ? 24 : MAX_ORDER_PAGES); page++) {
       const html = await read('order', page);
       const fingerprint = createHash('sha256').update(html).digest('hex');
       if (seenPages.has(fingerprint)) break;
@@ -166,5 +180,7 @@ export async function readPurchases(active: Session, pledges: readonly Pledge[],
     if (cleaned.some(result => result.status === 'rejected')) windowChanged = true;
   }
   assertActive();
-  return windowChanged ? empty : purchasePrices(purchaseMatches(pledges, log, owner), orders);
+  if (windowChanged) return empty;
+  if (steps) return appliedOrderPrices(steps, log, owner, orders);
+  return purchasePrices(purchaseMatches(pledges, log, owner), orders);
 }

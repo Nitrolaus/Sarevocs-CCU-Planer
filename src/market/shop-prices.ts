@@ -49,6 +49,10 @@ const price = z.array(z.object({ data: z.object({ app: z.object({ pricing: z.obj
 }) }), price: z.object({ amount: cents }) }), errors: z.array(z.unknown()).max(0).optional() })).length(1);
 
 type GraphRequest = (body: string, signal: AbortSignal) => Promise<unknown>;
+const editionTitles: Record<ShopEdition, readonly string[]> = {
+  standard: ['Standard Edition', 'Standard Upgrade'],
+  warbond: ['Warbond Edition', 'Warbond Upgrade'],
+};
 
 function waitForShopRetry(signal: AbortSignal): Promise<void> {
   return new Promise(resolve => {
@@ -84,8 +88,8 @@ export function shopPriceReader(read: GraphRequest): ReadShopPrices {
     const target = result[0]!.data.ship;
     if (target?.id !== toId || signal.aborted) return [];
     const checked: ShopPrice[] = [];
-    for (const [edition, title] of [['standard', 'Standard Edition'], ['warbond', 'Warbond Edition']] as const) {
-      const offers = target.skus.filter(row => row.title === title && row.available && (row.upgradePrice ?? 0) > 0 &&
+    for (const edition of ['standard', 'warbond'] as const) {
+      const offers = target.skus.filter(row => editionTitles[edition].includes(row.title) && row.available && (row.upgradePrice ?? 0) > 0 &&
         (row.unlimitedStock || (row.availableStock ?? 0) > 0));
       if (offers.length !== 1 || signal.aborted) continue;
       const reply = await request(price, 'getPrice',

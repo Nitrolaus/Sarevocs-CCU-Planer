@@ -2,13 +2,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { documentSchema, UserError, type Account, type ImportCandidate } from '../domain/model';
+import { documentSchema, UserError, type Account, type ImportCandidate, type Pledge } from '../domain/model';
+import { verifiedUpgradePurchasesSchema, type UpgradeHistoryResult } from '../domain/upgrade-history';
 
 const uuid = z.uuid();
 const lastSeenSchema = z.object({ schemaVersion: z.literal(1), accountId: uuid, revision: uuid,
   observedAt: z.iso.datetime({ offset: true }), document: documentSchema }).strict();
-export type LastSeen = z.infer<typeof lastSeenSchema>;
+export type LastSeen = z.infer<typeof lastSeenSchema> & { appliedPurchaseHistories?: Record<string, UpgradeHistoryResult> };
 const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_APPLIED_PURCHASE_HISTORIES = 512;
+const appliedPurchasesSchema = z.object({ accountId: uuid, reference: z.string().min(1).max(160), entries: z.array(z.object({
+  pledgeId: z.string().regex(/^[1-9]\d{0,15}$/), basis: z.string().max(9000), history: verifiedUpgradePurchasesSchema,
+}).strict()).max(MAX_APPLIED_PURCHASE_HISTORIES) }).strict();
+
+function purchaseBasis(pledge: Pledge): string | undefined {
+  if (pledge.ships.length !== 1 || pledge.ccus.length || pledge.sourceValues.upgradeState === 'unresolved') return;
+  const ship = pledge.ships[0]!;
+  return JSON.stringify([pledge.name, pledge.sourceValues.date ?? null, ship.childId, ship.modelName]);
+}
 
 /** A last observed view is a cache, not an accepted inventory import or account-identity proof. */
 export class LastSeenStore {
@@ -50,7 +61,37 @@ export class LastSeenStore {
   load(account: Account): LastSeen | null {
     const view = this.stored(account.id);
     if (view) this.checkIdentity(account, view);
-    return view;
+    return view ? this.withAppliedPurchases(view) : null;
+  }
+  private appliedPurchaseFile(accountId: string) { return path.join(this.directory, uuid.parse(accountId) + '.applied-purchases.json'); }
+  private appliedPurchases(view: LastSeen): z.infer<typeof appliedPurchasesSchema>['entries'] {
+    if (view.document.account.identityKind !== 'rsi-handle') return [];
+    try {
+      const saved = appliedPurchasesSchema.parse(this.read(this.appliedPurchaseFile(view.accountId)));
+      return saved.accountId === view.accountId && saved.reference === view.document.account.reference ? saved.entries : [];
+    } catch { return []; }
+  }
+  private withAppliedPurchases(view: LastSeen): LastSeen {
+    const entries = this.appliedPurchases(view);
+    if (!entries.length) return view;
+    const pledges = new Map(view.document.pledges.map(pledge => [pledge.pledgeId, pledge]));
+    const histories = entries.flatMap(entry => {
+      const pledge = pledges.get(entry.pledgeId);
+      return pledge && purchaseBasis(pledge) === entry.basis ? [[entry.pledgeId, entry.history] as const] : [];
+    });
+    return histories.length ? { ...view, appliedPurchaseHistories: Object.fromEntries(histories) } : view;
+  }
+  rememberAppliedPurchases(account: Account, view: LastSeen, pledgeId: string, result: UpgradeHistoryResult): LastSeen {
+    this.checkIdentity(account, view);
+    if (view.document.account.identityKind !== 'rsi-handle' || !verifiedUpgradePurchasesSchema.safeParse(result).success) return view;
+    const pledge = view.document.pledges.find(candidate => candidate.pledgeId === pledgeId);
+    const basis = pledge && purchaseBasis(pledge);
+    if (!basis) return view;
+    const previous = this.appliedPurchases(view).filter(entry => entry.pledgeId !== pledgeId);
+    const entries = [...previous.slice(1 - MAX_APPLIED_PURCHASE_HISTORIES), { pledgeId, basis, history: result }];
+    this.write(this.appliedPurchaseFile(account.id), appliedPurchasesSchema.parse({ accountId: account.id,
+      reference: view.document.account.reference, entries }));
+    return { ...view, appliedPurchaseHistories: { ...view.appliedPurchaseHistories, [pledgeId]: result } };
   }
   assertIdentity(account: Account, view: LastSeen): void { this.checkIdentity(account, view); }
   canRemember(account: Account, identity: ImportCandidate['document']['account']): boolean {
@@ -94,7 +135,7 @@ export class LastSeenStore {
       if (Buffer.byteLength(JSON.stringify({ ...view, document: retained })) <= MAX_BYTES) view.document = retained;
     }
     this.write(this.file(account.id), view);
-    return view;
+    return this.withAppliedPurchases(view);
   }
   selected(accounts: Account[]): string | null {
     try {

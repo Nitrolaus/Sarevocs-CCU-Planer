@@ -19,7 +19,7 @@ export const shipSchema = z.object({ childId: id, modelName: text, modelId: id.n
 export const ccuSchema = z.object({ instanceId: id, from: text, to: text,
   status: z.enum(['unused', 'applied', 'unverified']), applicability: z.enum(['confirmed', 'unverified', 'rejected']),
   insurance: insuranceSchema }).strict();
-const rsiPurchaseSchema = z.discriminatedUnion('status', [
+export const rsiPurchaseSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('documented'), source: z.enum(['order', 'log']),
     minor: z.number().int().positive().max(100_000_000), currency: z.enum(['USD', 'EUR', 'GBP']),
     purchaseDate: purchaseDay.optional(), poundRate: poundRateSchema.optional() }).strict().refine(record =>

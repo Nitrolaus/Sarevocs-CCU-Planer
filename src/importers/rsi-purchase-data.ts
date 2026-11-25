@@ -1,4 +1,5 @@
 import type { Pledge, RsiPurchase } from '../domain/model';
+import type { UpgradeHistoryStep } from '../domain/upgrade-history';
 import { pledgeDate } from '../domain/pledge-date';
 
 const normalize = (value: string) => value.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -95,7 +96,7 @@ export function purchaseParserProbe(kind: 'log' | 'order', html: string, ids: re
   })()`;
 }
 
-export function purchaseMatches(pledges: readonly Pledge[], log: readonly PurchaseLogRow[], owner: string | null) {
+export function purchaseMatches(pledges: readonly Pick<Pledge, 'pledgeId' | 'name'>[], log: readonly PurchaseLogRow[], owner: string | null) {
   const byId = new Map(pledges.map(p => [p.pledgeId, p]));
   const knownOwner = owner === null ? null : normalize(owner);
   const matches = new Map<string, { title: string; order: string; value: ReturnType<typeof amount>; date?: string }>();
@@ -148,4 +149,43 @@ export function purchasePrices({ matches, excluded }: ReturnType<typeof purchase
     }
   }
   return result;
+}
+
+/** Join applied IDs to the exact purchased upgrade title; preserve subscriber and other SKU qualifiers. */
+export function appliedPurchaseMatches(steps: readonly UpgradeHistoryStep[], log: readonly PurchaseLogRow[], owner: string | null) {
+  const byId = new Map<string, UpgradeHistoryStep | null>();
+  for (const step of steps) {
+    if (step.ccuPledgeId) byId.set(step.ccuPledgeId, byId.has(step.ccuPledgeId) ? null : step);
+  }
+  const targets: Array<Pick<Pledge, 'pledgeId' | 'name'>> = [];
+  for (const row of log) {
+    if ('excluded' in row) continue;
+    const step = byId.get(row.id);
+    if (!step?.appliedAt) continue;
+    const pair = normalize(step.from + ' to ' + step.to);
+    const name = normalize(row.title);
+    const modern = 'upgrade - ' + pair;
+    const suffixes = ['', ' standard', ' warbond', ' warbond edition', ' standard edition', ' standard upgrade', ' warbond upgrade'];
+    if (name !== pair + ' upgrade' && !suffixes.some(suffix => name === modern + suffix)) continue;
+    targets.push({pledgeId: row.id, name: row.title});
+  }
+  return purchaseMatches(targets, log, owner);
+}
+
+export function appliedOrderPrices(steps: readonly UpgradeHistoryStep[], log: readonly PurchaseLogRow[], owner: string | null, orders: readonly PurchaseOrder[]) {
+  const evidence = appliedPurchaseMatches(steps, log, owner);
+  const prices = purchasePrices(evidence, orders);
+  const byOrder = new Map(orders.map(order => [order.id, order]));
+  for (const step of steps) {
+    const id = step.ccuPledgeId;
+    if (!id) continue;
+    const price = prices.get(id);
+    const match = evidence.matches.get(id);
+    const logDate = pledgeDate({sourceValues: {date: match?.date ?? ''}});
+    const orderDate = pledgeDate({sourceValues: {date: match ? byOrder.get(match.order)?.date ?? '' : ''}});
+    const appliedDate = step.appliedAt?.slice(0, 10);
+    if (price?.status !== 'documented' || price.source !== 'order' || !appliedDate || !(logDate || orderDate) ||
+        (logDate && logDate > appliedDate) || (orderDate && orderDate > appliedDate)) prices.delete(id);
+  }
+  return prices;
 }

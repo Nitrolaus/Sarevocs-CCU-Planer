@@ -2,6 +2,7 @@ import { BrowserWindow, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { cookieSchema, officialCookie, type StoredCookie } from '../security/rsi-cookies';
 import { upgradeHistoryRequestSchema, upgradeHistoryResultSchema, unavailableHistory, type UpgradeHistoryResult } from '../domain/upgrade-history';
+import { readAppliedCcuPurchases } from './rsi-purchases';
 
 const ORIGIN = 'https://robertsspaceindustries.com';
 export const UPGRADE_HISTORY_URL = ORIGIN + '/api/account/upgradeLog';
@@ -60,7 +61,9 @@ export function historyParserProbe(html: string): string {
   })()`;
 }
 
+type PurchaseLookup = { owner: string | null; assertActive: () => void };
 type Job = { accountId: string; key: string; pledgeId: number; abort: AbortController; timedOut: boolean; redirected?: boolean;
+  purchaseLookup?: PurchaseLookup;
   task: Promise<UpgradeHistoryResult>; net?: Electron.Session; parserSession?: Electron.Session; parser?: BrowserWindow };
 type Waiter = { job: Job; resolve: (acquired: boolean) => void; remove: () => void };
 
@@ -72,25 +75,30 @@ export class UpgradeHistoryReader {
   private active = 0;
   private stopping = false;
   private closing = new Set<string>();
-  constructor(private loadCookies: (accountId: string) => Promise<StoredCookie[]>) {}
+  constructor(private loadCookies: (accountId: string) => Promise<StoredCookie[]>,
+    private readonly readPurchases = readAppliedCcuPurchases) {}
 
-  read(accountId: string, pledgeId: number, revisionKey: string): Promise<UpgradeHistoryResult> {
+  read(accountId: string, pledgeId: number, revisionKey: string, purchaseLookup?: PurchaseLookup): Promise<UpgradeHistoryResult> {
     if (!upgradeHistoryRequestSchema.safeParse({ accountId, pledgeId, revisionKey }).success) return Promise.resolve(unavailableHistory('unavailable'));
     if (this.stopping || this.closing.has(accountId)) return Promise.resolve(unavailableHistory('cancelled'));
-    const key = `${accountId}:${pledgeId}:${revisionKey}`;
+    const key = `${accountId}:${pledgeId}:${revisionKey}${purchaseLookup ? ':orders' : ''}`;
     const cached = this.cache.get(key);
     if (cached) return Promise.resolve(structuredClone(cached));
     const pending = this.jobs.get(key);
     if (pending) return pending.task.then(result => structuredClone(result));
     if (this.jobs.size >= MAX_ACTIVE + MAX_QUEUED) return Promise.resolve(unavailableHistory('unavailable'));
-    const job: Job = { accountId, pledgeId, key, abort: new AbortController(), timedOut: false, task: Promise.resolve(unavailableHistory('cancelled')) };
+    const job: Job = { accountId, pledgeId, key, purchaseLookup, abort: new AbortController(), timedOut: false,
+      task: Promise.resolve(unavailableHistory('cancelled')) };
     // Registration precedes the first await and the cookie-loader invocation.
     this.jobs.set(key, job);
     job.task = Promise.resolve().then(() => this.run(job)).finally(() => this.jobs.delete(key));
     return job.task.then(result => structuredClone(result));
   }
   private cancelled(job: Job) { return this.stopping || this.closing.has(job.accountId) || job.abort.signal.aborted; }
-  private check(job: Job) { if (this.cancelled(job)) throw new Error('HISTORY_STOP'); }
+  private check(job: Job) {
+    if (this.cancelled(job)) throw new Error('HISTORY_STOP');
+    job.purchaseLookup?.assertActive();
+  }
   private acquire(job: Job): Promise<boolean> {
     if (this.cancelled(job)) return Promise.resolve(false);
     if (this.active < MAX_ACTIVE) { this.active++; return Promise.resolve(true); }
@@ -197,7 +205,16 @@ export class UpgradeHistoryReader {
       this.check(job);
       const output: unknown = await parser.webContents.executeJavaScript(historyParserProbe(raw.data.rendered));
       this.check(job);
-      return upgradeHistoryResultSchema.parse(output);
+      const history = upgradeHistoryResultSchema.parse(output);
+      if (history.status !== 'loaded' || !job.purchaseLookup) return history;
+      clearTimeout(timer);
+      if (!parser.isDestroyed()) parser.destroy();
+      const found = await this.readPurchases(net, history.steps, job.purchaseLookup.owner, () => this.check(job));
+      this.check(job);
+      const ids = new Set(history.steps.flatMap(step => step.ccuPledgeId ? [step.ccuPledgeId] : []));
+      const purchases = [...found].filter(([id, price]) => ids.has(id) && price.status === 'documented' && price.source === 'order')
+        .map(([ccuPledgeId, price]) => ({ ccuPledgeId, price }));
+      return upgradeHistoryResultSchema.parse({ ...history, purchases });
       };
       result = await perform();
     } catch { result = unavailableHistory(job.timedOut || job.redirected ? 'unavailable' : this.cancelled(job) ? 'cancelled' : 'unavailable'); }
@@ -214,7 +231,7 @@ export class UpgradeHistoryReader {
       this.release();
     }
     if (this.stopping || this.closing.has(job.accountId)) return unavailableHistory('cancelled');
-    if (result.status === 'loaded') {
+    if (result.status === 'loaded' && !job.purchaseLookup) {
       if (this.cache.size >= MAX_CACHE) this.cache.delete(this.cache.keys().next().value!);
       this.cache.set(job.key, structuredClone(result));
     }

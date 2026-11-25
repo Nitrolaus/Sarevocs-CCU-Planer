@@ -26,6 +26,8 @@ entries[2].name='SYNTHETIC GIVEAWAY';
 const doc=(id,pledges)=>({schemaVersion:1,accountId:id,revision:id===a?'33333333-3333-4333-8333-333333333333':'44444444-4444-4444-8444-444444444444',observedAt:at,document:{type:'sarevocs-ccu-inventory',schemaVersion:1,appVersion:version,createdAt:at,dataMode:'real',account:{reference:'rsi-local:'+id,identityKind:'manual-reference'},scope:{kind:'partial',exportComplete:false,expectedPledges:null,pagesExpected:null,pagesRead:1},pledges,buybacks:[]}});
 const ships=[['Prospector',15500],['Ursa',6000],['Dragonfly',4000],['Reward Ship',10000],['600i Touring',43500],['Starlite',6000],['ATLS IKTI Akuma',5000]].map(([name,minor],i)=>({id:i+1,name,minor}));
 const fixture={state:{accounts:[account(a),account(b)],selectedAccountId:a,dataDir:'SYNTHETIC',version,packaged:false,electron:'fixture',node:'fixture'},inventories:{[a]:{account:account(a),items:[],buybacks:[]},[b]:{account:account(b),items:[],buybacks:[]}},views:{[a]:doc(a,entries),[b]:doc(b,[pledge('2001',['Ursa'],'$33.00 USD')])},pricing:{settings:{schemaVersion:1,language:'de',currency:'EUR',taxMode:'gross',vatBasisPoints:1900},configured:true,settingsError:false,rate:{source:'ECB',sourceDate:at.slice(0,10),usdPerEurMicros:1100000,fetchedAt:at},pending:false,rateError:false},market:{schemaVersion:1,catalogue:{fetchedAt:at,ships:ships.map(({minor,...s})=>({...s,chassisId:null,manufacturer:'Synthetic',manufacturerCode:'T',status:'unknown',focus:'',length:null}))},values:{schemaVersion:1,source:'rsi-from-ships',fetchedAt:at,currency:'USD',taxBasis:'net',items:ships},offers:null,pending:false,errors:{catalogue:null,offers:null},refreshSchedule:{hour:17,minute:5,timeZone:'Europe/Berlin'}}};
+fixture.market.catalogue.ships.push({id:267,name:'Sabre Firebird',chassisId:null,manufacturer:'Aegis Dynamics',
+  manufacturerCode:'AEGS',status:'unknown',focus:'',length:null});
 for(const s of fixture.market.catalogue.ships){s.manufacturer=s.name==='Prospector'?'MISC':s.name==='Ursa'?'Roberts Space Industries':'Synthetic';s.manufacturerCode=s.name==='Ursa'?'RSI':s.name==='Prospector'?'MISC':'T';}for(const p of entries)p.sourceValues.date='Nov 14, 2026';
 fixture.market.catalogue.ships.find(ship=>ship.name==='Starlite').manufacturer='MISC';
 fixture.pricing.rate.usdPerEurMicros=1099200;
@@ -38,8 +40,8 @@ fs.writeFileSync(path.join(folder,'fixture.json'),JSON.stringify(fixture));
 try{app=await _electron.launch({executablePath:createRequire(import.meta.url)('electron'),args:[path.join(folder,'fixture-main.cjs'),'--disable-gpu','--disable-background-networking','--host-resolver-rules=MAP * ~NOTFOUND'],env});const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.getByRole('button',{name:'Schiffe & Fahrzeuge',exact:true}).click();const table=page.locator('.ship-value-table'),row=id=>table.locator('tbody tr[data-pledge="'+id+'"]').first();await row('1005').locator('.ship-current-value strong').filter({hasText:'54,59'}).waitFor();
 await check('STARLITE_SHOWS_TWO_COMPARABLE_PRICES_WITH_SOURCE_IN_TOOLTIP',async()=>{
   const item=row('1005');
-  assert.deepEqual((await table.locator('thead th').allTextContents()).slice(4,6),['Kaufpreis beim Erwerb','Aktueller Kaufpreis']);
-  assert.deepEqual((await item.locator('.ship-price').allTextContents()).map(s=>s.replace(/\s/g,'')),['≈50,04€','≈54,59€']);
+  assert.deepEqual((await table.locator('thead th').allTextContents()).slice(4,6),['Mein Kaufpreis','RSI-Shoppreis']);
+  assert.deepEqual((await item.locator('.ship-price').allTextContents()).map(s=>s.replace(/\s/g,'')),['Nichtbelegt','≈54,59€']);
   assert.match(await item.locator('.ship-purchase').getAttribute('title'),/Richtwert.*55,00/s);
   assert.doesNotMatch(await table.innerText(),/MwSt\.|netto|brutto/i);
 });
@@ -50,7 +52,7 @@ await check('PACKAGE_UPGRADE_REWARDS_AND_UNRESOLVED_VARIANTS_NEVER_INVENT_SHIP_P
   assert.match(await row('1006').locator('.ship-current-value strong').innerText(),/45,49/);
 });
 await check('CROWN_UPGRADE_ONLY_AND_ORIGINAL_HISTORY_TOOLTIP_REMAIN',async()=>{const name=row('1001').locator('td').first();assert.equal(await name.getByRole('img',{name:'Spielkopie im Pledge'}).count(),1);assert.match(await row('1001').locator('.inventory-kind').innerText(),/Nur upgraden/);await name.focus();await app.evaluate(async()=>{for(let n=0;n<100;n++){if(globalThis.fixture.pending.some(p=>!p.done&&p.command.pledgeId==='1001'))return;await new Promise(r=>setTimeout(r,10));}throw Error('HISTORY_REQUEST_MISSING');});await app.evaluate(()=>globalThis.resolveHistory({accountId:'11111111-1111-4111-8111-111111111111',pledgeId:'1001',revision:'33333333-3333-4333-8333-333333333333'},{status:'loaded',steps:[{from:'Hornet Ghost',to:'Prospector',appliedAt:null}],partial:false}));await page.waitForFunction(()=>document.querySelector('.ship-value-table tr[data-pledge="1001"] td').title.includes('Hornet Ghost → Prospector'));assert.match(await name.getAttribute('title'),/Nicht einschmelzen|nicht einschmelzen/);});
-await check('PROFILE_SWITCH_DOES_NOT_REUSE_PURCHASE_VALUES',async()=>{await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(b);await row('2001').waitFor();assert.match(await row('2001').locator('.ship-purchase').innerText(),/30,02/);assert.equal(await row('1001').count(),0);await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(a);await row('1001').waitFor();});
+await check('PROFILE_SWITCH_DOES_NOT_REUSE_PURCHASE_VALUES',async()=>{await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(b);await row('2001').waitFor();assert.equal(await row('2001').locator('.ship-purchase strong').innerText(),'Nicht belegt');assert.equal(await row('1001').count(),0);await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(a);await row('1001').waitFor();});
 await check('MANUFACTURER_BETWEEN_CURRENT_MODEL_AND_INSURANCE_WITH_COMPACT_RSI_DATE',async()=>{const headings=await table.locator('thead th').allTextContents();assert.deepEqual(headings.slice(0,3),['Schiff / Fahrzeug','Hersteller','Versicherung']);assert.equal(await row('1001').locator('.ship-manufacturer').innerText(),'MISC');assert.equal(await row('1002').locator('.ship-manufacturer').innerText(),'RSI');assert.match(await row('1001').locator('.ship-source').innerText(),/14\.11\.26/);const first=table.locator('tbody tr').first();assert.equal(await first.locator('td').count(),7);await table.screenshot({path:path.join(folder,'manufacturer-table.png')});});
 await check('UNPRICED_PACKAGE_STILL_IDENTIFIES_THE_SHARED_CELL',async()=>{
   await app.evaluate(()=>{
@@ -113,12 +115,12 @@ await check('GIVEAWAY_PENCIL_ONLY_AND_LOCAL_DONOR_SURVIVES_INVENTORY_POLL',async
 });
 await check('VAT_SETTING_DOES_NOT_CHANGE_THE_COMPARISON_AND_MISSING_FX_RETURNS_ORIGINAL_AMOUNTS',async()=>{
   await app.evaluate(()=>{globalThis.fixture.pricing.settings.language='en';globalThis.fixture.pricing.settings.vatBasisPoints=2000;});
-  await table.locator('th[title="Current purchase price"]').waitFor();
+  await table.locator('th[title="RSI shop price"]').waitFor();
   assert.match(await row('1005').locator('.ship-current-value').innerText(),/54\.59/);
-  assert.match(await row('1005').locator('.ship-purchase').innerText(),/50\.04/);
+  assert.equal(await row('1005').locator('.ship-purchase strong').innerText(),'Not recorded');
   await app.evaluate(()=>{globalThis.fixture.pricing.settings.language='de';globalThis.fixture.pricing.rate=null;});
   await row('1005').locator('.ship-current-value strong').filter({hasText:'60,00'}).waitFor();
-  assert.match(await row('1005').locator('.ship-purchase').innerText(),/55,00\s*\$/);
+  assert.match(await row('1005').locator('.ship-purchase').getAttribute('title'),/55,00\s*\$/);
   await app.evaluate(({},pricing)=>{globalThis.fixture.pricing=pricing;},fixture.pricing);
 });
 await check('DOCUMENTED_PURCHASES_SHOW_SCOPE_AND_SOURCE',async()=>{
@@ -131,11 +133,86 @@ await check('DOCUMENTED_PURCHASES_SHOW_SCOPE_AND_SOURCE',async()=>{
     view.revision='66666666-6666-4666-8666-666666666666';view.observedAt=new Date().toISOString();
   });
   const original=row('1001').locator('.ship-purchase'), bundle=row('1006').locator('.ship-purchase');
-  await original.getByText('Ursprungspreis',{exact:true}).waitFor();
-  assert.match(await original.innerText(),/69,09/);
+  await original.getByText('Gesamtkosten offen',{exact:true}).waitFor();
+  assert.doesNotMatch(await original.innerText(),/69,09/);
+  assert.match(await original.getAttribute('title'),/69,09/);
   assert.match(await original.getAttribute('title'),/RSI-Kaufprotokoll/);
   assert.match(await bundle.innerText(),/72,41.*\s+Paketpreis beim Erwerb/);
   assert.match(await bundle.getAttribute('title'),/RSI-Bestellung/);
+});
+await check('UPGRADED_SHIP_SHOWS_ONLY_A_PROVEN_TOTAL',async()=>{
+  const ship=pledge('1060',['Sabre Firebird'],'$185.00 USD');
+  ship.name='Standalone Ships - MDC';
+  ship.rsiPurchase={status:'documented',source:'order',minor:4125,currency:'EUR'};
+  await app.evaluate(({},ship)=>{
+    const view=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];
+    view.document.pledges.push(ship);
+    view.revision='99999999-9999-4999-8999-999999999999';
+    view.observedAt=new Date().toISOString();
+  },ship);
+  const cost=row('1060').locator('.ship-purchase');
+  const orderHistory={status:'loaded',partial:false,steps:[
+    {from:'MDC',to:'Sabre Firebird Imperator Subscribers Edition',appliedAt:'2026-02-03 09:17',ccuPledgeId:'9901'},
+  ],purchases:[{ccuPledgeId:'9901',price:{status:'documented',source:'order',minor:9980,currency:'EUR'}}]};
+  await cost.getByText('Gesamtkosten offen',{exact:true}).waitFor();
+  assert.doesNotMatch(await cost.innerText(),/41,25/);
+  assert.equal(await table.getByRole('button',{name:'Bestellbeleg prüfen',exact:true}).count(),0);
+  await cost.focus();
+  await app.evaluate(async()=>{
+    for(let n=0;n<100;n++){
+      const pending=globalThis.fixture.pending.find(p=>!p.done&&p.command.pledgeId==='1060'&&!p.command.lookupPurchases);
+      if(pending){
+        globalThis.resolveHistory(pending.command,{status:'loaded',partial:false,steps:[
+          {from:'MDC',to:'Sabre Firebird Imperator Subscribers Edition',appliedAt:'2026-02-03 09:17',ccuPledgeId:'9901'},
+        ]});
+        return;
+      }
+      await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    throw Error('EXPECTED_ONE_HISTORY_READ_AFTER_FOCUS');
+  });
+  assert.equal(await cost.locator('strong').innerText(),'Gesamtkosten offen');
+  await cost.press('Shift+F10');
+  const action=page.getByRole('menuitem',{name:'Bestellbeleg prüfen',exact:true});
+  await action.waitFor();
+  await action.press('Escape');
+  await action.waitFor({state:'hidden'});
+  await row('1005').locator('.ship-purchase').click({button:'right'});
+  assert.equal(await action.count(),0);
+  await cost.click({button:'right'});
+  await action.click();
+  await cost.getByText('Bestellbeleg wird gesucht …',{exact:true}).waitFor();
+  await app.evaluate(async({},orderHistory)=>{
+    for(let n=0;n<100;n++){
+      const pending=globalThis.fixture.pending.find(p=>!p.done&&p.command.pledgeId==='1060'&&p.command.lookupPurchases===true);
+      if(pending){
+        globalThis.resolveHistory(pending.command,orderHistory);
+        return;
+      }
+      await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    throw Error('EXPECTED_ORDER_LOOKUP_FOR_EXPLICIT_REQUEST');
+  },orderHistory);
+  await cost.locator('strong').filter({hasText:'141,05'}).waitFor();
+  assert.equal(await cost.getByText('Gesamtkosten',{exact:true}).count(),1);
+  assert.match(await cost.getAttribute('title'),/Basisschiff · MDC · 41,25/);
+  assert.match(await cost.getAttribute('title'),/MDC → Sabre Firebird Imperator Subscribers Edition · 99,80/);
+  assert.doesNotMatch(await cost.innerText(),/41,25|99,80/);
+  await app.evaluate(({},orderHistory)=>{
+    const view=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];
+    view.revision='88888888-8888-4888-8888-888888888888';
+    view.appliedPurchaseHistories={'1060':orderHistory};
+  },orderHistory);
+  await app.evaluate(async()=>{
+    for(let n=0;n<50;n++){
+      if(globalThis.fixture.commands.some(cmd=>cmd.action==='rsi.background'&&cmd.knownRevision==='88888888-8888-4888-8888-888888888888'))return;
+      await new Promise(resolve=>setTimeout(resolve,200));
+    }
+    throw Error('EXPECTED_CACHED_ORDER_AFTER_INVENTORY_REFRESH');
+  });
+  assert.match(await cost.locator('strong').innerText(),/141,05/);
+  const orders=await app.evaluate(()=>globalThis.fixture.commands.filter(cmd=>cmd.action==='rsi.upgradeHistory'&&cmd.lookupPurchases));
+  assert.equal(orders.length,1);
 });
 await check('TWO_HUNDRED_SHIPS_STAY_COMPACT_AT_1440_1024_AND_125_PERCENT',async()=>{await row('1005').locator('.ship-current-value strong').filter({hasText:'54,59'}).waitFor();await table.evaluate(t=>{const c=t.createCaption();c.textContent='SYNTHETISCHE TESTDATEN · KOMPAKTE PREISANSICHT';c.style.cssText='text-align:left;color:#ffbd69;padding:6px 10px;font-size:11px';});await table.screenshot({path:path.join(folder,'compact-prices.png')});await table.evaluate(t=>t.caption.remove());await app.evaluate(({},pledges)=>{const v=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];v.document.pledges=pledges;v.revision='55555555-5555-4555-8555-555555555555';v.observedAt=new Date().toISOString();},Array.from({length:200},(_,i)=>({...pledge(String(5000+i),[i%2?'Prospector':'Ursa'],'$95.00 USD'),name:i%2?'Standalone Ships - Prospector':'Standalone Ships - Ursa'})));await page.waitForFunction(()=>document.querySelectorAll('.ship-value-table tbody tr').length===200);for(const [width,scale]of [[1440,1],[1024,1],[1024,1.25]]){await page.setViewportSize({width,height:1000});const cdp=await page.context().newCDPSession(page);await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,mobile:false,deviceScaleFactor:scale});const geometry=await table.locator('tbody tr').evaluateAll(rows=>rows.map(r=>({height:r.getBoundingClientRect().height,overflow:r.scrollWidth>r.clientWidth})));assert.ok(geometry.every(r=>r.height<=44&&!r.overflow),JSON.stringify(geometry.slice(0,3)));assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await table.locator('tbody tr').first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(folder,'compact-'+width+'-'+scale+'.png')});await cdp.detach();}await page.setViewportSize({width:1440,height:1000});});
 await check('NO_LOGIN_MUTATION_NETWORK_OR_REAL_USER_DATA',async()=>{
