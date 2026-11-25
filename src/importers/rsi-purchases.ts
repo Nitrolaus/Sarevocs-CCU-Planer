@@ -4,7 +4,7 @@ import type { Pledge, RsiPurchase } from '../domain/model';
 import type { UpgradeHistoryStep } from '../domain/upgrade-history';
 import { RSI_ORIGIN } from '../main/policy';
 import { captureRsiCookie, isAuthenticationCookieName } from '../security/rsi-cookies';
-import { appliedOrderPrices, appliedPurchaseMatches, purchaseMatches, purchaseParserProbe, purchasePrices, type PurchaseLogRow, type PurchaseOrder } from './rsi-purchase-data';
+import { appliedPurchaseMatches, batchPurchasePrices, purchaseMatches, purchaseParserProbe, type PurchaseLogRow, type PurchaseOrder } from './rsi-purchase-data';
 
 export const PURCHASE_LOG_URL = RSI_ORIGIN + '/api/account/pledgeLog';
 export const purchaseOrdersUrl = (page: number) => RSI_ORIGIN + `/en/account/billing?storefront=2&page=${page}&pagesize=100`;
@@ -33,19 +33,22 @@ async function responseText(response: Response, maxBytes: number) {
 export async function readPurchases(active: Session, pledges: readonly Pledge[], owner: string | null, assertActive: () => void,
   createTransport = () => session.fromPartition('purchase-read-' + randomUUID(), { cache: false }),
   report: (problem: PurchaseReadProblem) => void = () => {}) {
-  return readPurchaseEvidence(active, pledges, undefined, owner, assertActive, createTransport, report);
+  return (await readPurchaseEvidence(active, pledges, undefined, owner, assertActive, createTransport, report)).bases;
 }
 
-export function readAppliedCcuPurchases(active: Session, steps: readonly UpgradeHistoryStep[], owner: string | null, assertActive: () => void,
+export async function readAppliedCcuPurchases(active: Session, steps: readonly UpgradeHistoryStep[], owner: string | null, assertActive: () => void,
   createTransport = () => session.fromPartition('purchase-read-' + randomUUID(), { cache: false }),
   report: (problem: PurchaseReadProblem) => void = () => {}) {
-  return readPurchaseEvidence(active, [], steps, owner, assertActive, createTransport, report);
+  return (await readPurchaseEvidence(active, [], steps, owner, assertActive, createTransport, report)).applied;
 }
 
-async function readPurchaseEvidence(active: Session, pledges: readonly Pledge[], steps: readonly UpgradeHistoryStep[] | undefined,
-  owner: string | null, assertActive: () => void, createTransport: () => Session, report: (problem: PurchaseReadProblem) => void) {
-  const ids = (steps ? steps.flatMap(step => step.ccuPledgeId ?? []) : pledges.map(p => p.pledgeId)).filter(id => /^[1-9]\d{0,19}$/.test(id));
-  const empty = new Map<string, RsiPurchase>();
+export async function readPurchaseEvidence(active: Session, pledges: readonly Pledge[], steps: readonly UpgradeHistoryStep[] | undefined,
+  owner: string | null, assertActive: () => void,
+  createTransport = () => session.fromPartition('purchase-read-' + randomUUID(), { cache: false }),
+  report: (problem: PurchaseReadProblem) => void = () => {}) {
+  const ids = [...new Set([...pledges.map(p => p.pledgeId), ...(steps ?? []).flatMap(step => step.ccuPledgeId ?? [])])]
+    .filter(id => /^[1-9]\d{0,19}$/.test(id));
+  const empty = { bases: new Map<string, RsiPurchase>(), applied: new Map<string, RsiPurchase>() };
   if (!ids.length) return empty;
 
   const controller = new AbortController();
@@ -67,6 +70,7 @@ async function readPurchaseEvidence(active: Session, pledges: readonly Pledge[],
   };
 
   const log: PurchaseLogRow[] = [], orders: PurchaseOrder[] = [];
+  let logComplete = false;
   let phase: PurchaseReadProblem = 'purchase-log-unavailable';
   try {
     const scoped = await Promise.all([active.cookies.get({ url: PURCHASE_LOG_URL }), active.cookies.get({ url: purchaseOrdersUrl(1) })]);
@@ -136,7 +140,6 @@ async function readPurchaseEvidence(active: Session, pledges: readonly Pledge[],
     };
     const seenPages = new Set<string>();
     // Reserve time for order confirmation even when the private log has many pages.
-    let logComplete = false;
     const logDeadline = Date.now() + (steps ? 90_000 : 7500);
     for (let page = 1; page <= (steps ? 512 : MAX_LOG_PAGES) && Date.now() < logDeadline; page++) {
       let response;
@@ -157,8 +160,9 @@ async function readPurchaseEvidence(active: Session, pledges: readonly Pledge[],
       if (page === count) { logComplete = true; break; }
     }
     if (steps && !logComplete) { report(phase); return empty; }
-    const evidence = steps ? appliedPurchaseMatches(steps, log, owner) : purchaseMatches(pledges, log, owner);
-    const wantedOrders = [...new Set([...evidence.matches.values()].map(purchase => purchase.order))];
+    const evidence = purchaseMatches(pledges, log, owner);
+    const applied = appliedPurchaseMatches(steps ?? [], log, owner);
+    const wantedOrders = [...new Set([...evidence.matches.values(), ...applied.matches.values()].map(purchase => purchase.order))];
     phase = 'purchase-orders-unavailable';
     seenPages.clear();
     for (let page = 1; wantedOrders.length && page <= (steps ? 24 : MAX_ORDER_PAGES); page++) {
@@ -180,7 +184,6 @@ async function readPurchaseEvidence(active: Session, pledges: readonly Pledge[],
     if (cleaned.some(result => result.status === 'rejected')) windowChanged = true;
   }
   assertActive();
-  if (windowChanged) return empty;
-  if (steps) return appliedOrderPrices(steps, log, owner, orders);
-  return purchasePrices(purchaseMatches(pledges, log, owner), orders);
+  if (windowChanged || steps && !logComplete) return empty;
+  return batchPurchasePrices(pledges, steps ?? [], log, owner, orders);
 }

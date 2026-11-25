@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { documentSchema, UserError, type Account, type ImportCandidate, type Pledge } from '../domain/model';
+import { documentSchema, rsiPurchaseSchema, UserError, type Account, type ImportCandidate, type Pledge, type RsiPurchase } from '../domain/model';
 import { verifiedUpgradePurchasesSchema, type UpgradeHistoryResult } from '../domain/upgrade-history';
 
 const uuid = z.uuid();
@@ -11,9 +11,11 @@ const lastSeenSchema = z.object({ schemaVersion: z.literal(1), accountId: uuid, 
 export type LastSeen = z.infer<typeof lastSeenSchema> & { appliedPurchaseHistories?: Record<string, UpgradeHistoryResult> };
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_APPLIED_PURCHASE_HISTORIES = 512;
-const appliedPurchasesSchema = z.object({ accountId: uuid, reference: z.string().min(1).max(160), entries: z.array(z.object({
+const appliedPurchaseEntry = z.object({
   pledgeId: z.string().regex(/^[1-9]\d{0,15}$/), basis: z.string().max(9000), history: verifiedUpgradePurchasesSchema,
-}).strict()).max(MAX_APPLIED_PURCHASE_HISTORIES) }).strict();
+}).strict();
+const appliedPurchasesSchema = z.object({ accountId: uuid, reference: z.string().min(1).max(160),
+  entries: z.array(appliedPurchaseEntry).max(MAX_APPLIED_PURCHASE_HISTORIES) }).strict();
 
 function purchaseBasis(pledge: Pledge): string | undefined {
   if (pledge.ships.length !== 1 || pledge.ccus.length || pledge.sourceValues.upgradeState === 'unresolved') return;
@@ -37,8 +39,13 @@ export class LastSeenStore {
     if (fs.lstatSync(this.directory).isSymbolicLink()) throw new UserError('Unzulaessiger Cacheordner.');
     const temp = file + '.' + randomUUID() + '.pending';
     const fd = fs.openSync(temp, 'wx');
-    try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-    fs.renameSync(temp, file);
+    try {
+      try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+      fs.renameSync(temp, file);
+    } catch (error) {
+      try { fs.unlinkSync(temp); } catch { /* Preserve the write error. */ }
+      throw error;
+    }
   }
   private checkIdentity(account: Account, view: LastSeen, previous?: LastSeen | null) {
     if (account.mode !== 'real' || view.accountId !== account.id || view.document.dataMode !== 'real') throw new UserError('Bestand gehoert nicht zu diesem Profil.');
@@ -82,16 +89,73 @@ export class LastSeenStore {
     return histories.length ? { ...view, appliedPurchaseHistories: Object.fromEntries(histories) } : view;
   }
   rememberAppliedPurchases(account: Account, view: LastSeen, pledgeId: string, result: UpgradeHistoryResult): LastSeen {
+    return this.rememberPurchaseHistories(account, view, { [pledgeId]: result });
+  }
+  rememberPurchaseHistories(account: Account, view: LastSeen, histories: Readonly<Record<string, UpgradeHistoryResult>>,
+    basePurchases: Readonly<Record<string, RsiPurchase>> = {}): LastSeen {
     this.checkIdentity(account, view);
-    if (view.document.account.identityKind !== 'rsi-handle' || !verifiedUpgradePurchasesSchema.safeParse(result).success) return view;
-    const pledge = view.document.pledges.find(candidate => candidate.pledgeId === pledgeId);
-    const basis = pledge && purchaseBasis(pledge);
-    if (!basis) return view;
-    const previous = this.appliedPurchases(view).filter(entry => entry.pledgeId !== pledgeId);
-    const entries = [...previous.slice(1 - MAX_APPLIED_PURCHASE_HISTORIES), { pledgeId, basis, history: result }];
-    this.write(this.appliedPurchaseFile(account.id), appliedPurchasesSchema.parse({ accountId: account.id,
-      reference: view.document.account.reference, entries }));
-    return { ...view, appliedPurchaseHistories: { ...view.appliedPurchaseHistories, [pledgeId]: result } };
+    if (view.document.account.identityKind !== 'rsi-handle' || (!Object.keys(histories).length && !Object.keys(basePurchases).length)) return view;
+    const stored = this.stored(account.id);
+    if (!stored || stored.revision !== view.revision || stored.document.account.reference !== view.document.account.reference ||
+        stored.document.account.identityKind !== 'rsi-handle') return view;
+    const updates: z.infer<typeof appliedPurchaseEntry>[] = [];
+    const sessionOrders = new Map<string, RsiPurchase>();
+    if (Object.keys(basePurchases).length) {
+      for (const pledge of view.document.pledges) {
+        if (pledge.rsiPurchase?.status === 'documented' && pledge.rsiPurchase.source === 'order') {
+          sessionOrders.set(pledge.pledgeId, pledge.rsiPurchase);
+        }
+      }
+    }
+    let baseChanged = false;
+    const pledges = stored.document.pledges.map(pledge => {
+      const id = pledge.pledgeId;
+      if (Object.hasOwn(histories, id)) {
+        const entry = appliedPurchaseEntry.safeParse({ pledgeId: id, basis: purchaseBasis(pledge), history: histories[id] });
+        if (entry.success) updates.push(entry.data);
+      }
+      if (pledge.rsiPurchase?.status === 'excluded' || pledge.rsiPurchase?.status === 'documented' && pledge.rsiPurchase.source === 'order') return pledge;
+      const candidate = sessionOrders.get(id) ?? (Object.hasOwn(basePurchases, id) ? basePurchases[id] : undefined);
+      if (!candidate) return pledge;
+      const price = rsiPurchaseSchema.safeParse(candidate);
+      if (!price.success || price.data.status !== 'documented' || price.data.source !== 'order') return pledge;
+      baseChanged = true;
+      return { ...pledge, rsiPurchase: price.data };
+    });
+    if (baseChanged) {
+      const document = { ...stored.document, pledges };
+      view = { ...view, document };
+      try { this.write(this.file(account.id), { ...stored, document }); }
+      catch { /* Keep the verified observation available for the current session. */ }
+    }
+    if (!updates.length) return view;
+    const previous = this.appliedPurchases(view);
+    const merged = new Map(previous.map(entry => [entry.pledgeId, entry]));
+    const appliedPurchaseHistories = { ...view.appliedPurchaseHistories };
+    for (const entry of updates) {
+      const old = merged.get(entry.pledgeId);
+      const prior = old?.basis === entry.basis ? old.history : appliedPurchaseHistories[entry.pledgeId];
+      const history = prior?.steps.length && !entry.history.steps.length ? prior : entry.history;
+      merged.delete(entry.pledgeId);
+      merged.set(entry.pledgeId, { ...entry, history });
+      appliedPurchaseHistories[entry.pledgeId] = history;
+    }
+    // Keep paid receipts ahead of confirmed empty histories when the bounded sidecar fills.
+    const newestFirst = [...merged.values()].reverse();
+    const prioritized = [...newestFirst.filter(entry => entry.history.steps.length), ...newestFirst.filter(entry => !entry.history.steps.length)];
+    const sidecar = { accountId: account.id, reference: stored.document.account.reference, entries: [] as typeof updates };
+    let bytes = Buffer.byteLength(JSON.stringify(sidecar));
+    for (const entry of prioritized) {
+      if (sidecar.entries.length >= MAX_APPLIED_PURCHASE_HISTORIES) break;
+      const size = Buffer.byteLength(JSON.stringify(entry)) + (sidecar.entries.length ? 1 : 0);
+      if (bytes + size > MAX_BYTES) continue;
+      bytes += size;
+      sidecar.entries.push(entry);
+    }
+    sidecar.entries.reverse();
+    try { this.write(this.appliedPurchaseFile(account.id), sidecar); }
+    catch { /* Sidecar persistence is independent of base receipts and the active table. */ }
+    return { ...view, appliedPurchaseHistories };
   }
   assertIdentity(account: Account, view: LastSeen): void { this.checkIdentity(account, view); }
   canRemember(account: Account, identity: ImportCandidate['document']['account']): boolean {

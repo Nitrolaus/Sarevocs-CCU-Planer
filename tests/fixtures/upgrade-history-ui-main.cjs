@@ -57,6 +57,7 @@ ipcMain.handle('fixture:command', async (_event, command) => {
     if (!fixture.sessionSaved) return { ok: true, data: { status: 'auth-required', steps: [], partial: false } };
     return new Promise(resolve => fixture.pending.push({ command: copy(command), resolve, done: false }));
   }
+  if (command.action === 'rsi.purchaseHistories') return { ok: true, data: copy(fixture.purchaseHistories?.[command.revision] ?? { histories: {}, basePurchases: {} }) };
   if (command.action === 'rsi.settings') return { ok: true, data: { available: true, saved: fixture.sessionSaved, stored: fixture.sessionSaved,
     directory: 'Synthetischer Testordner', sessionOpen: false, error: null } };
   if (command.action === 'rsi.delete') { fixture.sessionSaved = false; return { ok: true, data: { deleted: true } }; }

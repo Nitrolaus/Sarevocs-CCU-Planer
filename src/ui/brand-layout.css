@@ -157,7 +157,11 @@ aside nav button[data-menu="help"]{--symbol-ink:#c6a8ff}
   background:linear-gradient(145deg,color-mix(in srgb,var(--symbol-ink) 20%,#18222d),#18222d)}
 .sidebar-menu-icon svg{width:17px;height:17px}
 aside nav button.active .sidebar-menu-icon{background:linear-gradient(145deg,color-mix(in srgb,var(--symbol-ink) 28%,#18222d),#18222d)}
-.sidebar-support{display:flex;justify-content:center;gap:8px;margin-top:16px}
+#root .sidebar-referral{display:grid;justify-items:center;gap:2px;width:100%;margin:12px 0 0;padding:3px 4px;border:0;background:transparent;color:#adc6d0;box-shadow:none;font-size:11px;font-weight:400;line-height:1.35}
+#root .sidebar-referral::after{content:none}
+.sidebar-referral strong{font:600 12px 'Segoe UI',Arial,sans-serif;letter-spacing:.06em;color:#a1efdd}
+.sidebar-referral:hover strong,.sidebar-referral:focus-visible strong{text-decoration:underline;text-underline-offset:3px}
+.sidebar-support{display:flex;justify-content:center;gap:8px;margin-top:6px}
 .sidebar-support button{
   display:grid;place-items:center;flex:0 1 84px;min-width:0;min-height:38px;margin:0;padding:4px 7px;
   border:1px solid transparent;
@@ -167,7 +171,7 @@ aside nav button.active .sidebar-menu-icon{background:linear-gradient(145deg,col
 .sidebar-support-text{display:none}
 .sidebar-support button:hover img,.sidebar-support button:focus-visible img{opacity:1}
 .sidebar-support-error{font-size:12px;color:#f4bbbc;margin-top:6px}
-@media(max-height:880px){aside nav{margin-top:30px}aside footer{padding-top:18px}.sidebar-support{margin-top:12px}}
+@media(max-height:880px){aside nav{margin-top:30px}aside footer{padding-top:18px}#root .sidebar-referral{margin-top:8px}}
 @media(prefers-reduced-motion:reduce){
   #root :is(button, summary, .help-topics a){transition:none}
 }

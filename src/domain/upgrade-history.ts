@@ -23,11 +23,18 @@ export const upgradeHistoryResultSchema = z.object({
   status: z.enum(['loaded', 'unavailable', 'auth-required', 'cancelled']),
   steps: z.array(upgradeHistoryStepSchema).max(MAX_UPGRADE_HISTORY_STEPS),
   partial: z.boolean(),
+  confirmedEmpty: z.literal(true).optional(),
   purchases: z.array(z.object({ ccuPledgeId, price: rsiPurchaseSchema }).strict()).max(MAX_UPGRADE_HISTORY_STEPS).optional(),
-}).strict().refine(value => value.status === 'loaded' || (value.steps.length === 0 && value.partial === false && !value.purchases));
+}).strict().refine(value => value.status === 'loaded' || (value.steps.length === 0 && value.partial === false && !value.purchases))
+  .refine(value => !value.confirmedEmpty || (value.status === 'loaded' && !value.partial && !value.steps.length && !value.purchases?.length));
 export type UpgradeHistoryResult = z.infer<typeof upgradeHistoryResultSchema>;
+export type PurchaseHistoryBatch = {
+  histories: Record<string, UpgradeHistoryResult>;
+  basePurchases: Record<string, z.infer<typeof rsiPurchaseSchema>>;
+};
 
 export const verifiedUpgradePurchasesSchema = upgradeHistoryResultSchema.refine(result => {
+  if (result.confirmedEmpty) return true;
   if (result.status !== 'loaded' || result.partial || !result.steps.length || result.purchases?.length !== result.steps.length) return false;
   const ids = new Set(result.steps.filter(step => step.appliedAt).map(step => step.ccuPledgeId));
   if (ids.has(undefined) || ids.size !== result.steps.length) return false;

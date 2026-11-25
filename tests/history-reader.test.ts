@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { upgradeHistoryRequestSchema, upgradeHistoryResultSchema, unavailableHistory } from '../src/domain/upgrade-history';
+import { upgradeHistoryRequestSchema, upgradeHistoryResultSchema, verifiedUpgradePurchasesSchema, unavailableHistory } from '../src/domain/upgrade-history';
 
 test('Upgradehistorien-DTOs lassen ausschließlich begrenzte bekannte Felder durch', () => {
   const valid = { status: 'loaded', steps: [{ from: 'Alpha', to: 'Beta', appliedAt: '2026-11-15 13:30' }], partial: false };
@@ -10,6 +10,19 @@ test('Upgradehistorien-DTOs lassen ausschließlich begrenzte bekannte Felder dur
     { ...valid, steps: [{ from: 'Alpha\nSecret', to: 'Beta', appliedAt: null }] }, { ...valid, steps: Array.from({ length: 129 }, () => valid.steps[0]) },
     { ...valid, steps: [{ from: 'A'.repeat(201), to: 'Beta', appliedAt: null }] }, { ...valid, steps: [{ from: 'Alpha', to: 'Beta', appliedAt: '2026-02-31 25:99' }] }, { ...valid, status: 'unavailable' }]) assert.equal(upgradeHistoryResultSchema.safeParse(bad).success, false);
   assert.deepEqual(unavailableHistory('auth-required'), { status: 'auth-required', steps: [], partial: false });
+});
+
+test('Ein bestätigter Leerverlauf benötigt eine ausdrückliche widerspruchsfreie Antwort', () => {
+  const empty = {status: 'loaded', steps: [], partial: false};
+  assert.equal(verifiedUpgradePurchasesSchema.safeParse(empty).success, false);
+  const explicit = {...empty, confirmedEmpty: true};
+  assert.equal(verifiedUpgradePurchasesSchema.safeParse(explicit).success, true);
+  for (const contradiction of [{status:'auth-required'}, {partial:true}, {confirmedEmpty:false},
+    {steps:[{from:'Alpha', to:'Beta', appliedAt:'2026-11-15 13:30'}]},
+    {purchases:[{ccuPledgeId:'5', price:{status:'excluded'}}]}]) {
+    assert.equal(upgradeHistoryResultSchema.safeParse({...explicit, ...contradiction}).success, false);
+    assert.equal(verifiedUpgradePurchasesSchema.safeParse({...explicit, ...contradiction}).success, false);
+  }
 });
 
 test('Upgradehistorien-Anfrage verlangt Profil, Revision und eine positive sichere numerische Pledge-ID', () => {

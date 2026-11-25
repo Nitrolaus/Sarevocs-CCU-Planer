@@ -62,6 +62,7 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('account.select'), accountId: z.uuid() }).strict(),
   z.object({ action: z.literal('rsi.background'), accountId: z.uuid(), knownRevision: z.uuid().optional() }).strict(),
   z.object({ action: z.literal('rsi.refresh'), accountId: z.uuid() }).strict(),
+  z.object({ action: z.literal('rsi.purchaseHistories'), accountId: z.uuid(), revision: z.uuid() }).strict(),
   z.object({ action: z.literal('rsi.upgradeHistory'), accountId: z.uuid(), revision: z.uuid(),
     pledgeId: z.string().regex(/^[1-9][0-9]{0,15}$/).refine(value => Number.isSafeInteger(Number(value))),
     lookupPurchases: z.literal(true).optional() }).strict(),

@@ -1,4 +1,4 @@
-import type { Account, ImportCandidate } from '../domain/model';
+import type { Account, ImportCandidate, RsiPurchase } from '../domain/model';
 import { LastSeenStore, type LastSeen } from '../storage/last-seen';
 import type { HangarRefreshProgress } from '../importers/hangar-read';
 import type { ObservedConciergeRank } from '../domain/concierge';
@@ -42,9 +42,13 @@ export class BackgroundInventory {
     return state.status === 'connected' ? state.conciergeRank : undefined;
   }
   rememberAppliedPurchases(id: string, revision: string, pledgeId: string, result: UpgradeHistoryResult): void {
+    this.rememberPurchaseHistories(id, revision, { [pledgeId]: result });
+  }
+  rememberPurchaseHistories(id: string, revision: string, histories: Readonly<Record<string, UpgradeHistoryResult>>,
+    basePurchases: Readonly<Record<string, RsiPurchase>> = {}): void {
     const state = this.state(id);
     if (state.view?.revision !== revision) return;
-    try { state.view = this.cache.rememberAppliedPurchases(this.account(id), state.view, pledgeId, result); }
+    try { state.view = this.cache.rememberPurchaseHistories(this.account(id), state.view, histories, basePurchases); }
     catch { /* The verified response still goes to the active table if local caching fails. */ }
   }
   observe(id: string, candidate: ImportCandidate, conciergeRank?: ObservedConciergeRank): LastSeen {

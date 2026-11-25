@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import { STAR_CITIZEN_REFERRAL_CODE } from '../domain/referral';
 
 const resources = {
   teces: 'https://robertsspaceindustries.com/en/orgs/TECES',
@@ -14,6 +15,7 @@ const resources = {
   paypal: 'https://www.paypal.com/ncp/payment/EKNGMDJFVKZHJ',
   bugReportDe: 'https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml',
   bugReportEn: 'https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml',
+  referral: `https://www.robertsspaceindustries.com/enlist?referral=${STAR_CITIZEN_REFERRAL_CODE}`,
 } as const;
 
 const documents = {

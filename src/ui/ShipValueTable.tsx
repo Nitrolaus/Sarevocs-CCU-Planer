@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {createPortal} from 'react-dom';
 import type {Pledge} from '../domain/model';
 import {pricedUpgradeSteps} from '../domain/applied-ccu-price';
 import type {HistoryTooltipState} from './upgrade-history';
@@ -69,8 +70,8 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
     purchaseAnchor.current=price;
     const rect=(price??event.currentTarget).getBoundingClientRect();
     const x='clientX' in event?event.clientX:rect.left+12,y='clientY' in event?event.clientY:rect.bottom;
-    setPurchaseMenu({pledgeId:pledge.pledgeId,left:Math.max(8,Math.min(x,window.innerWidth-248)),
-      top:Math.max(8,Math.min(y,window.innerHeight-52))});
+    setPurchaseMenu({pledgeId:pledge.pledgeId,left:Math.max(8,Math.min(x,window.innerWidth-208)),
+      top:Math.max(8,Math.min(y,window.innerHeight-48))});
   }
   const organizerByPledge=useMemo(()=>new Map(origins?.entries.map(entry=>[entry.pledgeId,entry.organizer])),[origins]);
   useEffect(()=>{
@@ -167,13 +168,15 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
       const upgradedShip=source==='rsi-dom-probe/1'&&p.ships.length===1&&!p.ccus.length&&!unresolved&&
         !!standaloneModel(p)&&!sameStandaloneShip(p,market?.catalogue?.ships);
       const history=upgradedShip?historyFor(p):undefined;
+      const originalShip=history?.status==='loaded'&&history.confirmedEmpty===true;
       const steps=history?.status==='loaded'
         ?pricedUpgradeSteps(history.steps,historyPurchases,market?.catalogue?.ships,history.purchases):[];
       const total=history?.status==='loaded'?historyCosts(p,steps,history.partial,display,market):undefined;
       const paidAmount=cost.kind==='recorded'&&!fromLog?purchaseAmount:null;
       const totalAmount=total?.paid!=null?money(total.paid,display.settings.currency,total.approximate):null;
+      const visiblePurchase=totalAmount??(!upgradedShip||originalShip?paidAmount:null);
       const checkingPurchases=history?.status==='loading'&&history.lookupPurchases;
-      const mayCheckPurchase=upgradedShip&&!totalAmount&&!checkingPurchases&&canLookUpPurchases(p);
+      const mayCheckPurchase=upgradedShip&&!visiblePurchase&&!checkingPurchases&&canLookUpPurchases(p);
       const packagePrice=(fromLog||fromOrder)&&p.ships.length>0&&!standaloneModel(p);
       const organizer=organizerByPledge.get(p.pledgeId);
       const giveaway=giveawayShip(p);
@@ -188,14 +191,14 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
         poundPurchase&&cost.value?.purchaseDate?t('Belegtes Kaufdatum')+' · '+cost.value.purchaseDate:null,
         poundPurchase&&cost.value?.poundRate?t('Historischer EZB-Kurs')+' · '+cost.value.poundRate.sourceDate:null,
         p.name,
-        ...(upgradedShip?[
+        ...(upgradedShip&&!originalShip?[
           t('Basisschiff')+' · '+standaloneModel(p)+' · '+(cost.value?money(cost.value.minor,cost.value.currency):t('Nicht belegt')),
           ...steps.map(({step,price})=>step.from+' → '+step.to+' · '+
             (price?.status==='documented'&&price.source==='order'?money(price.minor,price.currency):t('Nicht belegt'))),
         ]:[]),
-        totalAmount?t('Gesamtkosten')+' · '+totalAmount:upgradedShip?t('Gesamtkosten offen'):null,
-        history?.status==='loaded'&&history.purchases?.length===0?t('Kein Bestellbeleg für die angewendeten CCUs gefunden.'):null,
-        mayCheckPurchase?t('Rechtsklick für „Bestellbeleg prüfen“.'):null,
+        totalAmount?t('Gesamtkosten')+' · '+totalAmount:upgradedShip&&!originalShip?t('Der Kaufpreis ist noch nicht vollständig belegt.'):null,
+        history?.status==='loaded'&&history.purchases?.length===0?t('Für die angewendeten CCUs wurde kein Kaufpreis gefunden.'):null,
+        mayCheckPurchase?t('Rechtsklick für „Hangar-Log prüfen“.'):null,
         packageRows>1?t('Gemeinsamer Paketwert, kein Einzelpreis je Schiff.'):null].filter(Boolean).join('\n');
       return values.map((value,index)=>{
         const today=estimateMinor(value.usdMinor,comparisonSettings,fx),name=isGameView?p.name+(value.ship?' · '+value.name:''):value.name;
@@ -224,9 +227,11 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
             :value.ship?<span className={'badge '+(p.insurance.kind==='lti'?'':'unknown')} title={p.insurance.kind==='lti'?'LTI':p.insurance.kind==='months'?p.insurance.months+' '+t('Monate'):t('Unbekannt')}>{p.insurance.kind==='lti'?'LTI':p.insurance.kind==='months'?p.insurance.months+' '+t('Monate'):t('Unbekannt')}</span>:'—'}</td>
           <td className="inventory-kind" title={typeTitle}>{type}{protectedLabel?<small className="game-protected-access">🔒 {protectedLabel}{status==='Nur upgraden'?' · '+t(status):''}</small>:issue?<small className="inventory-issue">{t('Zuordnung prüfen')}</small>
             :status==='Nur upgraden'?<small className="ship-access">{t(status)}</small>:gameKind?<small>{t('NPC nicht bestätigt')}</small>:null}</td>
-          {index===0&&<td className="ship-price ship-purchase" rowSpan={values.length} title={purchaseTitle}
+          {index===0&&<td className="ship-price ship-purchase" rowSpan={values.length} title={purchaseTitle} aria-live={upgradedShip?'polite':undefined}
             tabIndex={upgradedShip?0:undefined} onMouseEnter={upgradedShip?()=>onHistory(p):undefined} onFocus={upgradedShip?()=>onHistory(p):undefined}>
-            <strong aria-live={upgradedShip?'polite':undefined}>{upgradedShip?totalAmount??t(checkingPurchases?'Bestellbeleg wird gesucht …':'Gesamtkosten offen'):paidAmount??t('Nicht belegt')}</strong>
+            {visiblePurchase?<strong>{visiblePurchase}</strong>:<span className="ship-price-unavailable"
+              aria-label={t(checkingPurchases?'Kaufpreis wird gesucht …':'Kaufpreis beim Erwerb nicht belegt.')}>
+              {checkingPurchases?'…':'—'}</span>}
             {totalAmount&&<small className="ship-package-total">{t('Gesamtkosten')}</small>}
             {paidAmount&&poundPurchase&&!upgradedShip&&<small className="ship-package-total">{converted.minor===null?t('Umrechnung offen'):money(converted.minor,display.settings.currency,true)}</small>}
             {packageRows>1&&<small className="ship-package-total">{t('Paketgesamt')} ({packageRows})</small>}
@@ -251,12 +256,12 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
     })}
     {!shown&&<tr><td colSpan={7} className="empty">{total&&query.trim()?t('Keine passenden Einträge gefunden.'):emptyText??t('Keine Gegenstände für diesen Filter.')}</td></tr>}
   </tbody></ResizableTable>
-  {purchaseMenu&&menuPledge&&canLookUpPurchases(menuPledge)&&<div className="ship-purchase-menu" role="menu"
+  {purchaseMenu&&menuPledge&&canLookUpPurchases(menuPledge)&&createPortal(<div className="ship-purchase-menu" role="menu"
     aria-label={t('Mein Kaufpreis')} style={{left:purchaseMenu.left,top:purchaseMenu.top}}>
     <button ref={purchaseAction} type="button" role="menuitem" onClick={()=>{
       setPurchaseMenu(null);lookupPurchases(menuPledge);
-    }}>{t('Bestellbeleg prüfen')}</button>
-  </div>}
+    }}>{t('Hangar-Log prüfen')}</button>
+  </div>,document.body)}
   </div>
   {editing&&<GiveawayOriginDialog key={editing} initial={organizerByPledge.get(editing)??''}
     onSave={name=>saveOrigin(editing,name)} onClose={()=>setEditing(undefined)}/>}

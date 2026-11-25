@@ -85,10 +85,14 @@ try{
     await active.focus();
     await page.keyboard.press('Tab');
     assert.equal(await nav.getByRole('button',{name:'CCU-Planer',exact:true}).evaluate(el=>el.matches(':focus-visible')&&getComputedStyle(el).outlineStyle==='solid'),true);
+    const referral=page.getByRole('button',{name:/Star-Citizen-Referral-Code.*STAR-7J4R-YRSX/});
+    await referral.waitFor();
+    assert.ok((await referral.boundingBox()).y+(await referral.boundingBox()).height<=(await kofi.boundingBox()).y);
+    await referral.click();
     await kofi.click();
     await paypal.click();
-    assert.deepEqual(await app.evaluate(()=>globalThis.fixture.commands.filter(command=>['kofi','paypal'].includes(command.resource))),
-      [{action:'help.openResource',resource:'kofi'},{action:'help.openResource',resource:'paypal'}]);
+    assert.deepEqual(await app.evaluate(()=>globalThis.fixture.commands.filter(command=>['referral','kofi','paypal'].includes(command.resource))),
+      [{action:'help.openResource',resource:'referral'},{action:'help.openResource',resource:'kofi'},{action:'help.openResource',resource:'paypal'}]);
     await page.setViewportSize(original);
   });
   await check('SHARED_GLASS_FRAME_AND_FOCUS_APPLY_TO_INVENTORY_ACTIONS_AND_TABS',async()=>{
@@ -179,7 +183,7 @@ try{
     for(const name of ['Kerberos','Die Bauaufsicht','Arasil','Erkul']){
       await community.getByRole('button',{name,exact:true}).click();
     }
-    assert.deepEqual(await app.evaluate(()=>globalThis.fixture.commands.filter(command=>command.action==='help.openResource'&&!['kofi','paypal'].includes(command.resource))),
+    assert.deepEqual(await app.evaluate(()=>globalThis.fixture.commands.filter(command=>command.action==='help.openResource'&&!['referral','kofi','paypal'].includes(command.resource))),
       ['teces','kerberos','bauaufsicht','arasil','erkul'].map(resource=>({action:'help.openResource',resource})));
     await help.getByRole('button',{name:'Fehler melden',exact:true}).click();
     await help.getByRole('button',{name:'Einstieg',exact:true}).click();

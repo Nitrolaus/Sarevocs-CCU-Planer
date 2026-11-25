@@ -41,18 +41,18 @@ try{app=await _electron.launch({executablePath:createRequire(import.meta.url)('e
 await check('STARLITE_SHOWS_TWO_COMPARABLE_PRICES_WITH_SOURCE_IN_TOOLTIP',async()=>{
   const item=row('1005');
   assert.deepEqual((await table.locator('thead th').allTextContents()).slice(4,6),['Mein Kaufpreis','RSI-Shoppreis']);
-  assert.deepEqual((await item.locator('.ship-price').allTextContents()).map(s=>s.replace(/\s/g,'')),['Nichtbelegt','≈54,59€']);
+  assert.deepEqual((await item.locator('.ship-price').allTextContents()).map(s=>s.replace(/\s/g,'')),['—','≈54,59€']);
   assert.match(await item.locator('.ship-purchase').getAttribute('title'),/Richtwert.*55,00/s);
   assert.doesNotMatch(await table.innerText(),/MwSt\.|netto|brutto/i);
 });
 await check('RECORDED_PACKAGE_TOTAL_IS_SHARED_ONCE_AND_CHILDREN_SHOW_STANDARD_PRICES',async()=>{const r=table.locator('tr[data-pledge="1002"]');assert.equal(await r.count(),2);assert.equal(await r.locator('.ship-purchase').count(),1);assert.equal(await r.locator('.ship-purchase').getAttribute('rowspan'),'2');assert.match(await r.locator('.ship-purchase').innerText(),/145,45.*Paketgesamt \(2\)/s);assert.deepEqual((await r.locator('.ship-current-value strong').allTextContents()).map(s=>s.replace(/\s/g,'')),['≈54,59€','≈36,39€']);});
 await check('PACKAGE_UPGRADE_REWARDS_AND_UNRESOLVED_VARIANTS_NEVER_INVENT_SHIP_PURCHASES',async()=>{
-  for(const id of ['1001','1003','1004','1006'])assert.equal(await row(id).locator('.ship-purchase strong').innerText(),'Nicht belegt');
+  for(const id of ['1001','1003','1004','1006'])assert.equal(await row(id).locator('.ship-purchase .ship-price-unavailable').innerText(),'—');
   assert.equal(await row('1004').locator('.ship-current-value strong').innerText(),'Nicht verfügbar');
   assert.match(await row('1006').locator('.ship-current-value strong').innerText(),/45,49/);
 });
 await check('CROWN_UPGRADE_ONLY_AND_ORIGINAL_HISTORY_TOOLTIP_REMAIN',async()=>{const name=row('1001').locator('td').first();assert.equal(await name.getByRole('img',{name:'Spielkopie im Pledge'}).count(),1);assert.match(await row('1001').locator('.inventory-kind').innerText(),/Nur upgraden/);await name.focus();await app.evaluate(async()=>{for(let n=0;n<100;n++){if(globalThis.fixture.pending.some(p=>!p.done&&p.command.pledgeId==='1001'))return;await new Promise(r=>setTimeout(r,10));}throw Error('HISTORY_REQUEST_MISSING');});await app.evaluate(()=>globalThis.resolveHistory({accountId:'11111111-1111-4111-8111-111111111111',pledgeId:'1001',revision:'33333333-3333-4333-8333-333333333333'},{status:'loaded',steps:[{from:'Hornet Ghost',to:'Prospector',appliedAt:null}],partial:false}));await page.waitForFunction(()=>document.querySelector('.ship-value-table tr[data-pledge="1001"] td').title.includes('Hornet Ghost → Prospector'));assert.match(await name.getAttribute('title'),/Nicht einschmelzen|nicht einschmelzen/);});
-await check('PROFILE_SWITCH_DOES_NOT_REUSE_PURCHASE_VALUES',async()=>{await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(b);await row('2001').waitFor();assert.equal(await row('2001').locator('.ship-purchase strong').innerText(),'Nicht belegt');assert.equal(await row('1001').count(),0);await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(a);await row('1001').waitFor();});
+await check('PROFILE_SWITCH_DOES_NOT_REUSE_PURCHASE_VALUES',async()=>{await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(b);await row('2001').waitFor();assert.equal(await row('2001').locator('.ship-purchase .ship-price-unavailable').innerText(),'—');assert.equal(await row('1001').count(),0);await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(a);await row('1001').waitFor();});
 await check('MANUFACTURER_BETWEEN_CURRENT_MODEL_AND_INSURANCE_WITH_COMPACT_RSI_DATE',async()=>{const headings=await table.locator('thead th').allTextContents();assert.deepEqual(headings.slice(0,3),['Schiff / Fahrzeug','Hersteller','Versicherung']);assert.equal(await row('1001').locator('.ship-manufacturer').innerText(),'MISC');assert.equal(await row('1002').locator('.ship-manufacturer').innerText(),'RSI');assert.match(await row('1001').locator('.ship-source').innerText(),/14\.11\.26/);const first=table.locator('tbody tr').first();assert.equal(await first.locator('td').count(),7);await table.screenshot({path:path.join(folder,'manufacturer-table.png')});});
 await check('UNPRICED_PACKAGE_STILL_IDENTIFIES_THE_SHARED_CELL',async()=>{
   await app.evaluate(()=>{
@@ -63,7 +63,7 @@ await check('UNPRICED_PACKAGE_STILL_IDENTIFIES_THE_SHARED_CELL',async()=>{
     view.observedAt=new Date().toISOString();
   });
   const shared=table.locator('tr[data-pledge="1002"] .ship-purchase');
-  await shared.getByText('Nicht belegt',{exact:true}).waitFor();
+  await shared.getByText('—',{exact:true}).waitFor();
   assert.equal(await shared.count(),1);
   assert.equal(await shared.getAttribute('rowspan'),'2');
   assert.equal(await shared.getByText('Paketgesamt (2)',{exact:true}).count(),1);
@@ -117,7 +117,7 @@ await check('VAT_SETTING_DOES_NOT_CHANGE_THE_COMPARISON_AND_MISSING_FX_RETURNS_O
   await app.evaluate(()=>{globalThis.fixture.pricing.settings.language='en';globalThis.fixture.pricing.settings.vatBasisPoints=2000;});
   await table.locator('th[title="RSI shop price"]').waitFor();
   assert.match(await row('1005').locator('.ship-current-value').innerText(),/54\.59/);
-  assert.equal(await row('1005').locator('.ship-purchase strong').innerText(),'Not recorded');
+  assert.equal(await row('1005').locator('.ship-purchase .ship-price-unavailable').innerText(),'—');
   await app.evaluate(()=>{globalThis.fixture.pricing.settings.language='de';globalThis.fixture.pricing.rate=null;});
   await row('1005').locator('.ship-current-value strong').filter({hasText:'60,00'}).waitFor();
   assert.match(await row('1005').locator('.ship-purchase').getAttribute('title'),/55,00\s*\$/);
@@ -133,7 +133,8 @@ await check('DOCUMENTED_PURCHASES_SHOW_SCOPE_AND_SOURCE',async()=>{
     view.revision='66666666-6666-4666-8666-666666666666';view.observedAt=new Date().toISOString();
   });
   const original=row('1001').locator('.ship-purchase'), bundle=row('1006').locator('.ship-purchase');
-  await original.getByText('Gesamtkosten offen',{exact:true}).waitFor();
+  await page.waitForFunction(()=>document.querySelector('[data-pledge="1001"] .ship-purchase')?.title.includes('RSI-Kaufprotokoll'));
+  await original.getByText('—',{exact:true}).waitFor();
   assert.doesNotMatch(await original.innerText(),/69,09/);
   assert.match(await original.getAttribute('title'),/69,09/);
   assert.match(await original.getAttribute('title'),/RSI-Kaufprotokoll/);
@@ -154,9 +155,9 @@ await check('UPGRADED_SHIP_SHOWS_ONLY_A_PROVEN_TOTAL',async()=>{
   const orderHistory={status:'loaded',partial:false,steps:[
     {from:'MDC',to:'Sabre Firebird Imperator Subscribers Edition',appliedAt:'2026-02-03 09:17',ccuPledgeId:'9901'},
   ],purchases:[{ccuPledgeId:'9901',price:{status:'documented',source:'order',minor:9980,currency:'EUR'}}]};
-  await cost.getByText('Gesamtkosten offen',{exact:true}).waitFor();
+  await cost.getByText('—',{exact:true}).waitFor();
   assert.doesNotMatch(await cost.innerText(),/41,25/);
-  assert.equal(await table.getByRole('button',{name:'Bestellbeleg prüfen',exact:true}).count(),0);
+  assert.equal(await table.getByRole('button',{name:'Hangar-Log prüfen',exact:true}).count(),0);
   await cost.focus();
   await app.evaluate(async()=>{
     for(let n=0;n<100;n++){
@@ -171,17 +172,25 @@ await check('UPGRADED_SHIP_SHOWS_ONLY_A_PROVEN_TOTAL',async()=>{
     }
     throw Error('EXPECTED_ONE_HISTORY_READ_AFTER_FOCUS');
   });
-  assert.equal(await cost.locator('strong').innerText(),'Gesamtkosten offen');
+  assert.equal(await cost.locator('.ship-price-unavailable').innerText(),'—');
   await cost.press('Shift+F10');
-  const action=page.getByRole('menuitem',{name:'Bestellbeleg prüfen',exact:true});
+  const action=page.getByRole('menuitem',{name:'Hangar-Log prüfen',exact:true});
   await action.waitFor();
   await action.press('Escape');
   await action.waitFor({state:'hidden'});
   await row('1005').locator('.ship-purchase').click({button:'right'});
   assert.equal(await action.count(),0);
   await cost.click({button:'right'});
+  await action.waitFor();
+  const menu=page.getByRole('menu',{name:'Mein Kaufpreis',exact:true});
+  const geometry=await action.evaluate(button=>{
+    const item=button.getBoundingClientRect(), outer=button.parentElement.getBoundingClientRect(),style=getComputedStyle(button);
+    return {inside:item.left>=outer.left&&item.right<=outer.right, border:style.borderLeftWidth,margin:style.marginLeft,body:button.parentElement.parentElement===document.body};
+  });
+  assert.deepEqual(geometry,{inside:true,border:'0px',margin:'0px',body:true});
+  await menu.screenshot({path:path.join(folder,'purchase-context-menu.png')});
   await action.click();
-  await cost.getByText('Bestellbeleg wird gesucht …',{exact:true}).waitFor();
+  await cost.getByLabel('Kaufpreis wird gesucht …',{exact:true}).waitFor();
   await app.evaluate(async({},orderHistory)=>{
     for(let n=0;n<100;n++){
       const pending=globalThis.fixture.pending.find(p=>!p.done&&p.command.pledgeId==='1060'&&p.command.lookupPurchases===true);
@@ -214,11 +223,34 @@ await check('UPGRADED_SHIP_SHOWS_ONLY_A_PROVEN_TOTAL',async()=>{
   const orders=await app.evaluate(()=>globalThis.fixture.commands.filter(cmd=>cmd.action==='rsi.upgradeHistory'&&cmd.lookupPurchases));
   assert.equal(orders.length,1);
 });
+await check('CONNECTED_INVENTORY_APPLIES_BATCH_RECEIPTS_WITHOUT_PER_SHIP_CLICKS',async()=>{
+  const upgraded=pledge('1070',['Sabre Firebird'],'$185.00 USD'); upgraded.name='Standalone Ships - MDC';
+  const unchanged=pledge('1071',['Ursa'],'$70.00 USD'); unchanged.name='Standalone Ships - Synthetic Ursa Promotion';
+  const revision='77777777-7777-4777-8777-777777777777';
+  await app.evaluate(({}, {revision,upgraded,unchanged})=>{
+    const fixture=globalThis.fixture, view=fixture.views[fixture.state.selectedAccountId];
+    view.document.account={identityKind:'rsi-handle',reference:'SYNTHETIC_ACCOUNT'};
+    view.document.pledges.push(upgraded,unchanged);
+    view.revision=revision; view.observedAt=new Date().toISOString();
+    const receipt=minor=>({status:'documented',source:'order',currency:'EUR',minor});
+    fixture.purchaseHistories={[revision]:{basePurchases:{'1070':receipt(4125),'1071':receipt(3090)},histories:{
+      '1070':{status:'loaded',partial:false,steps:[
+        {from:'MDC',to:'Sabre Firebird Imperator Subscribers Edition',appliedAt:'2026-02-03 09:17',ccuPledgeId:'9903'},
+      ],purchases:[{ccuPledgeId:'9903',price:receipt(9980)}]},
+      '1071':{status:'loaded',partial:false,steps:[],confirmedEmpty:true},
+    }}};
+  },{revision,upgraded,unchanged});
+  await row('1070').locator('.ship-purchase strong').filter({hasText:'141,05'}).waitFor();
+  await row('1071').locator('.ship-purchase strong').filter({hasText:'30,90'}).waitFor();
+  const commands=await app.evaluate(()=>globalThis.fixture.commands);
+  assert.equal(commands.filter(command=>command.action==='rsi.purchaseHistories'&&command.revision===revision).length,1);
+  assert.equal(commands.some(command=>command.action==='rsi.upgradeHistory'&&['1070','1071'].includes(command.pledgeId)),false);
+});
 await check('TWO_HUNDRED_SHIPS_STAY_COMPACT_AT_1440_1024_AND_125_PERCENT',async()=>{await row('1005').locator('.ship-current-value strong').filter({hasText:'54,59'}).waitFor();await table.evaluate(t=>{const c=t.createCaption();c.textContent='SYNTHETISCHE TESTDATEN · KOMPAKTE PREISANSICHT';c.style.cssText='text-align:left;color:#ffbd69;padding:6px 10px;font-size:11px';});await table.screenshot({path:path.join(folder,'compact-prices.png')});await table.evaluate(t=>t.caption.remove());await app.evaluate(({},pledges)=>{const v=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];v.document.pledges=pledges;v.revision='55555555-5555-4555-8555-555555555555';v.observedAt=new Date().toISOString();},Array.from({length:200},(_,i)=>({...pledge(String(5000+i),[i%2?'Prospector':'Ursa'],'$95.00 USD'),name:i%2?'Standalone Ships - Prospector':'Standalone Ships - Ursa'})));await page.waitForFunction(()=>document.querySelectorAll('.ship-value-table tbody tr').length===200);for(const [width,scale]of [[1440,1],[1024,1],[1024,1.25]]){await page.setViewportSize({width,height:1000});const cdp=await page.context().newCDPSession(page);await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,mobile:false,deviceScaleFactor:scale});const geometry=await table.locator('tbody tr').evaluateAll(rows=>rows.map(r=>({height:r.getBoundingClientRect().height,overflow:r.scrollWidth>r.clientWidth})));assert.ok(geometry.every(r=>r.height<=44&&!r.overflow),JSON.stringify(geometry.slice(0,3)));assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await table.locator('tbody tr').first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(folder,'compact-'+width+'-'+scale+'.png')});await cdp.detach();}await page.setViewportSize({width:1440,height:1000});});
 await check('NO_LOGIN_MUTATION_NETWORK_OR_REAL_USER_DATA',async()=>{
   assert.equal(await page.locator('dialog[open]').count(),0);
   const commands=await app.evaluate(()=>globalThis.fixture.commands);
-  const allowed=['state','inventory','inventory.giveaways','rsi.background','rsi.settings','rsi.upgradeHistory','rsi.conciergeRank','account.select','pricing.status','market.status','loaners.status','help.checkUpdate'];
+  const allowed=['state','inventory','inventory.giveaways','rsi.background','rsi.settings','rsi.upgradeHistory','rsi.purchaseHistories','rsi.conciergeRank','account.select','pricing.status','market.status','loaners.status','help.checkUpdate'];
   const unexpected=commands.filter(command=>!allowed.includes(command.action)&&!(command.action==='table.widths'&&command.widths===undefined));
   assert.deepEqual([...new Set(unexpected.map(command=>command.action))],[]);
   assert.equal(await app.evaluate(()=>globalThis.blockedRequests),0);

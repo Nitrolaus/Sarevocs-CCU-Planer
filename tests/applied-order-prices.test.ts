@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { appliedOrderPrices, type PurchaseLogRow, type PurchaseOrder } from '../src/importers/rsi-purchase-data';
+import { appliedOrderPrices, batchPurchasePrices, type PurchaseLogRow, type PurchaseOrder } from '../src/importers/rsi-purchase-data';
+import { basePledge } from './fixtures';
 
 const title = 'Upgrade - MDC to Sabre Firebird Imperator Subscribers Edition';
 const step = { from: 'MDC', to: 'Sabre Firebird Imperator Subscribers Edition', ccuPledgeId: '111', appliedAt: '2026-01-21 18:01' };
@@ -22,4 +23,18 @@ test('applied Firebird subscriber CCU resolves only the paid item at its invoice
   assert.equal(prices([row], [{...order, date:'Jan 22 2026'}]).size, 0);
   assert.equal(prices([row,row], [order]).size, 0);
   assert.equal(appliedOrderPrices([step,step], [row], 'Fixture', [order]).size, 0);
+});
+
+test('Held and applied CCUs share the available quantity on a single billing line', () => {
+  const held = { ...basePledge('222'), name: title };
+  const rows = [row, { ...row, id: held.pledgeId }];
+  const oversubscribed = batchPurchasePrices([held], [step], rows, 'Fixture', [order]);
+  assert.equal(oversubscribed.applied.size, 0);
+  assert.deepEqual(oversubscribed.bases.get('222'), { status: 'documented', source: 'log', currency: 'EUR', minor: 9900 });
+  const enough = { ...order, lines: [{...order.lines[0]!, quantity: '2'}] };
+  const priced = batchPurchasePrices([held], [step], rows, 'Fixture', [enough]);
+  const unit = { status: 'documented', source: 'order', currency: 'EUR', minor: 750 };
+  assert.deepEqual(priced.applied.get('111'), unit);
+  assert.deepEqual(priced.bases.get('222'), unit);
+  assert.equal(batchPurchasePrices([{...held, pledgeId:'111'}], [step], [row], 'Fixture', [order]).applied.size, 0);
 });

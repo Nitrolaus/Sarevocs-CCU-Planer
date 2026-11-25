@@ -33,14 +33,16 @@ test('help can request only predefined public links and bundled documents', asyn
     'https://robertsspaceindustries.com', 'https://robertsspaceindustries.com',
     'https://robertsspaceindustries.com', 'https://www.twitch.tv', 'https://erkul.games',
     'https://support.robertsspaceindustries.com', 'https://learn.microsoft.com', 'https://ko-fi.com', 'https://www.paypal.com',
-    'https://github.com', 'https://github.com',
+    'https://github.com', 'https://github.com', 'https://www.robertsspaceindustries.com',
   ]);
   assert.equal(opened[7], 'https://ko-fi.com/sarevoc');
   assert.match(opened[8]!, /^https:\/\/www\.paypal\.com\/ncp\/payment\/[A-Z0-9]{10,20}$/);
-  assert.deepEqual(opened.slice(9), [
+  assert.deepEqual(opened.slice(9, 11), [
     'https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml',
     'https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml',
   ]);
+  assert.equal(opened.at(-1), 'https://www.robertsspaceindustries.com/enlist?referral=STAR-7J4R-YRSX');
+  assert.equal(commandSchema.safeParse({ action: 'help.openResource', resource: 'referral', url: 'https://example.invalid' }).success, false);
   assert.equal(commandSchema.safeParse({ action: 'help.openResource', resource: 'bugReportEn', title: 'Unexpected issue data' }).success, false);
   assert.equal(commandSchema.safeParse({ action: 'help.openResource', resource: 'paypal', url: 'https://example.invalid' }).success, false);
   assert.equal(commandSchema.safeParse({ action: 'help.openResource', resource: 'kofi', url: 'https://example.invalid' }).success, false);

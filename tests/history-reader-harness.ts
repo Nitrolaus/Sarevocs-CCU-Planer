@@ -10,6 +10,8 @@ import type { Socket } from 'node:net';
 import { UpgradeHistoryReader, UPGRADE_HISTORY_URL, MAX_UPGRADE_HISTORY_BYTES, historyParserProbe } from '../src/importers/upgrade-history';
 import { upgradeHistoryResultSchema } from '../src/domain/upgrade-history';
 import type { StoredCookie } from '../src/security/rsi-cookies';
+import type { RsiPurchase } from '../src/domain/model';
+import { basePledge } from './fixtures';
 
 const root = path.resolve(process.argv.find(value => value.startsWith('--test-root='))!.slice(12));
 const legacyBaseline = process.argv.includes('--legacy-baseline');
@@ -31,6 +33,14 @@ const good = row('Nov 26 2023, 6:02 pm', 'Upgrade applied: #2 Upgrade - Beta to 
   row('Nov 26 2023, 5:44 am', 'Upgrade applied: #1 Upgrade - Alpha to Beta Standard Edition, new value: $55.00 USD');
 const mixed = row('Nov 26 2023, 6:02 pm', 'Upgrade applied: #2 Upgrade - Synthetic Beta to Synthetic Gamma Warbond Edition, new value: $60.00 USD') +
   row('Nov 26 2023, 5:44 am', 'Upgrade applied: #1 Synthetic Alpha to Synthetic Beta Upgrade, new value: $55.00 USD');
+const batchHtml = new Map([
+  ['301', row('Nov 26 2023, 1:00 pm', 'Upgrade applied: #401 Upgrade - Alpha to Beta, new value: $31.00 USD')],
+  ['302', row('Nov 26 2023, 2:00 pm', 'Upgrade applied: #402 Upgrade - Delta to Epsilon, new value: $32.00 USD')],
+  ['303', '<p>No upgrades have been applied to this pledge.</p>'],
+  ['304', ''],
+]);
+const receipt = (minor: number): RsiPurchase => ({status:'documented', source:'order', currency:'EUR', minor});
+const emptyBatch = {histories:{}, basePurchases:{}};
 let phase = 'INIT', scenario = 'success', served = 0, verifiedRequests = 0, requestDeadlineElapsedMs = 0, responseGate: ReturnType<typeof gate> | undefined;
 let cleanupDataAttempts = 0, cleanupCacheAttempts = 0;
 let proxy: http.Server | undefined;
@@ -79,6 +89,10 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       if (current === 'bad-json') { response.end('{'); return; }
       if (current === 'html') { response.end('<input type="password">'); return; }
       if (current === 'bad-envelope') { response.end(JSON.stringify({ success: 0, msg: 'SYNTHETIC_MUST_NOT_ESCAPE' })); return; }
+      if (current === 'batch') {
+        const html = batchHtml.get(String(JSON.parse(body).pledge_id));
+        response.end(JSON.stringify(html === undefined ? {success:0} : {success:1, data:{rendered:html}})); return;
+      }
       const rendered = current === 'partial' ? good + row('Bad date', 'Unknown synthetic action') : current === 'empty' ? '' : current === 'active-html' ? good + '<script>throw Error("SYNTHETIC_SCRIPT")</script><img src="https://example.invalid/private">' : good;
       response.end(JSON.stringify({ success: 1, data: { rendered } }));
     });
@@ -114,6 +128,81 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       await item.read(a, 2, revision); await item.read(b, 1, revision); await item.read(a, 1, randomUUID()); assert.equal(served - before, 4);
       await item.close(a); await item.read(a, 1, revision); assert.equal(served - before, 5);
     });
+    await check('BATCH_SHARES_TRANSPORT_PARSER_AND_ORDER_SCAN_AND_MEMOIZES_REVISION', async () => {
+      scenario = 'batch';
+      const id = randomUUID(), revision = randomUUID(), before = served, sessionCount = native.sessions.length, windowCount = native.windows.length;
+      const candidates = {histories:['301','302','303','304'], bases:[basePledge('301'),basePledge('303')]};
+      const lookup = {owner:'SYNTHETIC_OWNER', assertActive() {}};
+      let cookieLoads = 0, orderScans = 0;
+      const item = new UpgradeHistoryReader(async () => { cookieLoads++; return [cookie()]; }, undefined,
+        async (net, bases, steps, owner, active) => {
+          active(); orderScans++;
+          assert.equal(net, native.sessions.slice(sessionCount).filter(s => s.partition.startsWith('upgrade-history-net-')).at(-1)!.isolated);
+          assert.deepEqual(bases.map(p => p.pledgeId), ['301','303']);
+          assert.deepEqual(steps?.map(s => s.ccuPledgeId), ['401','402']);
+          assert.equal(owner, lookup.owner);
+          return {
+            bases: new Map([['301',receipt(3010)],['303',receipt(3030)],['499',receipt(4990)]]),
+            applied: new Map([['401',receipt(4010)],['402',receipt(4020)],['301',receipt(9990)]]),
+          };
+        });
+      readers.push(item);
+      const [first, duplicate] = await Promise.all([item.readBatch(id, revision, candidates, lookup), item.readBatch(id, revision, candidates, lookup)]);
+      assert.deepEqual(first.basePurchases, {'301':receipt(3010),'303':receipt(3030)});
+      assert.deepEqual(Object.keys(first.histories), ['301','302','303']);
+      assert.deepEqual(first.histories['301']!.purchases, [{ccuPledgeId:'401',price:receipt(4010)}]);
+      assert.deepEqual(first.histories['302']!.purchases, [{ccuPledgeId:'402',price:receipt(4020)}]);
+      assert.deepEqual(first.histories['303'], {status:'loaded',steps:[],partial:false,confirmedEmpty:true});
+      assert.deepEqual(duplicate, first);
+      assert.deepEqual(await item.readBatch(id, revision, candidates, lookup), first);
+      assert.deepEqual(await item.readBatch(id, revision, candidates, {
+        owner:lookup.owner, assertActive() { throw Error('SYNTHETIC_REVOKED'); },
+      }), emptyBatch);
+      const partitions = native.sessions.slice(sessionCount);
+      assert.equal(partitions.filter(s => s.partition.startsWith('upgrade-history-net-')).length, 1);
+      assert.equal(partitions.filter(s => s.partition.startsWith('upgrade-history-parser-')).length, 1);
+      assert.equal(native.windows.length - windowCount, 1);
+      assert.equal(served - before, 4); assert.equal(cookieLoads, 1); assert.equal(orderScans, 1);
+      await item.close(id);
+      assert.deepEqual(await item.readBatch(id, revision, candidates, lookup), first);
+      assert.equal(orderScans, 2);
+    });
+    await check('BATCH_WITHOUT_AUTHENTICATION_OR_CURRENT_CONTEXT_NEVER_RETURNS_RECEIPTS', async () => {
+      const before = served;
+      let scans = 0;
+      const unauthenticated = new UpgradeHistoryReader(async () => [], undefined, async () => {
+        scans++; return {bases:new Map(), applied:new Map()};
+      });
+      readers.push(unauthenticated);
+      const candidates = {histories:['301'], bases:[basePledge('301')]};
+      assert.deepEqual(await unauthenticated.readBatch(randomUUID(), randomUUID(), candidates,
+        {owner:'SYNTHETIC_OWNER',assertActive() {}}), emptyBatch);
+      assert.equal(served, before); assert.equal(scans, 0);
+      for (const action of ['close','shutdown','revision']) {
+        const held = gate(), id = randomUUID(), revision = randomUUID();
+        let active = true, drained = false;
+        const item = new UpgradeHistoryReader(async () => [cookie()], undefined, async () => {
+          held.entered = true; await held.promise;
+          // A late provider that ignores cancellation still must not publish results.
+          return {bases:new Map([['301',receipt(3010)]]), applied:new Map([['401',receipt(4010)]])};
+        });
+        readers.push(item);
+        scenario = 'batch';
+        const lookup = {owner:'SYNTHETIC_OWNER', assertActive() { if (!active) throw Error('SYNTHETIC_REVISION_CHANGED'); }};
+        const pending = item.readBatch(id, revision, candidates, lookup);
+        await until(() => held.entered);
+        const stopping = action === 'close' ? item.close(id) : action === 'shutdown' ? item.shutdown() : undefined;
+        if (action === 'revision') active = false;
+        const drain = stopping?.then(() => { drained = true; });
+        try {
+          await wait(30);
+          if (stopping) assert.equal(drained, false);
+        } finally { held.release(); }
+        assert.deepEqual(await pending, emptyBatch);
+        await drain;
+        if (action === 'shutdown') assert.deepEqual(await item.readBatch(id, revision, candidates, lookup), emptyBatch);
+      }
+    });
     await check('NO_COOKIE_OR_INVALID_SCOPE_NEVER_DISPATCHES', async () => {
       const before = served;
       assert.equal((await reader(async () => []).read(randomUUID(), 1, randomUUID())).status, 'auth-required');
@@ -133,6 +222,22 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
     await check('EMPTY_AND_PARTIAL_HISTORY_STAY_EXPLICIT', async () => {
       scenario = 'empty'; assert.deepEqual(await reader().read(randomUUID(), 1, randomUUID()), { status: 'loaded', steps: [], partial: true });
       scenario = 'partial'; const result = await reader().read(randomUUID(), 1, randomUUID()); assert.equal(result.status, 'loaded'); assert.equal(result.partial, true); assert.equal(result.steps.length, 2);
+    });
+    await check('EXPLICIT_NO_UPGRADES_IS_DISTINCT_FROM_MISSING_OR_CONFLICTING_ROWS', async () => {
+      const statement = '<p>No upgrades have been applied to this pledge.</p>';
+      const proof = {status:'loaded', steps:[], partial:false, confirmedEmpty:true};
+      assert.deepEqual(await parseOnly(statement), proof);
+      assert.deepEqual(await parseOnly('<div class="row"><label>This pledge has not been upgraded.</label></div>'), proof);
+      const event = 'Upgrade applied: #3 Upgrade - Gamma to Delta, new value: $4.00 USD';
+      for (const fragment of ['', '<div class="row"></div>', 'No results', '<p>No upgrades are available for this pledge.</p>',
+        statement + '<div class="row"></div>', '<div hidden>' + statement + '</div>', '<div style="display:none">' + statement + '</div>',
+        '<noscript>' + statement + '</noscript>', good + statement,
+        good + '<div class="row">Unknown action</div>', good + '<section>' + event + '</section>',
+        row('Nov 26 2023, 6:00 pm', event + '</span><span>' + event), row('Nov 26 2023, 6:00 pm', event + '</span>' + event)]) {
+        const parsed = await parseOnly(fragment);
+        assert.equal(parsed.confirmedEmpty, undefined);
+        assert.equal(parsed.partial, true);
+      }
     });
     await check('INERT_HTML_CANNOT_LOAD_REMOTE_RESOURCES_OR_SHOW_WINDOW', async () => {
       scenario = 'active-html'; const before = served;

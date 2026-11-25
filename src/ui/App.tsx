@@ -8,7 +8,7 @@ import type { BridgeResult, Command } from '../main/commands';
 import type { ReleaseUpdate } from '../main/release-updates';
 import type { AuthorizationSnapshot, BackgroundSnapshot } from '../main/background-inventory';
 import type { LastSeen } from '../storage/last-seen';
-import { unavailableHistory, type UpgradeHistoryResult } from '../domain/upgrade-history';
+import { unavailableHistory, type PurchaseHistoryBatch, type UpgradeHistoryResult } from '../domain/upgrade-history';
 import { historicCcuPurchases } from '../domain/applied-ccu-price';
 import { ChainHistory } from './ChainHistory';
 import { HistoryTooltipCache, historyKey, upgradeHistoryTitle } from './upgrade-history';
@@ -129,6 +129,8 @@ function App() {
   const selectedAccount = useRef(''); const selectionEpoch = useRef(0);
   const backgroundEpoch = useRef(0); const knownRevision = useRef<string | undefined>(undefined);
   const historyTooltips = useRef(new HistoryTooltipCache());
+  const purchaseRequest = useRef<string|undefined>(undefined);
+  const [purchaseBatch,setPurchaseBatch] = useState<{revision: string; accountId: string; result?: PurchaseHistoryBatch}>();
   const [, redrawHistory] = useState(0);
   const statusRef = useRef<BackgroundSnapshot['status']>('idle'); const pendingRef = useRef(false);
   const [open, setOpen] = useState(false); const dialog = useRef<HTMLDialogElement>(null);
@@ -155,6 +157,7 @@ function App() {
     if (selectedAccount.current === id) return;
     selectedAccount.current = id; selectionEpoch.current++; backgroundEpoch.current++; knownRevision.current = undefined;
     historyTooltips.current.activate(id);
+    purchaseRequest.current = undefined; setPurchaseBatch(undefined);
     pendingRef.current = false; setBackgroundPending(false); connectionStatus('idle'); setLastSeen(null); setHangarProgress(undefined);
     setAccountId(id); setMessage(''); setError('');
   }
@@ -214,10 +217,31 @@ function App() {
   const latestAcceptedAt = acceptedInventory?.items.reduce((latest, item) => Math.max(latest, Date.parse(item.importedAt) || 0),
     Date.parse(acceptedInventory.account.lastComplete ?? '') || 0) ?? 0;
   const observed = account?.mode === 'real' && lastSeen?.accountId === accountId && Date.parse(lastSeen.observedAt) > latestAcceptedAt ? lastSeen : null;
+  const observedRevision = observed?.revision;
+  const purchaseOwner = observed?.document.account.identityKind === 'rsi-handle';
+  useEffect(() => {
+    if (page !== 'inventory' || backgroundStatus !== 'connected' || !observedRevision || !purchaseOwner) return;
+    const revision = observedRevision, request = accountId + ':' + revision, epoch = selectionEpoch.current;
+    if (request === purchaseRequest.current) return;
+    purchaseRequest.current = request;
+    setPurchaseBatch({ accountId, revision });
+    void call<PurchaseHistoryBatch>({ action: 'rsi.purchaseHistories', accountId, revision }).then(result => {
+      if (current(accountId, epoch) && knownRevision.current === revision) setPurchaseBatch({ accountId, revision, result });
+    }).catch(() => {
+      if (current(accountId, epoch) && knownRevision.current === revision) setPurchaseBatch(undefined);
+    });
+  },[accountId,backgroundStatus,observedRevision,page,purchaseOwner]);
+  const currentPurchaseBatch = purchaseBatch?.accountId === accountId && purchaseBatch.revision === observedRevision ? purchaseBatch : undefined;
+  const purchaseEvidence = currentPurchaseBatch?.result;
+  const observedPledges = useMemo(() => (observed?.document.pledges ?? []).map(pledge => {
+    const receipt = purchaseEvidence?.basePurchases[pledge.pledgeId];
+    return receipt?.status === 'documented' && receipt.source === 'order' && pledge.rsiPurchase?.status !== 'excluded' &&
+      !(pledge.rsiPurchase?.status === 'documented' && pledge.rsiPurchase.source === 'order') ? {...pledge,rsiPurchase:receipt} : pledge;
+  }),[observed,purchaseEvidence]);
   const liveBuybacks = account?.mode === 'real' && lastSeen?.accountId === accountId && lastSeen.document.buybackObservation
     && (!account.reference || (account.reference === lastSeen.document.account.reference && account.identityKind === lastSeen.document.account.identityKind)) ? lastSeen.document : null;
   const viewingBuybacks = page === 'inventory' && filter === 'Buy Back';
-  const historyPledges = useMemo(() => observed?.document.pledges.filter(pledge => historyKey(pledge, account, observed)) ?? [], [account, observed]);
+  const historyPledges = useMemo(() => observedPledges.filter(pledge => historyKey(pledge, account, observed)), [account, observed, observedPledges]);
   const historyPurchases = useMemo(() => historicCcuPurchases(
     observed?.document.scope.exportComplete ? acceptedInventory?.items ?? [] : [],
     observed?.document.pledges ?? []), [acceptedInventory, observed]);
@@ -230,14 +254,20 @@ function App() {
       const result = await call<UpgradeHistoryResult>({ action: 'rsi.upgradeHistory', ...key });
       return current(key.accountId, epoch) && knownRevision.current === key.revision ? result : unavailableHistory('cancelled');
     } catch { return unavailableHistory('unavailable'); }
-  }, [account, observed]);
+  }, [account, observed, purchaseEvidence]);
   function inventoryHistory(pledge: Pledge) {
     const key = historyKey(pledge, account, observed);
-    return key ? observed?.appliedPurchaseHistories?.[key.pledgeId] ?? historyTooltips.current.get(key) : undefined;
+    if (!key) return;
+    const saved = observed?.appliedPurchaseHistories?.[key.pledgeId];
+    const manual = historyTooltips.current.get(key);
+    const automatic = purchaseEvidence?.histories[key.pledgeId];
+    return saved ?? (manual?.status === 'loading' && manual.lookupPurchases || manual?.status === 'loaded' && manual.purchases?.length
+      ? manual : automatic ?? manual);
   }
   async function loadUpgradeHistory(pledge: Pledge, lookupPurchases = false) {
     const key = historyKey(pledge, account, observed), epoch = selectionEpoch.current;
-    if (!key || observed?.appliedPurchaseHistories?.[key.pledgeId] || !current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
+    if (!key || observed?.appliedPurchaseHistories?.[key.pledgeId] || !lookupPurchases && purchaseEvidence?.histories[key.pledgeId] ||
+      !current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
     const ticket = historyTooltips.current.begin(key, lookupPurchases); if (!ticket) return;
     redrawHistory(value => value + 1);
     let result: UpgradeHistoryResult;
@@ -247,9 +277,9 @@ function App() {
     if (!current(key.accountId, epoch) || knownRevision.current !== key.revision) return;
     if (historyTooltips.current.finish(ticket, result)) redrawHistory(value => value + 1);
   }
-  const present = useMemo(() => observed ? observed.document.pledges.map(pledge => ({ pledge, availability: 'present' as const,
+  const present = useMemo(() => observed ? observedPledges.map(pledge => ({ pledge, availability: 'present' as const,
     source: 'rsi-dom-probe/1', importedAt: observed.observedAt })) : acceptedInventory?.items.filter(x => x.availability === 'present') ?? [],
-  [observed, acceptedInventory]);
+  [observed, observedPledges, acceptedInventory]);
   const plannerInventory = useMemo(() => observed ? { accountId, pledges: observed.document.pledges,
     observation: { kind: 'rsi-hangar' as const, observedAt: observed.observedAt } }
     : acceptedInventory ? { accountId, pledges: acceptedInventory.items.filter(x => x.availability === 'present').map(x => x.pledge),
@@ -449,12 +479,13 @@ function App() {
               onKeyDown={event=>{if(event.key==='Escape'&&inventoryQuery){event.preventDefault();clearInventorySearch();}}}/>
             <button type="button" className="inventory-search-clear" aria-label={t('Suche löschen')} disabled={!inventoryQuery} onClick={clearInventorySearch}>×</button>
           </div>
+          {currentPurchaseBatch&&!purchaseEvidence&&<span role="status" className="inventory-search-count">{t('Kaufpreise werden geprüft …')}</span>}
           <output htmlFor="inventory-search-input" aria-live="polite" className="inventory-search-count">{t(inventoryCount.total===1?'{shown} von {total} Eintrag':'{shown} von {total} Einträgen')
             .replace('{shown}', inventoryCount.shown.toLocaleString(display.settings.language))
             .replace('{total}', inventoryCount.total.toLocaleString(display.settings.language))}</output>
         </div>
         {viewingBuybacks ? <BuybackTable {...inventorySearchProps} entries={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} observation={liveBuybacks?.buybackObservation} display={display} balance={storeCredit} />
-          : filter === 'Loaner & Beiboote' ? <LoanerTable {...inventorySearchProps} accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable {...inventorySearchProps} key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} historyFor={inventoryHistory} historyPurchases={historyPurchases} onHistory={p=>void loadUpgradeHistory(p)} lookupPurchases={p=>void loadUpgradeHistory(p,true)} canLookUpPurchases={p=>!!historyKey(p,account,observed)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={(p,catalogue)=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,key?historyTooltips.current.get(key):undefined,catalogue),gameAccessEvidence(p));}}/>}</section>
+          : filter === 'Loaner & Beiboote' ? <LoanerTable {...inventorySearchProps} accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable {...inventorySearchProps} key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} historyFor={inventoryHistory} historyPurchases={historyPurchases} onHistory={p=>void loadUpgradeHistory(p)} lookupPurchases={p=>void loadUpgradeHistory(p,true)} canLookUpPurchases={p=>!(currentPurchaseBatch&&!purchaseEvidence)&&!!historyKey(p,account,observed)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={(p,catalogue)=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,inventoryHistory(p),catalogue),gameAccessEvidence(p));}}/>}</section>
       <div className="bottom" id="data-location"><span>Letzter vollständiger Import: {account?.lastComplete ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(account.lastComplete)) : 'noch keiner'}<br />Datenordner: {state?.dataDir ?? 'wird geladen'}</span>
         <span><button className="text-button" disabled={busy || !account?.reference} onClick={() => void run(async () => { const r = await call<{ exported: boolean; backup: string } | null>({ action: 'export', accountId }); if (r) setMessage(`Inventar exportiert. Konsistente Datenbanksicherung: ${r.backup}`); })}>{t("Sicherung / Export")}</button>
           <button className="text-button" disabled={busy || !account || account.mode !== 'real'} onClick={() => void run(rsi)}>{t("Sitzung & Sicherheit")}</button>

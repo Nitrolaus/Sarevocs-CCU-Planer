@@ -18,5 +18,7 @@
 .ccu-shop-price span { font-size: 0.78rem; color: #a9c2ce; }
 .ccu-price-legend { display: none; margin: 0; padding: 4px 10px; color: #a9c2ce; font-size: 0.72rem; }
 .ship-value-section:has(.ccu-shop-price [data-ecb-estimate]) > .ccu-price-legend { display: block; }
-.ship-purchase-menu{position:fixed;z-index:80;width:min(240px,calc(100vw - 16px));padding:4px;background:#17222c;border:1px solid #718b99;border-radius:6px;box-shadow:0 12px 30px #0009}
-.ship-purchase-menu button{width:100%;text-align:left;padding:7px 10px}
+.ship-price-unavailable{color:#8d9fac}
+.ship-purchase-menu{position:fixed;z-index:80;width:min(200px,calc(100vw - 16px));padding:3px;background:#17222c;border:1px solid #4a6475;border-radius:6px;box-shadow:0 8px 24px #0009}
+.ship-purchase-menu [role="menuitem"]{display:block;width:100%;margin:0;padding:6px 10px;border:0;border-radius:3px;background:none;color:#e7eff5;font-size:12px;font-weight:400;line-height:1.4;text-align:left}
+.ship-purchase-menu [role="menuitem"]:hover,.ship-purchase-menu [role="menuitem"]:focus-visible{background:#223a46;outline:none}

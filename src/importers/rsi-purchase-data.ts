@@ -173,8 +173,22 @@ export function appliedPurchaseMatches(steps: readonly UpgradeHistoryStep[], log
 }
 
 export function appliedOrderPrices(steps: readonly UpgradeHistoryStep[], log: readonly PurchaseLogRow[], owner: string | null, orders: readonly PurchaseOrder[]) {
+  return batchPurchasePrices([], steps, log, owner, orders).applied;
+}
+
+/** A held pledge and a consumed CCU must jointly fit the purchased quantity of a shared order line. */
+export function batchPurchasePrices(pledges: readonly Pledge[], steps: readonly UpgradeHistoryStep[], log: readonly PurchaseLogRow[],
+  owner: string | null, orders: readonly PurchaseOrder[]) {
+  const base = purchaseMatches(pledges, log, owner);
   const evidence = appliedPurchaseMatches(steps, log, owner);
-  const prices = purchasePrices(evidence, orders);
+  const matches = new Map([...base.matches, ...evidence.matches]);
+  const excluded = new Set([...base.excluded, ...evidence.excluded]);
+  const present = new Set(pledges.map(pledge => pledge.pledgeId));
+  for (const step of steps) if (step.ccuPledgeId && present.has(step.ccuPledgeId)) excluded.add(step.ccuPledgeId);
+  for (const id of excluded) matches.delete(id);
+  const prices = purchasePrices({ matches, excluded }, orders);
+  const bases = new Map([...prices].filter(([id]) => present.has(id)));
+  const applied = new Map<string, RsiPurchase>();
   const byOrder = new Map(orders.map(order => [order.id, order]));
   for (const step of steps) {
     const id = step.ccuPledgeId;
@@ -184,8 +198,8 @@ export function appliedOrderPrices(steps: readonly UpgradeHistoryStep[], log: re
     const logDate = pledgeDate({sourceValues: {date: match?.date ?? ''}});
     const orderDate = pledgeDate({sourceValues: {date: match ? byOrder.get(match.order)?.date ?? '' : ''}});
     const appliedDate = step.appliedAt?.slice(0, 10);
-    if (price?.status !== 'documented' || price.source !== 'order' || !appliedDate || !(logDate || orderDate) ||
-        (logDate && logDate > appliedDate) || (orderDate && orderDate > appliedDate)) prices.delete(id);
+    if (price?.status === 'documented' && price.source === 'order' && appliedDate && (logDate || orderDate) &&
+        (!logDate || logDate <= appliedDate) && (!orderDate || orderDate <= appliedDate)) applied.set(id, price);
   }
-  return prices;
+  return { bases, applied };
 }

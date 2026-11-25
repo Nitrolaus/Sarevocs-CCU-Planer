@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { app, BrowserWindow, type Session } from 'electron';
-import { readPurchases, PURCHASE_LOG_URL, purchaseOrdersUrl } from '../../src/importers/rsi-purchases';
+import { readPurchaseEvidence, readPurchases, PURCHASE_LOG_URL, purchaseOrdersUrl } from '../../src/importers/rsi-purchases';
 import { inventoryAcquisitionPrice, RSI_LOG_PRICE, RSI_ORDER_PRICE } from '../../src/pricing/inventory-values';
 import { evaluateRsiSessionRequest } from '../../src/main/policy';
 import { purchaseParserProbe } from '../../src/importers/rsi-purchase-data';
@@ -15,6 +15,7 @@ app.on('window-all-closed', () => {});
 const report = path.join(profile, 'result.json');
 const owner = 'FixtureOwner', token = 'SYNTHETIC_TOKEN';
 const title = 'Standalone Ships - Fixture Ship';
+const ccuTitle = 'Upgrade - Fixture Alpha to Fixture Beta';
 const names = [title, title, 'Package - Fixture Bundle', title, title, 'Standalone Ships - Original Fixture', title, title, title];
 const pledges = names.map((name, index) => ({ ...demoDocument().pledges[0]!, pledgeId: String(700 + index), name,
   acquisitionCost: null, sourceValues: {pledgeValue:'$75.00 USD'} }));
@@ -32,7 +33,7 @@ const order = (id: string, name: string, total: string, discount = '€0.00 EUR'
   <div class="payment-wrapper"><div class="right-section"><strong>Additional Discount:</strong><span>${discount}</span><br>
   <strong>Credits used:</strong><span>€5.00 EUR</span></div><div class="address">SYNTHETIC_ADDRESS</div></div></li>`;
 
-function fakeTransport(failOrders = false) {
+function fakeTransport(failOrders = false, incompleteLog = false) {
   type Filter = (details: { url: string; method: string }, reply: (response: {cancel: boolean}) => void) => void;
   let guard: Filter, cleared = false;
   const reads: string[] = [];
@@ -61,7 +62,9 @@ function fakeTransport(failOrders = false) {
         const html = page === 1 ? log(700,'FIXTURE01') + log(701,'FIXTURE02') + log(702,'FIXTURE03','$1,234.56 USD')
           + log(703,'FIXTURE04','$88.00 USD','OtherFixture') + log(704,'FIXTURE05')
           + log(706,'FIXTURE07') + log(707,'FIXTURE07') + log(708,'FIXTURE08') :
-          row(704,title,'Claimed as a gift by FixtureOwner, value: $12.00 USD') + log(705,'FIXTURE06');
+          row(704,title,'Claimed as a gift by FixtureOwner, value: $12.00 USD') + log(705,'FIXTURE06')
+          + row(901,ccuTitle,'Created by FixtureOwner - order #FIXTURE09, value: €65.00 EUR');
+        if (incompleteLog && page === 2) throw Error('synthetic log failure');
         return Response.json({success:1,data:{pagecount:'2',rendered:html}});
       }
       assert.equal(headers.has('x-rsi-token'), false);
@@ -71,7 +74,8 @@ function fakeTransport(failOrders = false) {
       if (failOrders) throw Error('synthetic network failure');
       const html = page === '1' ? order('FIXTURE01','Standalone Ship - Fixture Ship','€72.41 EUR') + order('FIXTURE02',title,'€82.42 EUR','€10.00 EUR')
         + order('FIXTURE07',title,'€74.48 EUR','€0.00 EUR','2') + order('FIXTURE08',title,'€77.77 EUR','€0.00 EUR','1','CANCELLED') :
-        order('FIXTURE06',names[5]!,'€67.23 EUR') + order('FIXTURE03',names[2]!,'€72.51 EUR','€0.00 EUR','2');
+        order('FIXTURE06',names[5]!,'€67.23 EUR') + order('FIXTURE03',names[2]!,'€72.51 EUR','€0.00 EUR','2')
+        + order('FIXTURE09',ccuTitle,'€34.95 EUR');
       return new Response('<img src="https://fixture.invalid/tracking"><script>throw Error("SCRIPT_EXECUTED")</script><ul class="orders-item">'+html+'</ul>',
         {headers:{'content-type':'text/html; charset=utf-8'}});
     },
@@ -107,6 +111,16 @@ void app.whenReady().then(async () => {
     assert.equal(inventoryAcquisitionPrice({...pledges[0]!,rsiPurchase:result.get('700')!},'rsi-dom-probe/1').value?.evidence, RSI_ORDER_PRICE);
     assert.equal(inventoryAcquisitionPrice({...pledges[1]!,rsiPurchase:result.get('701')!},'rsi-dom-probe/1').value?.evidence, RSI_LOG_PRICE);
     assert.equal(inventoryAcquisitionPrice({...pledges[4]!,rsiPurchase:result.get('704')!},'rsi-dom-probe/1').value, null);
+    const step = { from:'Fixture Alpha', to:'Fixture Beta', appliedAt:'2026-11-03 17:00', ccuPledgeId:'901' };
+    const together = fakeTransport();
+    const batch = await readPurchaseEvidence(active, [pledges[0]!], [step], owner, () => {}, together.create);
+    assert.deepEqual([...batch.bases], [['700', recorded(7241,'EUR','order')]]);
+    assert.deepEqual([...batch.applied], [['901', recorded(3495,'EUR','order')]]);
+    assert.deepEqual(together.reads, ['log1','log2','order1','order2']);
+    const unfinished = fakeTransport(false, true);
+    const unknown = await readPurchaseEvidence(active, [pledges[0]!], [step], owner, () => {}, unfinished.create);
+    assert.equal(unknown.bases.size + unknown.applied.size, 0);
+    assert.deepEqual(unfinished.reads, ['log1','log2']);
     const ordersOnly = fakeTransport();
     const withoutHandle = await readPurchases(active, pledges, null, () => {}, ordersOnly.create);
     assert.deepEqual(withoutHandle.get('700'), recorded(7241,'EUR','order'));

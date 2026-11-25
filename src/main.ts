@@ -29,7 +29,7 @@ import {CcuExclusionStore} from './planner/exclusion-store';
 import {ccuKeysIn} from './planner/exclusions';
 import {packageBasis,samePackageBasis} from './planner/package-shares';
 import { UpgradeHistoryReader } from './importers/upgrade-history';
-import { mayReadUpgradeHistory } from './main/upgrade-history-access';
+import { mayReadObservedRevision, mayReadUpgradeHistory, purchaseCandidates } from './main/upgrade-history-access';
 import { MarketService } from './market/service';
 import { TableWidthStore } from './main/table-widths';
 import { LoanerService } from './loaners/service';
@@ -391,6 +391,27 @@ async function start() {
                 () => readConcierge('total', cookies, controller.signal));
           } catch { data = { status: 'unavailable' }; }
           finally { if (pledgeRead === controller) pledgeRead = undefined; }
+          break;
+        }
+        case 'rsi.purchaseHistories': {
+          const epoch = selectionEpoch, id = cmd.accountId;
+          const current = () => {
+            if (shuttingDown || selectionEpoch !== epoch || selectedAccountId !== id || sessionBusy(id)) return false;
+            const snapshot = background.snapshot(id, cmd.revision);
+            return snapshot.revision === cmd.revision && snapshot.status === 'connected';
+          };
+          const view = background.snapshot(id).view;
+          data = { histories: {}, basePurchases: {} };
+          if (!current() || !mayReadObservedRevision(selectedAccountId, store.inventory(id), view, cmd) ||
+              view.document.account.identityKind !== 'rsi-handle') break;
+          const candidates = purchaseCandidates(view, market.snapshot().catalogue?.ships ?? []);
+          const result = await upgradeHistory.readBatch(id, cmd.revision, candidates, {
+            owner: view.document.account.reference,
+            assertActive() { if (!current()) throw Error('HISTORY_CONTEXT_CHANGED'); },
+          });
+          if (!current() || !mayReadObservedRevision(selectedAccountId, store.inventory(id), background.snapshot(id).view, cmd)) break;
+          background.rememberPurchaseHistories(id, cmd.revision, result.histories, result.basePurchases);
+          data = result;
           break;
         }
         case 'rsi.upgradeHistory': {

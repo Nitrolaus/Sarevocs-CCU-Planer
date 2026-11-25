@@ -62,6 +62,74 @@ test('Letzter Stand überlebt Neustart mit stabiler Revision und vollständigem 
   assert.equal(new LastSeenStore(first.directory).load(account)?.document.pledges[0]!.name, 'Synthetic next observation');
 });
 
+test('Sammelprüfung speichert bestätigte Kaufbelege einmal pro Datei und behält Ausschlüsse und Quellen bei', t => {
+  const account = profile(), store = cache(), source = candidate(account, 'synthetic-owner', 'rsi-handle');
+  const paid = { status: 'documented', source: 'order', currency: 'EUR', minor: 2599 } as const;
+  const original = source.document.pledges[0]!;
+  source.document.pledges = ['201', '202', '203', '204', '205'].map(pledgeId => ({ ...structuredClone(original), pledgeId }));
+  source.document.pledges[1]!.rsiPurchase = { status: 'excluded' };
+  source.document.pledges[2]!.rsiPurchase = { ...paid, minor: 1455 };
+  const view = store.save(account, source);
+  const confirmed: UpgradeHistoryResult = { status: 'loaded', partial: false, steps: [], confirmedEmpty: true };
+  const rename = t.mock.method(fs, 'renameSync');
+  const result = store.rememberPurchaseHistories(account, view,
+    { '201': confirmed, '202': { status: 'loaded', steps: [], partial: false }, '203': { ...confirmed, partial: true }, '999': confirmed },
+    { '201': paid, '202': paid, '203': paid, '204': { ...paid, source: 'log' }, '205': { ...paid, minor: -1 }, '999': paid });
+  assert.equal(rename.mock.callCount(), 2);
+  assert.equal(result.revision, view.revision);
+  assert.deepEqual(Object.keys(result.appliedPurchaseHistories ?? {}), ['201']);
+  assert.deepEqual(result.document.pledges.map(pledge => pledge.rsiPurchase), [paid, { status: 'excluded' }, { ...paid, minor: 1455 }, undefined, undefined]);
+  assert.deepEqual(new LastSeenStore(store.directory).load(account), result);
+  const base = JSON.parse(fs.readFileSync(path.join(store.directory, account.id + '.json'), 'utf8'));
+  assert.equal('appliedPurchaseHistories' in base, false);
+  const newer = store.save(account, source);
+  assert.deepEqual(newer.appliedPurchaseHistories, { '201': confirmed });
+  assert.deepEqual(newer.document.pledges[0]!.rsiPurchase, paid);
+  store.rememberPurchaseHistories(account, view, { '205': confirmed }, { '205': paid });
+  assert.deepEqual(store.load(account), newer);
+  const manual = profile(), manualView = store.save(manual, candidate(manual));
+  assert.equal(store.rememberPurchaseHistories(manual, manualView, { '201': confirmed }, { '201': paid }), manualView);
+});
+
+test('Bezahlte Upgrade-Belege überleben volle Belegablage sowie eine widersprechende Leermeldung', () => {
+  const account = profile(), store = cache(), source = candidate(account, 'synthetic-owner', 'rsi-handle');
+  const original = source.document.pledges[0]!;
+  source.document.pledges = Array.from({ length: 515 }, (_, i) => ({ ...structuredClone(original), pledgeId: String(i + 1) }));
+  const paid: UpgradeHistoryResult = { status: 'loaded', partial: false,
+    steps: [{ from: 'Alpha', to: 'Beta', appliedAt: '2026-11-15 11:20', ccuPledgeId: '55001' }],
+    purchases: [{ ccuPledgeId: '55001', price: { source: 'order', status: 'documented', minor: 2040, currency: 'USD' } }] };
+  const confirmed: UpgradeHistoryResult = { status: 'loaded', partial: false, steps: [], confirmedEmpty: true };
+  const view = store.rememberAppliedPurchases(account, store.save(account, source), '1', paid);
+  const empty = Object.fromEntries(source.document.pledges.map(pledge => [pledge.pledgeId, confirmed]));
+  const result = store.rememberPurchaseHistories(account, view, empty);
+  assert.deepEqual(result.appliedPurchaseHistories?.['1'], paid);
+  const disk = new LastSeenStore(store.directory).load(account)?.appliedPurchaseHistories;
+  assert.equal(Object.keys(disk ?? {}).length, 512);
+  assert.deepEqual(disk?.['1'], paid);
+  assert.deepEqual(disk?.['515'], confirmed);
+});
+
+test('Bei vorübergehend gesperrtem Bestand bleiben die verifizierten Ergebnisse sichtbar und gemeinsam nachschreibbar', t => {
+  const account = profile(), store = cache(), source = candidate(account, 'synthetic-owner', 'rsi-handle');
+  source.document.pledges[0]!.pledgeId = '61'; source.document.pledges[1]!.pledgeId = '62';
+  const view = store.save(account, source);
+  const paid = { status: 'documented', source: 'order', currency: 'EUR', minor: 2599 } as const;
+  const history: UpgradeHistoryResult = { status: 'loaded', partial: false, steps: [], confirmedEmpty: true };
+  const oldRename = fs.renameSync;
+  const rename = t.mock.method(fs, 'renameSync', (from: fs.PathLike, to: fs.PathLike) => {
+    if (String(to).endsWith(account.id + '.json')) throw new Error('SYNTHETIC_LOCK');
+    oldRename(from, to);
+  });
+  const live = store.rememberPurchaseHistories(account, view, { '61': history }, { '61': paid });
+  assert.deepEqual(live.document.pledges[0]!.rsiPurchase, paid);
+  assert.deepEqual(store.load(account)?.appliedPurchaseHistories, { '61': history });
+  assert.equal(store.load(account)?.document.pledges[0]!.rsiPurchase, undefined);
+  assert.equal(fs.readdirSync(store.directory).some(name => name.endsWith('.pending')), false);
+  rename.mock.restore();
+  store.rememberPurchaseHistories(account, live, {}, { '62': paid });
+  assert.deepEqual(store.load(account)?.document.pledges.slice(0, 2).map(p => p.rsiPurchase), [paid, paid]);
+});
+
 test('Sitzungsablage verlangt einen gelesenen Handle und berücksichtigt Cache oder bestätigte Bindung', () => {
   const store = cache(), a = profile();
   const handle = (reference: string) => ({reference, identityKind: 'rsi-handle' as const});
