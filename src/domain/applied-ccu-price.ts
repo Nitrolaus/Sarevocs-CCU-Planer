@@ -1,11 +1,9 @@
 import type { InventoryItem, Pledge, RsiPurchase } from './model';
 import type { UpgradeHistoryStep } from './upgrade-history';
+import type { CatalogueShip } from '../market/model';
+import { sameModelName } from '../market/ship-values';
 
 type DocumentedPurchase = Extract<RsiPurchase, { status: 'documented' }>;
-
-function normalizedName(name: string): string {
-  return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
-}
 
 /** Only records read directly from RSI on this profile can document local costs. */
 export function historicCcuPurchases(items: readonly InventoryItem[], currentPledges: readonly Pledge[]) {
@@ -20,10 +18,11 @@ export function historicCcuPurchases(items: readonly InventoryItem[], currentPle
   return purchases;
 }
 
-export function appliedCcuPrice(step: UpgradeHistoryStep, purchases: ReadonlyMap<string, Pledge>): DocumentedPurchase | undefined {
+export function appliedCcuPrice(step: UpgradeHistoryStep, purchases: ReadonlyMap<string, Pledge>,
+  catalogue: readonly CatalogueShip[] = []): DocumentedPurchase | undefined {
   const pledge = step.ccuPledgeId ? purchases.get(step.ccuPledgeId) : undefined;
   if (!pledge || pledge.rsiPurchase?.status !== 'documented' || pledge.ccus.length !== 1) return undefined;
   const ccu = pledge.ccus[0]!;
-  return normalizedName(ccu.from) === normalizedName(step.from) && normalizedName(ccu.to) === normalizedName(step.to)
+  return sameModelName(ccu.from, step.from, catalogue) && sameModelName(ccu.to, step.to, catalogue)
     ? pledge.rsiPurchase : undefined;
 }

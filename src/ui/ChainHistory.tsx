@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import type { Pledge } from '../domain/model';
 import type { UpgradeHistoryResult, UpgradeHistoryStep } from '../domain/upgrade-history';
 import { appliedCcuPrice } from '../domain/applied-ccu-price';
+import type { CatalogueShip } from '../market/model';
+import { sameModelName } from '../market/ship-values';
 import { formatMinor } from '../pricing/money';
 import { ChainLink } from './ChainLink';
 import { useText } from './i18n';
@@ -23,10 +25,11 @@ function dateLabel(at: string, language: 'de' | 'en'): string {
   return (language === 'de' ? `${day}.${month}.${year}` : `${year}-${month}-${day}`) + ` · ${hour}:${minute}`;
 }
 
-export function ChainHistory({ pledges, read, purchases, language }: {
+export function ChainHistory({ pledges, read, purchases, catalogue, language }: {
   pledges: readonly Pledge[];
   read: (pledge: Pledge) => Promise<UpgradeHistoryResult>;
   purchases: ReadonlyMap<string, Pledge>;
+  catalogue: readonly CatalogueShip[];
   language: 'de' | 'en';
 }) {
   const t = useText();
@@ -66,10 +69,10 @@ export function ChainHistory({ pledges, read, purchases, language }: {
         <ol className="chain-history-rail" tabIndex={0} aria-label={t('Baudatum, älteste Schritte zuerst')}>
           {steps.map((step, index) => {
             const previous = steps[index - 1];
-            const price = appliedCcuPrice(step, purchases);
+            const price = appliedCcuPrice(step, purchases, catalogue);
             return <li key={index}>
               {previous && <span className="chain-history-link" aria-hidden="true">
-                <ChainLink label="" broken={previous.to !== step.from || !previous.appliedAt || !step.appliedAt} />
+                <ChainLink label="" broken={!sameModelName(previous.to, step.from, catalogue) || !previous.appliedAt || !step.appliedAt} />
               </span>}
               <article className="chain-history-card">
                 <div className="chain-history-date">
