@@ -382,8 +382,8 @@ function App() {
         hasInventory={!!lastSeen || !!acceptedInventory?.items.length} />}
       {page === 'help' && <HelpView />}
       {(page === 'market' || page === 'fleet') && <MarketView accountId={accountId || null} display={display} inventory={plannerInventory} storeCredit={storeCredit}
-        chainHistory={catalogue => <ChainHistory key={`${accountId}:${observed?.revision ?? ''}`} pledges={historyPledges}
-          read={readChainHistory} purchases={historyPurchases} catalogue={catalogue} language={display.settings.language} />}
+        chainHistory={market => <ChainHistory key={`${accountId}:${observed?.revision ?? ''}`} pledges={historyPledges}
+          read={readChainHistory} purchases={historyPurchases} market={market} display={display} />}
         buybacks={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} buybackObservation={liveBuybacks?.buybackObservation}
         fleet={page === 'fleet'} onOpenPlanner={() => { setPage('market'); window.scrollTo(0, 0); }}
         onExportContext={receiveExportContext} onExport={()=>setExportKind(exportContext?.accountId===accountId?'chain':'offers')}/>}

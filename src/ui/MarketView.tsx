@@ -46,7 +46,7 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
   accountId: string | null; display: PricingSnapshot; inventory?: PlannerInventory | null; storeCredit?: StoreCredit;
   buybacks?: readonly Buyback[]; buybackObservation?: BuybackObservation;
   onExport?:()=>void; onExportContext?:(context:ExportContext)=>void; fleet?: boolean; onOpenPlanner: () => void;
-  chainHistory?: (catalogue: readonly CatalogueShip[]) => React.ReactNode;
+  chainHistory?: (market?: MarketSnapshot) => React.ReactNode;
 }) {
   const [snapshot, setSnapshot] = useState<MarketSnapshot>();
   const display = useMemo(() => ({ ...settingsDisplay, shopPrices: snapshot?.shopPrices }), [settingsDisplay, snapshot?.shopPrices]);
@@ -215,7 +215,7 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
       <div className="market-target-grid">{targets.map((id, index) => card(ships.find(s => s.id === id), index))}</div>
     </section>
     <ChainBuilder accountId={accountId} inventory={inventory} target={activeShip} market={snapshot} display={display} onShopError={setError} onExportContext={onExportContext}
-      editor={drafts.editor(activeShip?.id)} blockedResources={blocked} reservationsReady={reservationsReady} pendingHigher={pendingHigher} exclusions={exclusions} advisors={advisors} fairOffer={fairOffer} chainHistory={chainHistory?.(ships)} />
+      editor={drafts.editor(activeShip?.id)} blockedResources={blocked} reservationsReady={reservationsReady} pendingHigher={pendingHigher} exclusions={exclusions} advisors={advisors} fairOffer={fairOffer} chainHistory={chainHistory?.(snapshot)} />
     {activeShip && snapshot && <StartBasisComparison key={`${accountId}:${activeShip.id}`} target={activeShip} pool={pool}
       base={drafts.entries[activeShip.id]?.value ? selectedStartBase(pool,drafts.entries[activeShip.id]!.value!) : null}
       market={snapshot} display={display} blocked={blocked} entries={buybacks} observation={buybackObservation}

@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import type { Pledge } from '../domain/model';
 import type { UpgradeHistoryResult, UpgradeHistoryStep } from '../domain/upgrade-history';
 import { appliedCcuPrice } from '../domain/applied-ccu-price';
-import type { CatalogueShip } from '../market/model';
+import type { MarketSnapshot } from '../market/model';
 import { sameModelName } from '../market/ship-values';
+import { historyCosts } from '../pricing/history-costs';
+import type { PricingSnapshot } from '../pricing/model';
 import { formatMinor } from '../pricing/money';
+import { ChainHistoryResult } from './ChainHistoryResult';
 import { ChainLink } from './ChainLink';
 import { useText } from './i18n';
 import './chain-history.css';
@@ -25,14 +28,16 @@ function dateLabel(at: string, language: 'de' | 'en'): string {
   return (language === 'de' ? `${day}.${month}.${year}` : `${year}-${month}-${day}`) + ` · ${hour}:${minute}`;
 }
 
-export function ChainHistory({ pledges, read, purchases, catalogue, language }: {
+export function ChainHistory({ pledges, read, purchases, market, display }: {
   pledges: readonly Pledge[];
   read: (pledge: Pledge) => Promise<UpgradeHistoryResult>;
   purchases: ReadonlyMap<string, Pledge>;
-  catalogue: readonly CatalogueShip[];
-  language: 'de' | 'en';
+  market?: MarketSnapshot;
+  display: PricingSnapshot;
 }) {
   const t = useText();
+  const catalogue = market?.catalogue?.ships ?? [];
+  const { language } = display.settings;
   const [view, setView] = useState(initial);
   useEffect(() => {
     let active = true;
@@ -61,15 +66,15 @@ export function ChainHistory({ pledges, read, purchases, catalogue, language }: 
   return <div className="chain-history" role="tabpanel" aria-label={t('Kettenbauhistorie')}>
     {status && <p className="chain-history-status" role="status">{status}{view.checked < pledges.length && <> {view.checked}/{pledges.length}</>}</p>}
     {view.entries.map(({ pledge, result }) => {
-      const steps = [...result.steps].sort(byBuildDate);
+      const steps = [...result.steps].sort(byBuildDate).map(step => ({ step, price: appliedCcuPrice(step, purchases, catalogue) }));
+      const summary = historyCosts(pledge, steps, result.partial, display, market);
       const title = pledge.ships.length === 1 ? pledge.ships[0]!.modelName : pledge.name;
       return <section key={pledge.pledgeId} className="chain-history-row" aria-label={title}>
         <header><h3>{title}</h3><span>{t(steps.length === 1 ? '{count} angewendetes CCU' : '{count} angewendete CCUs').replace('{count}', String(steps.length))}</span></header>
         {result.partial && <p className="chain-history-status">{t('RSI-Protokoll unvollständig.')}</p>}
         <ol className="chain-history-rail" tabIndex={0} aria-label={t('Baudatum, älteste Schritte zuerst')}>
-          {steps.map((step, index) => {
-            const previous = steps[index - 1];
-            const price = appliedCcuPrice(step, purchases, catalogue);
+          {steps.map(({ step, price }, index) => {
+            const previous = steps[index - 1]?.step;
             return <li key={index}>
               {previous && <span className="chain-history-link" aria-hidden="true">
                 <ChainLink label="" broken={!sameModelName(previous.to, step.from, catalogue) || !previous.appliedAt || !step.appliedAt} />
@@ -88,6 +93,10 @@ export function ChainHistory({ pledges, read, purchases, catalogue, language }: 
               </article>
             </li>;
           })}
+          <li>
+            <span className="chain-history-link" aria-hidden="true"><ChainLink label="" broken={!summary.target} /></span>
+            <ChainHistoryResult summary={summary} settings={display.settings} />
+          </li>
         </ol>
       </section>;
     })}

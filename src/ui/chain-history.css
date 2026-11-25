@@ -1,3 +1,4 @@
+.chain-history-panel { margin-top: 20px }
 .chain-history { min-width: 0; display: grid; gap: 14px }
 .chain-history-row { min-width: 0; padding: 14px 16px; border: 1px solid #2f4655; border-radius: 10px; background: #17232d }
 .chain-history-row header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px }
@@ -17,3 +18,19 @@
 .chain-history-card dt,.chain-history-date span,.chain-history-price span { color: #a9c9cf; font-size: .82em }
 .chain-history-price { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; margin-top: auto; border-top: 1px solid #2f5d65; padding-top: 8px }
 .chain-history-price strong { white-space: nowrap; font-weight: 650 }
+.chain-history-result { width: 255px; padding: 8px 12px 11px; background: radial-gradient(ellipse at 84% 2%,#346b64 0%,transparent 60%),linear-gradient(153deg,#173942,#10242e); border-color: #8ac7ad; border-left-color: #d0b777; box-shadow: inset 0 0 0 1px #d6ffdb12,inset 0 1px 13px #8be2b22b,0 0 8px #7ed8a828 }
+.chain-history-result-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 43px; margin-bottom: 7px }
+.chain-history-result-heading h3 { color: #e2f7eb; font-size: 16px; font-weight: 650 }
+.chain-history-crest { display: block; flex: 0 0 50px; width: 50px; height: 50px; color: #eccd7d; filter: drop-shadow(0 0 5px #ebce7c66) }
+.chain-history-check { color: #c2ffed; filter: drop-shadow(0 0 3px #62fbd698) }
+.chain-history-result .chain-history-route { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 7px; margin: 0 0 8px }
+.chain-history-route > div { padding: 4px 7px; border: 1px solid #326068; border-radius: 5px; background: #102c34 }
+.chain-history-route dd { margin: 0; font-size: 13px; font-weight: 600 }
+.chain-history-result .chain-history-totals { display: grid; gap: 4px; margin: auto 0 0 }
+.chain-history-totals > div { display: flex; justify-content: space-between; align-items: baseline; gap: 5px }
+.chain-history-totals dt { color: #c3d9de; font-size: 13px }
+.chain-history-totals dd { margin: 0; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums }
+.chain-history-totals .chain-history-subtotal :is(dt,dd) { color: #a9c9cf; font-size: 12px }
+.chain-history-saving { padding-top: 6px; margin-top: 1px; border-top: 1px solid #41636b }
+.chain-history-saving[data-saving="true"] dd { color: #b5ffe0; text-shadow: 0 0 9px #6bffd04d }
+.chain-history-saving small { display: inline; font-size: 12px; font-weight: 550; margin-left: 3px }

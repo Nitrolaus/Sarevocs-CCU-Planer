@@ -474,6 +474,13 @@ Object.assign(english, {
   'Baudatum, älteste Schritte zuerst': 'Build date, oldest steps first',
   'Gebaut am': 'Applied on',
   'Datum offen': 'Date unknown',
+  'Kettenergebnis': 'Chain result',
+  'Normalpreis bei RSI': 'RSI standard price',
+  'Davon belegt': 'Documented subtotal',
+  'Ersparnis': 'Savings',
+  'Preis offen': 'Price unknown',
+  'Aktueller RSI-Standardwert des Zielschiffs als Richtwert inklusive Mehrwertsteuer.': 'Estimated current RSI standard value of the target ship, including VAT.',
+  'Startschiff und angewendete CCUs mit zugeordnetem RSI-Bestellpreis.': 'Starting ship and applied CCUs with matched RSI order prices.',
 });
 export function translate(language:'de'|'en',text:string):string{
   const exports:Record<string,string>={'LOKALER EXPORT':'LOCAL EXPORT','Exportieren':'Export','Exportieren …':'Export …','Dateiformat':'File format','Inhalt':'Contents','Bestand dieses Profils':'Inventory of this profile','Aktuelle CCU-Kette':'Current CCU chain','Vorschau wird erstellt …':'Preparing preview …','Zeilen':'rows','Lokale Momentaufnahme':'Local snapshot','Währung und Mehrwertsteuersatz aus deinen Einstellungen. Offene Werte bleiben offen.':'Currency and VAT from your settings. Unknown values remain unknown.','Hinweise zum Datenstand':'Data notes','Speicherort wählen …':'Choose save location …','Wird gespeichert …':'Saving …','Export gespeichert.':'Export saved.','Export fehlgeschlagen.':'Export failed.','Zuerst eine CCU-Kette mit Startbasis anzeigen.':'First display a CCU chain with a start base.'};

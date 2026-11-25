@@ -141,19 +141,33 @@ try {
     await cell('1001').focus(); await titleContains('1001', 'gültige RSI-Sitzung');
     assert.equal(await page.locator('dialog[open]').count(), 0);
   });
-  await check('CHAIN_BUILD_HISTORY_SHOWS_BUILD_DATES_AND_ONLY_DOCUMENTED_PRICES', async () => {
-    const archive = pledge('7001', 'Upgrade - Shiv to Synthetic Alpha', [], {
-      ccus: [{ instanceId: '7001:ccu', from: 'Shiv', to: 'Synthetic Alpha', status: 'unverified', applicability: 'unverified', insurance }],
-      rsiPurchase: { status: 'documented', source: 'order', minor: 910, currency: 'EUR' },
+  await check('CHAIN_HISTORY_END_CARDS_SHOW_TOTALS_AND_SCROLL_WITH_THE_CHAIN', async () => {
+    const order = minor => ({ status: 'documented', source: 'order', minor, currency: 'EUR' });
+    const ccu = (id, from, to, minor) => pledge(id, `Upgrade - ${from} to ${to}`, [], {
+      ccus: [{ instanceId: id + ':ccu', from, to, status: 'unverified', applicability: 'unverified', insurance }],
+      rsiPurchase: order(minor),
     });
+    const archive = [ccu('7001', 'Shiv', 'Synthetic Alpha', 910), ccu('7002', 'Synthetic Alpha', 'Paladin', 455)];
     await application.evaluate((_electron, { id, revision, archive }) => {
       const fixture = globalThis.fixture;
       fixture.sessionSaved = true;
       const snapshot = fixture.views[id];
       snapshot.revision = revision;
-      snapshot.document.pledges = snapshot.document.pledges.slice(0, 1);
-      snapshot.document.scope = { kind: 'full-hangar', exportComplete: true, expectedPledges: 1, pagesExpected: 1, pagesRead: 1 };
-      fixture.inventories[id].items = [{ pledge: archive, availability: 'removed', source: 'rsi-dom-probe/1', importedAt: '2026-11-01T00:00:00Z' }];
+      snapshot.document.pledges = [snapshot.document.pledges[0], snapshot.document.pledges[2]];
+      snapshot.document.pledges[0].rsiPurchase = { status: 'documented', source: 'order', minor: 9100, currency: 'EUR' };
+      snapshot.document.scope = { kind: 'full-hangar', exportComplete: true, expectedPledges: 2, pagesExpected: 1, pagesRead: 1 };
+      fixture.inventories[id].items = archive.map(pledge => ({ pledge, availability: 'removed',
+        source: 'rsi-dom-probe/1', importedAt: '2026-11-01T00:00:00Z' }));
+      const fetchedAt = new Date().toISOString();
+      fixture.market = { schemaVersion: 1, pending: false, offers: null, errors: { catalogue: null, offers: null },
+        refreshSchedule: { hour: 17, timeZone: 'Europe/Berlin' },
+        catalogue: { fetchedAt, ships: [{ id: 999, name: 'Paladin', chassisId: null, manufacturer: 'Test',
+          manufacturerCode: 'T', status: 'unknown', focus: '', length: null }] },
+        values: { schemaVersion: 1, source: 'rsi-from-ships', fetchedAt, currency: 'USD', taxBasis: 'net',
+          items: [{ id: 999, name: 'Paladin', minor: 22750 }] } };
+      fixture.pricing = { settings: { schemaVersion: 1, language: 'de', currency: 'EUR', taxMode: 'net', vatBasisPoints: 1900 },
+        configured: true, settingsError: false, rate: { source: 'ECB', fetchedAt, sourceDate: fetchedAt.slice(0, 10),
+          usdPerEurMicros: 1190000 }, pending: false, rateError: false };
     }, { id: ids.a, revision: revisions.next, archive });
     const profiles = page.getByRole('combobox', { name: 'Lokales Kontoprofil', exact: true });
     await profiles.selectOption(ids.c);
@@ -163,14 +177,36 @@ try {
     await page.getByRole('tab', { name: 'Kettenbauhistorie', exact: true }).click();
     const target = key(ids.a, revisions.next, '1001');
     await until(async () => await requestCount(target) === 1, 'CHAIN_HISTORY_REQUEST_MISSING');
-    await resolve(target, loaded([mainSteps[1], { ...mainSteps[0], ccuPledgeId: '7001' }]));
-    const cards = page.locator('.chain-history-card');
+    await resolve(target, loaded([{ ...mainSteps[1], ccuPledgeId: '7002' }, { ...mainSteps[0], ccuPledgeId: '7001' }]));
+    const cards = page.locator('.chain-history-card:not(.chain-history-result)');
     await until(async () => await cards.count() === 2, 'CHAIN_HISTORY_CARDS_MISSING');
     assert.deepEqual(await cards.locator('time').evaluateAll(times => times.map(time => time.dateTime)), ['2026-11-01T23:30', '2026-11-02T00:15']);
     assert.match(await cards.nth(0).locator('.chain-history-price').innerText(), /9,10\s€/);
-    assert.match(await cards.nth(1).locator('.chain-history-price').innerText(), /Preis offen/);
+    const ends = page.locator('.chain-history-rail > li:last-child .chain-history-result');
+    await until(async () => /227,50\s€/.test(await ends.first().innerText()), 'CURRENT_RSI_TARGET_PRICE_MISSING');
+    const end = await ends.first().innerText();
+    assert.match(end, /Shiv[\s\S]*Paladin[\s\S]*104,65\s€[\s\S]*122,85\s€[\s\S]*54 %/);
+    assert.equal(await ends.first().locator('.chain-history-crest .chain-history-check').count(), 1);
+    const next = key(ids.a, revisions.next, '1003');
+    await until(async () => await requestCount(next) === 1, 'SECOND_CHAIN_REQUEST_MISSING');
+    await resolve(next, loaded([{ from: 'Synthetic start', to: 'Synthetic Model 1003', appliedAt: '2026-11-02 18:15' }]));
+    await until(async () => await ends.count() === 2, 'SECOND_CHAIN_RESULT_MISSING');
+    assert.match(await ends.nth(1).innerText(), /Gesamtkosten\s+Preis offen[\s\S]*Ersparnis\s+Offen/);
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    const first = page.locator('.chain-history-rail > li').first();
+    assert.equal(await first.evaluate(item => getComputedStyle(item, '::after').content), 'none');
+    assert.equal(await first.evaluate(item => getComputedStyle(item).padding), '0px');
+    await page.locator('.chain-history').screenshot({ path: path.join(folder, 'product-synthetic-history-result.png') });
+    await page.setViewportSize({ width: 760, height: 1100 });
+    const rail = page.locator('.chain-history-rail').first();
+    const scroll = await rail.evaluate(list => {
+      list.scrollLeft = list.scrollWidth;
+      const rail = list.getBoundingClientRect(), end = list.querySelector('.chain-history-result').getBoundingClientRect();
+      return { scrollLeft: list.scrollLeft, visible: end.left >= rail.left && end.right <= rail.right + 1 };
+    });
+    assert.ok(scroll.scrollLeft > 0 && scroll.visible, JSON.stringify(scroll));
     await profiles.selectOption(ids.b);
-    await until(async () => await cards.count() === 0, 'OTHER_PROFILE_HISTORY_RETAINED');
+    await until(async () => await ends.count() === 0, 'OTHER_PROFILE_HISTORY_RETAINED');
   });
   assert.equal(await application.evaluate(() => globalThis.fixture.commands.some(c => ['rsi.open', 'rsi.connect', 'rsi.authorize', 'rsi.refresh', 'import.commit'].includes(c.action))), false);
   assert.equal(await application.evaluate(() => globalThis.blockedRequests), 0); assert.deepEqual(pageErrors, []);

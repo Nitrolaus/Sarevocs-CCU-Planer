@@ -44,6 +44,8 @@ ipcMain.handle('fixture:command', async (_event, command) => {
     if(command.draft)fixture.planDrafts[key]=copy(command.draft);return {ok:true,data:copy(fixture.planDrafts[key]??null)};
   }
   if (command.action === 'state') return { ok: true, data: copy(fixture.state) };
+  if (command.action === 'market.status' && fixture.market) return { ok: true, data: copy(fixture.market) };
+  if (command.action === 'pricing.status' && fixture.pricing) return { ok: true, data: copy(fixture.pricing) };
   if (command.action === 'inventory') return { ok: true, data: copy(fixture.inventories[command.accountId]) };
   if (command.action === 'account.select') { fixture.state.selectedAccountId = command.accountId; return { ok: true, data: { selectedAccountId: command.accountId } }; }
   if (command.action === 'rsi.background') {

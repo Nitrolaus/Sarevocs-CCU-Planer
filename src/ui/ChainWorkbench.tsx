@@ -249,7 +249,7 @@ export function ChainWorkbench({accountId,inventory,target,market,display,editor
     {tabOptions.map(([key,label]) => <button key={key} role="tab" aria-selected={advisorTab===key}
       onClick={() => {endDrag();setAdvisorTab(key);}}>{t(label)}</button>)}
   </div>;
-  if (advisorTab === 'history' && chainHistory) return <section className="panel market-chain ccu-builder ccu-workbench" aria-label={t('Kettenbauhistorie')}>
+  if (advisorTab === 'history' && chainHistory) return <section className="panel ccu-builder ccu-workbench chain-history-panel" aria-label={t('Kettenbauhistorie')}>
     <h2>{t('Kettenbauhistorie')}</h2>{tabs}{chainHistory}
   </section>;
   return <section className={'panel market-chain ccu-builder ccu-workbench'+(dragVisual?' is-dragging':'')} aria-label={t('Kettenbauer')}>
