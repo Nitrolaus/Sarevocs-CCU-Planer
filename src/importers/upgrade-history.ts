@@ -1,6 +1,6 @@
 import { BrowserWindow, session } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { cookieSchema, officialCookie, type StoredCookie } from '../security/rsi-cookies';
+import { activePurchaseSessionProof, cookieSchema, officialCookie, purchaseSessionProof, type StoredCookie } from '../security/rsi-cookies';
 import { upgradeHistoryRequestSchema, upgradeHistoryResultSchema, unavailableHistory, type UpgradeHistoryResult, type PurchaseHistoryBatch } from '../domain/upgrade-history';
 import type { Pledge, RsiPurchase } from '../domain/model';
 import { readAppliedCcuPurchases, readPurchaseEvidence } from './rsi-purchases';
@@ -74,7 +74,7 @@ export function historyParserProbe(html: string): string {
   })()`;
 }
 
-type PurchaseLookup = { owner: string | null; assertActive: () => void };
+type PurchaseLookup = { owner: string | null; sessionProof?: string; assertActive: () => void };
 type Transfer = { accountId: string; abort: AbortController; timedOut: boolean; redirected?: boolean;
   purchaseLookup?: PurchaseLookup; net?: Electron.Session; parserSession?: Electron.Session; parser?: BrowserWindow };
 type Job = Transfer & { key: string; pledgeId: number; task: Promise<UpgradeHistoryResult> };
@@ -103,7 +103,7 @@ export class UpgradeHistoryReader {
   private cache = new Map<string, UpgradeHistoryResult>();
   private batches = new Map<string, BatchJob>();
   private batchCursors = new Map<string, { history: string; base: string }>();
-  private completedBatch?: { accountId: string; revision: string; data: PurchaseHistoryBatch };
+  private completedBatch?: { accountId: string; revision: string; sessionProof?: string; data: PurchaseHistoryBatch };
   private queue: Waiter[] = [];
   private active = 0;
   private stopping = false;
@@ -164,6 +164,8 @@ export class UpgradeHistoryReader {
     if (!Array.isArray(stored) || stored.length > 500) throw Error('HISTORY_COOKIES');
     const parsed = cookieSchema.array().safeParse(stored);
     if (!parsed.success || parsed.data.some(cookie => !officialCookie(cookie))) throw Error('HISTORY_COOKIES');
+    if (job.purchaseLookup?.owner === null && (!job.purchaseLookup.sessionProof ||
+        purchaseSessionProof(parsed.data) !== job.purchaseLookup.sessionProof)) throw Error('HISTORY_SESSION_CHANGED');
     const net = job.net = this.secureSession('upgrade-history-net-');
     let armed = false;
     net.webRequest.onBeforeRequest((details, callback) => {
@@ -219,6 +221,8 @@ export class UpgradeHistoryReader {
           text += decoder.decode();
         } finally { await reader.cancel().catch(() => {}); }
         const raw: unknown = JSON.parse(text);
+        // A negative result for one pledge carries no history evidence. Other pledges may still have a history.
+        if (raw && typeof raw === 'object' && 'success' in raw && raw.success === 0 && Object.keys(raw).length === 1) return null;
         if (!raw || typeof raw !== 'object' || !('success' in raw) || raw.success !== 1 || !('data' in raw) ||
             !raw.data || typeof raw.data !== 'object' || !('rendered' in raw.data) || typeof raw.data.rendered !== 'string') return unavailableHistory('unavailable');
         if (!job.parser) await this.openParser(job);
@@ -259,15 +263,29 @@ export class UpgradeHistoryReader {
     }));
     return cleanup.every(value => value.status === 'fulfilled');
   }
+  private async assertPurchaseSession(accountId: string, lookup: PurchaseLookup) {
+    if (lookup.owner === null && (!lookup.sessionProof || lookup.sessionProof !== purchaseSessionProof(await this.loadCookies(accountId)))) {
+      throw Error('HISTORY_SESSION_CHANGED');
+    }
+    lookup.assertActive();
+  }
+  private async checkPurchaseTransport(job: Transfer, net: Electron.Session) {
+    if (job.purchaseLookup?.owner === null && await activePurchaseSessionProof(net) !== job.purchaseLookup.sessionProof) {
+      throw Error('HISTORY_SESSION_CHANGED');
+    }
+    this.check(job);
+  }
   private async run(job: Job): Promise<UpgradeHistoryResult> {
     if (!await this.acquire(job)) return unavailableHistory('cancelled');
     let result = unavailableHistory('unavailable');
     try {
       const transport = await this.openTransport(job);
-      result = transport ? await transport.history(job.pledgeId) : unavailableHistory('auth-required');
+      result = transport ? (await transport.history(job.pledgeId) ?? unavailableHistory('unavailable')) : unavailableHistory('auth-required');
       if (transport && result.status === 'loaded' && job.purchaseLookup) {
         if (job.parser && !job.parser.isDestroyed()) job.parser.destroy();
+        await this.checkPurchaseTransport(job, transport.net);
         const found = await this.readPurchases(transport.net, result.steps, job.purchaseLookup.owner, () => this.check(job));
+        await this.assertPurchaseSession(job.accountId, job.purchaseLookup);
         this.check(job);
         result = withOrderPurchases(result, found);
       }
@@ -283,11 +301,15 @@ export class UpgradeHistoryReader {
 
   async readBatch(accountId: string, revision: string, candidates: PurchaseCandidates, lookup: PurchaseLookup): Promise<PurchaseHistoryBatch> {
     if (!upgradeHistoryRequestSchema.shape.accountId.safeParse(accountId).success ||
-        !upgradeHistoryRequestSchema.shape.revisionKey.safeParse(revision).success || !lookup.owner || this.stopping || this.closing.has(accountId)) return emptyBatch();
+        !upgradeHistoryRequestSchema.shape.revisionKey.safeParse(revision).success || (!lookup.owner && !lookup.sessionProof) || this.stopping || this.closing.has(accountId)) return emptyBatch();
     try { lookup.assertActive(); } catch { return emptyBatch(); }
-    if (this.completedBatch?.accountId === accountId && this.completedBatch.revision === revision) return this.completedBatch.data;
+    const cached = this.completedBatch;
+    if (cached?.accountId === accountId && cached.revision === revision && cached.sessionProof === lookup.sessionProof) {
+      try { await this.assertPurchaseSession(accountId, lookup); } catch { return emptyBatch(); }
+      return this.completedBatch === cached ? cached.data : emptyBatch();
+    }
     const previous = this.batches.get(accountId);
-    if (previous?.revision === revision) return previous.task;
+    if (previous?.revision === revision && previous.purchaseLookup?.sessionProof === lookup.sessionProof) return previous.task;
     if (previous) this.stop(previous);
     const job: BatchJob = { accountId, revision, purchaseLookup: lookup, abort: new AbortController(), timedOut: false, task: Promise.resolve(emptyBatch()) };
     this.batches.set(accountId, job);
@@ -302,20 +324,18 @@ export class UpgradeHistoryReader {
     const histories = nextCandidates(candidates.histories, id => id, cursor.history, 256);
     const bases = nextCandidates(candidates.bases, pledge => pledge.pledgeId, cursor.base, 4096);
     if (!histories.length && !bases.length) return emptyBatch();
-    let output = emptyBatch(), completed = false;
+    let output = emptyBatch(), completed = false, allCandidatesRead = true;
     try {
       const transport = await this.openTransport(job);
       if (!transport) return output;
       const deadline = Date.now() + 90_000;
-      let failures = 0;
       for (const id of histories) {
         this.check(job);
-        if (Date.now() >= deadline) break;
-        cursor.history = id;
+        if (Date.now() >= deadline) { allCandidatesRead = false; break; }
         const history = await transport.history(Number(id));
-        if (history.status === 'auth-required') return emptyBatch();
-        if (history.status !== 'loaded') { if (++failures >= 2) break; continue; }
-        failures = 0;
+        if (history && history.status !== 'loaded') return emptyBatch();
+        cursor.history = id;
+        if (!history) continue;
         if (history.confirmedEmpty || history.steps.length) output.histories[id] = history;
       }
       if (job.parser && !job.parser.isDestroyed()) job.parser.destroy();
@@ -323,6 +343,7 @@ export class UpgradeHistoryReader {
       const entries = Object.entries(output.histories);
       // Include partial rows for duplicate-ID detection. A single purchased CCU cannot belong to two ships.
       const steps = entries.flatMap(([, result]) => result.steps);
+      await this.checkPurchaseTransport(job, transport.net);
       const { bases: receipts, applied } = await this.readCombined(transport.net, bases, steps, job.purchaseLookup!.owner, () => this.check(job));
       this.check(job);
       if (bases.length) cursor.base = bases.at(-1)!.pledgeId;
@@ -339,8 +360,11 @@ export class UpgradeHistoryReader {
       this.batchCursors.set(job.accountId, cursor);
     }
     if (completed && !this.stopping && this.batches.get(job.accountId) === job && !this.closing.has(job.accountId)) {
-      try { job.purchaseLookup!.assertActive(); } catch { return emptyBatch(); }
-      this.completedBatch = { accountId: job.accountId, revision: job.revision, data: output };
+      try { await this.assertPurchaseSession(job.accountId, job.purchaseLookup!); } catch { return emptyBatch(); }
+      if (this.stopping || this.batches.get(job.accountId) !== job || this.closing.has(job.accountId)) return emptyBatch();
+      if (allCandidatesRead && histories.length === candidates.histories.length && bases.length === candidates.bases.length) {
+        this.completedBatch = { accountId: job.accountId, revision: job.revision, sessionProof: job.purchaseLookup!.sessionProof, data: output };
+      }
       return output;
     }
     return emptyBatch();

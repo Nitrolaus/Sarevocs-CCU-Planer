@@ -18,7 +18,10 @@ export const RSI_LOG_PRICE = 'RSI-Kaufprotokoll: protokollierter Wert beim Erwer
 
 export function standaloneModel(pledge: Pledge): string | undefined {
   const title = /^Standalone Ships?\s*[-–]\s*(.+)$/i.exec(pledge.name)?.[1];
-  return title?.replace(/(?:\s+(?:[-–]\s+)?(?:Warbond(?: Edition)?|Standard Edition|IAE(?: 29\d{2})?(?: Edition)?))+$/i, '');
+  const model = title?.replace(/(?:\s+(?:[-–]\s+)?(?:Warbond(?: Edition)?|Standard Edition|IAE(?: 29\d{2})?(?: Edition)?))+$/i, '');
+  // This single-ship order line can include a paint. Keep the original title for the billing match.
+  const parts = model?.split(/\s+plus\s+/i);
+  return pledge.ships.length === 1 && !pledge.ccus.length && parts?.length === 2 && /^[^+\r\n]+\s+Paint$/i.test(parts[1]!) ? parts[0] : model;
 }
 
 export function sameStandaloneShip(pledge: Pledge, catalogue: readonly CatalogueShip[] = []): boolean {

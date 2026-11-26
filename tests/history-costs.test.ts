@@ -61,3 +61,21 @@ test('unknown, duplicated and unallocated costs leave the total open', () => {
   assert.equal(noRate.paid, null);
   assert.equal(noRate.normal, null);
 });
+
+test('Einzelschiff mit Lackierung und vollständig belegtem Subscriber-Upgrade zeigt die Summe beider Bestellpositionen', () => {
+  const { pledge, display } = fixture();
+  const order = (minor: number) => ({status:'documented', source:'order', currency:'EUR', minor} as const);
+  display.settings.currency = 'EUR';
+  pledge.name = 'Standalone Ships - MDC plus Icefront Camo Paint';
+  pledge.ships[0]!.modelName = 'Sabre Firebird';
+  pledge.rsiPurchase = order(4125);
+  const step = {from:'MDC', to:'Sabre Firebird Imperator Subscribers Edition', appliedAt:'2026-02-03 09:17', ccuPledgeId:'1002'};
+  const entries = [{step, price:order(9980)}];
+  assert.equal(historyCosts(pledge, entries, false, display).paid, 14105);
+  assert.equal(historyCosts(pledge, [{step}], false, display).paid, null);
+  for (const name of ['Package - MDC plus Icefront Camo Paint', 'Standalone Ships - Other plus Icefront Camo Paint',
+    'Standalone Ships - MDC plus Another Ship plus Icefront Camo Paint', 'Standalone Ships - MDC plus Another Ship']) {
+    assert.equal(historyCosts({...pledge, name}, entries, false, display).paid, null);
+  }
+  assert.equal(historyCosts({...pledge, ships:[...pledge.ships, {...pledge.ships[0]!,childId:'2'}]}, entries, false, display).paid, null);
+});

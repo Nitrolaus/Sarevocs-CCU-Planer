@@ -33,7 +33,7 @@ const order = (id: string, name: string, total: string, discount = '€0.00 EUR'
   <div class="payment-wrapper"><div class="right-section"><strong>Additional Discount:</strong><span>${discount}</span><br>
   <strong>Credits used:</strong><span>€5.00 EUR</span></div><div class="address">SYNTHETIC_ADDRESS</div></div></li>`;
 
-function fakeTransport(failOrders = false, incompleteLog = false) {
+function fakeTransport(failOrders = false, incompleteLog = false, rotateSession = false) {
   type Filter = (details: { url: string; method: string }, reply: (response: {cancel: boolean}) => void) => void;
   let guard: Filter, cleared = false;
   const reads: string[] = [];
@@ -43,7 +43,7 @@ function fakeTransport(failOrders = false, incompleteLog = false) {
     return allow;
   };
   const transport = {
-    cookies: { set: async () => {} },
+    cookies: { set: async () => {}, get: async () => [{...cookie, value:rotateSession && reads.length ? 'SYNTHETIC_ROTATED' : token}] },
     webRequest: { onBeforeRequest: (listener: Filter) => { guard = listener; }, onBeforeRedirect: () => {} },
     clearStorageData: async () => { cleared = true; }, clearCache: async () => {}, closeAllConnections: async () => {},
     fetch: async (url: string, opts: RequestInit) => {
@@ -128,6 +128,10 @@ void app.whenReady().then(async () => {
     for (const id of ['701','702','703']) assert.equal(withoutHandle.has(id), false);
     for (const id of ['706','707']) assert.deepEqual(withoutHandle.get(id), recorded(3724,'EUR','order'));
     for (const id of ['704','708']) assert.deepEqual(withoutHandle.get(id), {status:'excluded'});
+    const rotated = fakeTransport(false, false, true);
+    const discarded = await readPurchaseEvidence(active, [pledges[0]!], [step], null, () => {}, rotated.create);
+    assert.equal(discarded.applied.size + discarded.bases.size, 0);
+    assert.equal(rotated.cleaned(), true);
     const interrupted = fakeTransport(true);
     const problems: string[] = [];
     assert.deepEqual((await readPurchases(active, pledges, owner, () => {}, interrupted.create, problem => problems.push(problem))).get('700'), recorded(8800,'USD','log'));

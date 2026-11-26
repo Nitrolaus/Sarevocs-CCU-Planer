@@ -157,21 +157,22 @@ aside nav button[data-menu="help"]{--symbol-ink:#c6a8ff}
   background:linear-gradient(145deg,color-mix(in srgb,var(--symbol-ink) 20%,#18222d),#18222d)}
 .sidebar-menu-icon svg{width:17px;height:17px}
 aside nav button.active .sidebar-menu-icon{background:linear-gradient(145deg,color-mix(in srgb,var(--symbol-ink) 28%,#18222d),#18222d)}
-#root .sidebar-referral{display:grid;justify-items:center;gap:2px;width:100%;margin:12px 0 0;padding:3px 4px;border:0;background:transparent;color:#adc6d0;box-shadow:none;font-size:11px;font-weight:400;line-height:1.35}
-#root .sidebar-referral::after{content:none}
-.sidebar-referral strong{font:600 12px 'Segoe UI',Arial,sans-serif;letter-spacing:.06em;color:#a1efdd}
+#root button.sidebar-referral{display:grid;justify-items:center;gap:3px;width:100%;margin:12px 0 0;padding:5px 4px;color:#adc6d0;font-size:11px;font-weight:400;line-height:1.35}
+#root button.sidebar-referral,#root .sidebar-support button{border:0;background:none;box-shadow:none}
+#root button.sidebar-referral::after,#root .sidebar-support button::after{content:none}
+#root button.sidebar-referral:is(:hover,:active,:focus-visible),#root .sidebar-support button:is(:hover,:active,:focus-visible){box-shadow:none}
+.sidebar-referral strong{font:650 15px 'Segoe UI',Arial,sans-serif;letter-spacing:.06em;color:#a1efdd}
 .sidebar-referral:hover strong,.sidebar-referral:focus-visible strong{text-decoration:underline;text-underline-offset:3px}
-.sidebar-support{display:flex;justify-content:center;gap:8px;margin-top:6px}
+.sidebar-support{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;margin-top:6px}
 .sidebar-support button{
-  display:grid;place-items:center;flex:0 1 84px;min-width:0;min-height:38px;margin:0;padding:4px 7px;
-  border:1px solid transparent;
+  display:grid;place-items:center;min-width:0;min-height:36px;margin:0;padding:4px 7px;
   font-size:18px;font-weight:700;line-height:1;white-space:nowrap;
 }
-.sidebar-support img{display:block;max-width:100%;object-fit:contain;opacity:.66}
+.sidebar-support img{display:block;max-width:100%;object-fit:contain;opacity:.9}
 .sidebar-support-text{display:none}
 .sidebar-support button:hover img,.sidebar-support button:focus-visible img{opacity:1}
 .sidebar-support-error{font-size:12px;color:#f4bbbc;margin-top:6px}
-@media(max-height:880px){aside nav{margin-top:30px}aside footer{padding-top:18px}#root .sidebar-referral{margin-top:8px}}
+@media(max-height:880px){aside nav{margin-top:30px}aside footer{padding-top:18px}#root button.sidebar-referral{margin-top:8px}}
 @media(prefers-reduced-motion:reduce){
   #root :is(button, summary, .help-topics a){transition:none}
 }

@@ -178,7 +178,8 @@ async function start() {
   win.on('closed', cancelConciergeReads);
   if(process.platform==='win32'&&app.isPackaged)win.setAppDetails(taskbarDetails(process.execPath,APP_NAME));
   selectedAccountId = lastSeen.selected(store.accounts());
-  background = new BackgroundInventory(lastSeen, id => store.account(id), id => login.resume(id, win), id => login.close(id));
+  background = new BackgroundInventory(lastSeen, id => store.account(id), id => login.resume(id, win), id => login.close(id),
+    candidate => login.purchaseSessionFor(candidate));
   inventoryRefresh = new InventoryRefresh(id => background.refresh(id), () => shuttingDown ? null : selectedAccountId, sessionBusy);
   desktop!.attachWindow(win);
   win.on('closed', () => { mainWindow = null; });
@@ -402,15 +403,21 @@ async function start() {
           };
           const view = background.snapshot(id).view;
           data = { histories: {}, basePurchases: {} };
-          if (!current() || !mayReadObservedRevision(selectedAccountId, store.inventory(id), view, cmd) ||
-              view.document.account.identityKind !== 'rsi-handle') break;
+          if (!current() || !mayReadObservedRevision(selectedAccountId, store.inventory(id), view, cmd)) break;
+          const identity = view.document.account;
+          const owner = identity.identityKind === 'rsi-handle' ? identity.reference : null;
+          const sessionProof = !owner && identity.reference === 'rsi-local:' + id ? background.purchaseSession(id, cmd.revision) : undefined;
+          if (!owner && !sessionProof) break;
           const candidates = purchaseCandidates(view, market.snapshot().catalogue?.ships ?? []);
           const result = await upgradeHistory.readBatch(id, cmd.revision, candidates, {
-            owner: view.document.account.reference,
-            assertActive() { if (!current()) throw Error('HISTORY_CONTEXT_CHANGED'); },
+            owner, sessionProof,
+            assertActive() {
+              if (!current() || sessionProof && background.purchaseSession(id, cmd.revision) !== sessionProof) throw Error('HISTORY_CONTEXT_CHANGED');
+            },
           });
-          if (!current() || !mayReadObservedRevision(selectedAccountId, store.inventory(id), background.snapshot(id).view, cmd)) break;
-          background.rememberPurchaseHistories(id, cmd.revision, result.histories, result.basePurchases);
+          if (!current() || sessionProof && background.purchaseSession(id, cmd.revision) !== sessionProof ||
+              !mayReadObservedRevision(selectedAccountId, store.inventory(id), background.snapshot(id).view, cmd)) break;
+          if (owner) background.rememberPurchaseHistories(id, cmd.revision, result.histories, result.basePurchases);
           data = result;
           break;
         }
@@ -425,13 +432,16 @@ async function start() {
           const saved = view?.appliedPurchaseHistories?.[cmd.pledgeId];
           if (saved) { data = saved; break; }
           const identity = view?.document.account;
+          const sessionProof = cmd.lookupPurchases && identity?.identityKind === 'manual-reference' &&
+            identity.reference === 'rsi-local:' + cmd.accountId ? background.purchaseSession(cmd.accountId, cmd.revision) : undefined;
+          const purchaseCurrent = () => current() && (!sessionProof || background.purchaseSession(cmd.accountId, cmd.revision) === sessionProof);
           const purchaseLookup = cmd.lookupPurchases ? {
-            owner: identity?.identityKind === 'rsi-handle' ? identity.reference : null,
-            assertActive() { if (!current()) throw new Error('HISTORY_CONTEXT_CHANGED'); },
+            owner: identity?.identityKind === 'rsi-handle' ? identity.reference : null, sessionProof,
+            assertActive() { if (!purchaseCurrent()) throw new Error('HISTORY_CONTEXT_CHANGED'); },
           } : undefined;
           const result = await upgradeHistory.read(cmd.accountId, Number(cmd.pledgeId), cmd.revision, purchaseLookup);
-          if (!permitted()) { data = { status: 'cancelled', steps: [], partial: false }; break; }
-          if (cmd.lookupPurchases) background.rememberAppliedPurchases(cmd.accountId, cmd.revision, cmd.pledgeId, result);
+          if (!permitted() || !purchaseCurrent()) { data = { status: 'cancelled', steps: [], partial: false }; break; }
+          if (cmd.lookupPurchases && purchaseLookup?.owner) background.rememberAppliedPurchases(cmd.accountId, cmd.revision, cmd.pledgeId, result);
           data = result;
           break;
         }

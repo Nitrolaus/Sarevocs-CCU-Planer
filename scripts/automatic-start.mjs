@@ -80,6 +80,7 @@ try {
   assert.equal(initial.ok, true); assert.equal(initial.data.status, 'connecting');
   assert.equal(initial.data.revision, seed.revisions[a.id]); assert.equal(initial.data.view.accountId, a.id);
   assert.equal(initial.data.view.document.pledges[0].name, 'SYNTHETIC_CACHED_A PLEDGE 0');
+  await page.getByRole('button', { name: 'Schiffe & Fahrzeuge', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('tbody')?.textContent?.includes('SYNTHETIC_CACHED_A'));
   assert.equal((await inspect()).resume[0].settled, false, 'Cache must be available before resume settles');
   assert.equal((await inspect()).connect.length, 0, 'Startup must not start interactive authorization');

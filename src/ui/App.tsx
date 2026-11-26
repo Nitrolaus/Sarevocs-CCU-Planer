@@ -218,9 +218,12 @@ function App() {
     Date.parse(acceptedInventory.account.lastComplete ?? '') || 0) ?? 0;
   const observed = account?.mode === 'real' && lastSeen?.accountId === accountId && Date.parse(lastSeen.observedAt) > latestAcceptedAt ? lastSeen : null;
   const observedRevision = observed?.revision;
-  const purchaseOwner = observed?.document.account.identityKind === 'rsi-handle';
+  const purchaseIdentity = observed?.document.account;
+  const purchaseProfileMatches = purchaseIdentity?.identityKind === 'rsi-handle' ||
+    purchaseIdentity?.identityKind === 'manual-reference' && purchaseIdentity.reference === 'rsi-local:' + accountId;
+  const purchaseTableVisible = page === 'inventory' && filter !== 'Buy Back' && filter !== 'Loaner & Beiboote';
   useEffect(() => {
-    if (page !== 'inventory' || backgroundStatus !== 'connected' || !observedRevision || !purchaseOwner) return;
+    if (!purchaseTableVisible || backgroundStatus !== 'connected' || !observedRevision || !purchaseProfileMatches) return;
     const revision = observedRevision, request = accountId + ':' + revision, epoch = selectionEpoch.current;
     if (request === purchaseRequest.current) return;
     purchaseRequest.current = request;
@@ -230,7 +233,7 @@ function App() {
     }).catch(() => {
       if (current(accountId, epoch) && knownRevision.current === revision) setPurchaseBatch(undefined);
     });
-  },[accountId,backgroundStatus,observedRevision,page,purchaseOwner]);
+  },[accountId,backgroundStatus,observedRevision,purchaseTableVisible,purchaseProfileMatches]);
   const currentPurchaseBatch = purchaseBatch?.accountId === accountId && purchaseBatch.revision === observedRevision ? purchaseBatch : undefined;
   const purchaseEvidence = currentPurchaseBatch?.result;
   const observedPledges = useMemo(() => (observed?.document.pledges ?? []).map(pledge => {
@@ -479,7 +482,7 @@ function App() {
               onKeyDown={event=>{if(event.key==='Escape'&&inventoryQuery){event.preventDefault();clearInventorySearch();}}}/>
             <button type="button" className="inventory-search-clear" aria-label={t('Suche löschen')} disabled={!inventoryQuery} onClick={clearInventorySearch}>×</button>
           </div>
-          {currentPurchaseBatch&&!purchaseEvidence&&<span role="status" className="inventory-search-count">{t('Kaufpreise werden geprüft …')}</span>}
+          {purchaseTableVisible&&currentPurchaseBatch&&!purchaseEvidence&&<span role="status" className="inventory-search-count">{t('Kaufpreise werden geprüft …')}</span>}
           <output htmlFor="inventory-search-input" aria-live="polite" className="inventory-search-count">{t(inventoryCount.total===1?'{shown} von {total} Eintrag':'{shown} von {total} Einträgen')
             .replace('{shown}', inventoryCount.shown.toLocaleString(display.settings.language))
             .replace('{total}', inventoryCount.total.toLocaleString(display.settings.language))}</output>

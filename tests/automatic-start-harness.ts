@@ -5,6 +5,7 @@ import { InventoryStore } from '../src/storage/database';
 import { LastSeenStore } from '../src/storage/last-seen';
 import { parseImport } from '../src/importers/files';
 import type { Account, ImportCandidate } from '../src/domain/model';
+import { DEFAULT_DISPLAY_SETTINGS, PricingService } from '../src/pricing/service';
 import { demoDocument } from './fixtures';
 
 /** Test-only module aliased over importers/rsi while bundling the actual main entry point. */
@@ -27,13 +28,19 @@ function candidate(account: Account, marker: string): ImportCandidate {
   document.dataMode = 'real';
   document.account = { reference: `rsi-local:${account.id}`, identityKind: 'manual-reference' };
   document.scope = { kind: 'partial', exportComplete: false, expectedPledges: null, pagesExpected: null, pagesRead: 1 };
-  document.pledges.forEach((pledge, index) => { pledge.name = `${marker} PLEDGE ${index}`; });
+  document.pledges.forEach((pledge, index) => {
+    pledge.name = `${marker} PLEDGE ${index}`;
+    // The inventory table shows the ship model as its row label.
+    pledge.ships.forEach(ship => { ship.modelName = `${marker} ${ship.modelName}`; });
+  });
   const result = parseImport(JSON.stringify(document)); result.adapter = 'rsi-dom-probe/1';
   return result;
 }
 
 export async function seedAutomaticStart(dataRoot: string, wasmFile: string): Promise<AutomaticSeed> {
   const data = path.join(dataRoot, 'Daten');
+  const pricing = new PricingService(path.join(data, 'Anzeige'), async () => { throw new Error('Network disabled in startup fixture'); });
+  try { pricing.save(DEFAULT_DISPLAY_SETTINGS); } finally { pricing.close(); }
   const store = await InventoryStore.open(path.join(data, 'inventory.sqlite'), fs.readFileSync(wasmFile));
   try {
     const accounts = [store.createAccount('SYNTHETIC PROFILE A', 'real'), store.createAccount('SYNTHETIC PROFILE B', 'real')];
@@ -117,6 +124,7 @@ export class AutomaticControl {
 declare global { var ccuAutomaticStart: AutomaticControl; }
 export function installAutomaticFixture(seed: AutomaticSeed) { globalThis.ccuAutomaticStart = new AutomaticControl(seed); }
 export class RsiLogin {
+  purchaseSessionFor() { return undefined; }
   constructor(..._ignored: unknown[]) { if (!globalThis.ccuAutomaticStart) throw new Error('Synthetic fixture must be installed before main'); }
   resume(id: string, _parent: BrowserWindow) { return globalThis.ccuAutomaticStart.resume(id); }
   connect(id: string, _parent: BrowserWindow, _remember: boolean, options: { hideHangar?: boolean; signal?: AbortSignal } = {}) {

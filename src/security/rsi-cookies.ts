@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHmac, randomBytes } from 'node:crypto';
 export const cookieSchema = z.object({ name: z.string().min(1).max(1024), value: z.string().max(65536),
   domain: z.string().max(255), path: z.string().max(2048), secure: z.literal(true), httpOnly: z.boolean(),
   hostOnly: z.boolean(), session: z.boolean(), expirationDate: z.number().finite().optional(),
@@ -23,4 +24,17 @@ export function captureRsiCookie(cookie: CookieInput): StoredCookie | null {
 }
 export function hasAuthenticationCookie(cookies: readonly CookieInput[]) {
   return cookies.some(c => officialCookie(c) && isAuthenticationCookieName(c.name) && c.value.length > 0);
+}
+
+const processKey = randomBytes(32);
+/** Ephemeral comparison of the authentication values and their scope, never a stored identity. */
+export function purchaseSessionProof(cookies: readonly StoredCookie[]): string | undefined {
+  const auth = cookies.filter(cookie => isAuthenticationCookieName(cookie.name));
+  if (!auth.length || auth.some(cookie => !officialCookie(cookie) || !cookie.value)) return;
+  const scoped = auth.map(c => JSON.stringify([c.name, c.domain, c.hostOnly, c.path, c.value])).sort();
+  return createHmac('sha256', processKey).update(JSON.stringify(scoped)).digest('hex');
+}
+export async function activePurchaseSessionProof(session: Electron.Session): Promise<string | undefined> {
+  const cookies = (await session.cookies.get({})).map(captureRsiCookie).filter(cookie => cookie !== null);
+  return purchaseSessionProof(cookies);
 }

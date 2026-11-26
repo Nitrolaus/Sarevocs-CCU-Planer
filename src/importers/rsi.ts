@@ -4,7 +4,7 @@ import { allowedRsiNavigation, evaluateRsiSessionRequest, insecureRsiTransport, 
 import { id as referenceSchema, UserError, type ImportCandidate } from '../domain/model';
 import { HangarPageError, readHangarPages, type HangarRefreshProgress } from './hangar-read';
 import { SessionVault, type StoredCookie } from '../security/session-vault';
-import { captureRsiCookie, hasAuthenticationCookie, isAuthenticationCookieName } from '../security/rsi-cookies';
+import { captureRsiCookie, hasAuthenticationCookie, isAuthenticationCookieName, purchaseSessionProof } from '../security/rsi-cookies';
 import { isDeepStrictEqual } from 'node:util';
 import { connectionResource, connectionTarget, diagnosticLabel, networkErrorName, protectNavigationWarnings, HANGAR_OBSERVATIONS, type ConnectionEvent, type DiagnosticSink } from '../diagnostics/connection';
 import { RSI_PAGE_PROBE, RSI_CONNECTION_PROBE, RSI_HANDLE_PROBE, rsiFetchPageProbe } from './rsi-page';
@@ -41,6 +41,7 @@ export class RsiLogin {
   private windows = new Map<string, BrowserWindow>();
   private statuses = new Map<string, LoginStatus>();
   private frozen = new Set<string>();
+  private observedPurchaseSessions = new WeakMap<ImportCandidate, string>();
   private connecting = new Set<string>();
   private attempts = new Map<string, ConnectionAttempt>();
   private sessions = new Map<string, RsiSession>();
@@ -69,6 +70,7 @@ export class RsiLogin {
     return (await isolated.cookies.get({})).map(captureRsiCookie).filter((c): c is StoredCookie => c !== null);
   }
   status(accountId: string): LoginStatus { return this.statuses.get(accountId) ?? { state: 'closed', message: 'Noch keine RSI-Anmeldung geprüft.' }; }
+  purchaseSessionFor(candidate: ImportCandidate) { return this.observedPurchaseSessions.get(candidate); }
   private async cancelRestore(accountId: string) {
     const restore = this.restores.get(accountId);
     if (!restore) return;
@@ -628,6 +630,12 @@ export class RsiLogin {
       } catch { /* An optional rank never invalidates an otherwise successful hangar read. */ }
     }
     checkWindow();
+    if (manualReference && hasAuthenticationCookie(snapshot)) {
+      const latest = await this.cookies(active.session).catch(() => []);
+      checkWindow();
+      const proof = purchaseSessionProof(snapshot);
+      if (proof && proof === purchaseSessionProof(latest)) this.observedPurchaseSessions.set(candidate, proof);
+    }
     this.frozen.add(accountId);
     this.statuses.set(accountId, { state: 'page-ready', message: 'Hangar gelesen. Vorschau vor der lokalen Übernahme prüfen.' });
     this.record({ event: 'hangar-observation', target: 'hangar', resource: 'mainFrame', observation: 'preview-ready' });

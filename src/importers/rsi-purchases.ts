@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pledge, RsiPurchase } from '../domain/model';
 import type { UpgradeHistoryStep } from '../domain/upgrade-history';
 import { RSI_ORIGIN } from '../main/policy';
-import { captureRsiCookie, isAuthenticationCookieName } from '../security/rsi-cookies';
+import { activePurchaseSessionProof, captureRsiCookie, isAuthenticationCookieName, purchaseSessionProof } from '../security/rsi-cookies';
 import { appliedPurchaseMatches, batchPurchasePrices, purchaseMatches, purchaseParserProbe, type PurchaseLogRow, type PurchaseOrder } from './rsi-purchase-data';
 
 export const PURCHASE_LOG_URL = RSI_ORIGIN + '/api/account/pledgeLog';
@@ -71,6 +71,7 @@ export async function readPurchaseEvidence(active: Session, pledges: readonly Pl
 
   const log: PurchaseLogRow[] = [], orders: PurchaseOrder[] = [];
   let logComplete = false;
+  let expectedSession: string | undefined;
   let phase: PurchaseReadProblem = 'purchase-log-unavailable';
   try {
     const scoped = await Promise.all([active.cookies.get({ url: PURCHASE_LOG_URL }), active.cookies.get({ url: purchaseOrdersUrl(1) })]);
@@ -82,6 +83,7 @@ export async function readPurchaseEvidence(active: Session, pledges: readonly Pl
       if (captured) cookies.set(JSON.stringify([captured.name, captured.domain, captured.path]), captured);
     }
     const tokens = [...new Set(scoped[0].filter(c => c.name === 'Rsi-Token').map(c => c.value))];
+    if (owner === null) expectedSession = purchaseSessionProof([...cookies.values()]);
     const token = tokens.length === 1 ? tokens[0] : undefined;
     if (!token || token.length > 65_536 || !/^[\x21-\x7e]+$/.test(token)) { report(phase); return empty; }
 
@@ -179,6 +181,10 @@ export async function readPurchaseEvidence(active: Session, pledges: readonly Pl
     clearTimeout(timer);
     clearInterval(watch);
     stop();
+    if (owner === null && transport) {
+      const current = await activePurchaseSessionProof(transport).catch(() => undefined);
+      if (!expectedSession || current !== expectedSession) windowChanged = true;
+    }
     const partitions = [transport, parserSession].filter(partition => partition !== undefined);
     const cleaned = await Promise.allSettled(partitions.flatMap(partition => [partition.closeAllConnections(), partition.clearStorageData(), partition.clearCache()]));
     if (cleaned.some(result => result.status === 'rejected')) windowChanged = true;

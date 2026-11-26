@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="$(var.ProductCode)" Name="Sarevoc´s CCU Planer"
-           Codepage="65001" Manufacturer="Sarevoc" Language="1031" Version="0.3.125" UpgradeCode="{6458FCD5-BD95-42AB-86D7-9C136FA4439D}">
-    <Package SummaryCodepage="1252" Description="Sarevocs CCU Planer" Comments="Sarevocs CCU Planer 0.3.125" InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64"/>
+           Codepage="65001" Manufacturer="Sarevoc" Language="1031" Version="0.3.126" UpgradeCode="{6458FCD5-BD95-42AB-86D7-9C136FA4439D}">
+    <Package SummaryCodepage="1252" Description="Sarevocs CCU Planer" Comments="Sarevocs CCU Planer 0.3.126" InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64"/>
     <MajorUpgrade Schedule="afterInstallFinalize" MigrateFeatures="no"
                   DowngradeErrorMessage="Eine neuere Version des CCU-Planers ist bereits installiert."/>
     <MediaTemplate EmbedCab="yes" CompressionLevel="mszip"/>

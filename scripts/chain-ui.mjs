@@ -61,12 +61,27 @@ try{
     const support=page.locator('.sidebar-support');
     const kofi=support.getByRole('button',{name:'Sarevoc auf Ko-fi unterstützen'});
     const paypal=support.getByRole('button',{name:'Sarevoc über PayPal unterstützen'});
+    const referral=page.getByRole('button',{name:/Star-Citizen-Referral-Code.*STAR-7J4R-YRSX/});
     assert.equal(await support.getByRole('button').count(),2);
     assert.equal(await kofi.locator('img').evaluate(async img=>{await img.decode();return img.naturalWidth>0;}),true);
     assert.equal(await app.evaluate(()=>globalThis.fixture.commands.some(command=>['kofi','paypal'].includes(command.resource))),false);
     for(const size of [{width:1440,height:850},{width:1024,height:700}]){
       await page.setViewportSize(size);
       assert.equal(await page.locator('aside').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+      const layout=await page.locator('aside').evaluate(sidebar=>{
+        const nav=sidebar.querySelector('nav button').getBoundingClientRect();
+        const code=sidebar.querySelector('.sidebar-referral'),support=sidebar.querySelector('.sidebar-support');
+        const rect=el=>el.getBoundingClientRect();
+        const aligns=el=>Math.abs(rect(el).left-nav.left)<=1&&Math.abs(rect(el).right-nav.right)<=1;
+        const [left,right]=support.querySelectorAll('button');
+        const plain=[code,left,right].every(el=>{
+          const style=getComputedStyle(el);
+          return style.borderLeftWidth==='0px'&&style.backgroundImage==='none'&&getComputedStyle(el,'::after').content==='none';
+        });
+        return {aligned:aligns(code)&&aligns(support),equal:Math.abs(rect(left).width-rect(right).width)<=1,plain,
+          codeSize:parseFloat(getComputedStyle(code.querySelector('strong')).fontSize)};
+      });
+      assert.deepEqual(layout,{aligned:true,equal:true,plain:true,codeSize:15});
     }
     const active=nav.getByRole('button',{name:/Bestand/});
     assert.match(await active.evaluate(el=>getComputedStyle(el).backgroundImage),/linear-gradient/);
@@ -85,7 +100,6 @@ try{
     await active.focus();
     await page.keyboard.press('Tab');
     assert.equal(await nav.getByRole('button',{name:'CCU-Planer',exact:true}).evaluate(el=>el.matches(':focus-visible')&&getComputedStyle(el).outlineStyle==='solid'),true);
-    const referral=page.getByRole('button',{name:/Star-Citizen-Referral-Code.*STAR-7J4R-YRSX/});
     await referral.waitFor();
     assert.ok((await referral.boundingBox()).y+(await referral.boundingBox()).height<=(await kofi.boundingBox()).y);
     await referral.click();

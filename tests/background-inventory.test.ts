@@ -115,6 +115,21 @@ test('Live beobachteter Concierge-Rang bleibt beim gelesenen Profil im Arbeitssp
   assert.equal(coordinator.conciergeRank(account.id), undefined);
 });
 
+test('Der Sitzungsnachweis gehört ausschließlich zur aktuell verbundenen Beobachtung im Hauptprozess', async () => {
+  const { account, cache, lookup } = setup();
+  const observed = candidate(account), proof = 'SYNTHETIC_PROOF_ONLY';
+  const coordinator = new BackgroundInventory(cache, lookup, async () => null, async () => {}, c => c === observed ? proof : undefined);
+  const view = coordinator.observe(account.id, observed);
+  assert.equal(coordinator.purchaseSession(account.id, view.revision), proof);
+  assert.equal(coordinator.purchaseSession(account.id, randomUUID()), undefined);
+  assert.ok(!JSON.stringify(coordinator.snapshot(account.id)).includes(proof));
+  assert.ok(!fs.readFileSync(path.join(cache.directory, account.id + '.json'), 'utf8').includes(proof));
+  await coordinator.cancel(account.id);
+  assert.equal(coordinator.purchaseSession(account.id, view.revision), undefined);
+  const other = coordinator.observe(account.id, structuredClone(observed));
+  assert.equal(coordinator.purchaseSession(account.id, other.revision), undefined);
+});
+
 test('Abbruch wartet auf Close und Restore; verspätete Completion schreibt nichts und erzeugt keine neue Ansicht', { timeout: 5000 }, async () => {
   const { account, cache, lookup } = setup(), pending = deferred<ImportCandidate | null>(), closing = deferred<void>();
   const saved = cache.save(account, candidate(account)); cache.writes = 0;

@@ -8,11 +8,11 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.125 Alpha** ist als kostenlose Testversion verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.126 Alpha** ist als kostenlose Testversion verfügbar.
 
-[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.125-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.126-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
-Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update zeigt der Installer den registrierten Ordner. Du kannst den Ordner über „Durchsuchen …“ ändern. Der direkte Wechsel vom CAB-Installer 0.3.117 ist in der Windows-Sandbox geprüft.
+Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update von MSI 0.3.121 bis 0.3.125 übernimmt Windows Installer den registrierten Ordner. Die Release-Anleitung zeigt den Update-Befehl und erklärt, wie du das ursprünglich verwendete MSI als Quelle bereithältst.
 
 #### Bestand und Angebote
 
@@ -50,7 +50,7 @@ Beim Download kann Windows die Internetherkunft der Datei kennzeichnen. Diese He
 
 ### Offizieller Download
 
-Ich veröffentliche den offiziellen Installer ausschließlich hier auf GitHub unter **Nitrolaus/Sarevocs-CCU-Planer**. Downloads auf anderen Seiten werden von den jeweiligen Anbietern bereitgestellt. Die `SHA256.txt` zur jeweiligen Version hilft dir zu prüfen, ob deine Datei mit meinem GitHub-Download übereinstimmt. [Offizielle Downloads](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases)
+Ich veröffentliche den offiziellen Installer ausschließlich hier auf GitHub unter **Nitrolaus/Sarevocs-CCU-Planer**. Downloads auf anderen Seiten werden von den jeweiligen Anbietern bereitgestellt. Die SHA-256-Prüfsumme auf der Release-Seite hilft dir zu prüfen, ob deine Datei mit meinem GitHub-Download übereinstimmt. [Offizielle Downloads](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases)
 
 ### Ausblick
 
@@ -68,11 +68,11 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.125 Alpha** is available as a free test release.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.126 Alpha** is available as a free test release.
 
-[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.125-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.126-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
-Choose the program folder when installing for the first time. During an update, the installer shows the registered folder. Use Browse to choose a different folder. The direct upgrade from the 0.3.117 CAB installer was tested in Windows Sandbox.
+Choose the program folder when installing for the first time. When updating from MSI 0.3.121 through 0.3.125, Windows Installer reuses the registered folder. See the release instructions for the update command and how to make the original MSI available as a source.
 
 #### Inventory and offers
 
@@ -110,7 +110,7 @@ Windows can mark a downloaded file as coming from the internet. This is called *
 
 ### Official download
 
-I publish the official installer exclusively here on GitHub under **Nitrolaus/Sarevocs-CCU-Planer**. Downloads on other sites are provided by their respective operators. Compare your file’s SHA-256 checksum with the value in `SHA256.txt` from the same release to check that it matches my GitHub download. [Official downloads](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases)
+I publish the official installer exclusively here on GitHub under **Nitrolaus/Sarevocs-CCU-Planer**. Downloads on other sites are provided by their respective operators. Compare your file’s SHA-256 checksum with the value on the release page to check that it matches my GitHub download. [Official downloads](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases)
 
 ### What’s planned
 

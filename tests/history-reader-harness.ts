@@ -9,7 +9,7 @@ import https from 'node:https';
 import type { Socket } from 'node:net';
 import { UpgradeHistoryReader, UPGRADE_HISTORY_URL, MAX_UPGRADE_HISTORY_BYTES, historyParserProbe } from '../src/importers/upgrade-history';
 import { upgradeHistoryResultSchema } from '../src/domain/upgrade-history';
-import type { StoredCookie } from '../src/security/rsi-cookies';
+import { purchaseSessionProof, type StoredCookie } from '../src/security/rsi-cookies';
 import type { RsiPurchase } from '../src/domain/model';
 import { basePledge } from './fixtures';
 
@@ -42,6 +42,7 @@ const batchHtml = new Map([
 const receipt = (minor: number): RsiPurchase => ({status:'documented', source:'order', currency:'EUR', minor});
 const emptyBatch = {histories:{}, basePurchases:{}};
 let phase = 'INIT', scenario = 'success', served = 0, verifiedRequests = 0, requestDeadlineElapsedMs = 0, responseGate: ReturnType<typeof gate> | undefined;
+let rotateHistorySession = false;
 let cleanupDataAttempts = 0, cleanupCacheAttempts = 0;
 let proxy: http.Server | undefined;
 async function check(name: string, run: () => Promise<void>) { phase = name; scenario = 'success'; responseGate = undefined; await run(); results.push(name); console.log('PASS: ' + name); }
@@ -90,6 +91,7 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       if (current === 'html') { response.end('<input type="password">'); return; }
       if (current === 'bad-envelope') { response.end(JSON.stringify({ success: 0, msg: 'SYNTHETIC_MUST_NOT_ESCAPE' })); return; }
       if (current === 'batch') {
+        if (rotateHistorySession) response.setHeader('Set-Cookie', 'Rsi-Token=SYNTHETIC_OTHER_SESSION; Secure; HttpOnly; Path=/');
         const html = batchHtml.get(String(JSON.parse(body).pledge_id));
         response.end(JSON.stringify(html === undefined ? {success:0} : {success:1, data:{rendered:html}})); return;
       }
@@ -166,6 +168,43 @@ try { @{Pfx=[Convert]::ToBase64String($cert.Export([Security.Cryptography.X509Ce
       await item.close(id);
       assert.deepEqual(await item.readBatch(id, revision, candidates, lookup), first);
       assert.equal(orderScans, 2);
+    });
+    await check('MANUAL_REFERENCE_REQUIRES_SAME_SESSION_BEFORE_READ_AFTER_EVIDENCE_AND_ON_CACHE_HIT', async () => {
+      scenario = 'batch';
+      const id = randomUUID(), revision = randomUUID();
+      // The first two pledges have an explicit negative response. The third still has a payable upgrade.
+      const candidates = {histories:['299','300','301'], bases:[basePledge('301')]};
+      const proof = purchaseSessionProof([cookie()])!;
+      let stored = cookie(), rotate = false, scans = 0;
+      const lookup = {owner:null, sessionProof:proof, assertActive() {}};
+      const item = new UpgradeHistoryReader(async () => [stored], undefined, async (_net, _bases, steps, owner) => {
+        scans++; assert.equal(owner, null); assert.deepEqual(steps?.map(step => step.ccuPledgeId), ['401']);
+        if (rotate) stored = cookie('SYNTHETIC_OTHER_SESSION');
+        return {bases:new Map([['301',receipt(3100)]]), applied:new Map([['401',receipt(4100)]])};
+      });
+      readers.push(item);
+      const before = served;
+      assert.deepEqual(await item.readBatch(id, revision, candidates, {...lookup, sessionProof:undefined}), emptyBatch);
+      assert.deepEqual(await item.readBatch(id, revision, candidates, {...lookup, sessionProof:purchaseSessionProof([cookie('SYNTHETIC_OTHER_SESSION')])}), emptyBatch);
+      assert.equal(served, before); assert.equal(scans, 0);
+      const result = await item.readBatch(id, revision, candidates, lookup);
+      assert.deepEqual(result.histories['301']?.purchases, [{ccuPledgeId:'401',price:receipt(4100)}]);
+      assert.deepEqual(result.basePurchases, {'301':receipt(3100)});
+      assert.equal(served - before, 3);
+      stored = cookie('SYNTHETIC_OTHER_SESSION');
+      assert.deepEqual(await item.readBatch(id, revision, candidates, lookup), emptyBatch);
+      stored = cookie(); rotate = true;
+      assert.deepEqual(await item.readBatch(id, randomUUID(), candidates, lookup), emptyBatch);
+      assert.equal(scans, 2);
+      rotate = false; stored = cookie(); rotateHistorySession = true;
+      try {
+        assert.deepEqual(await item.readBatch(id, randomUUID(), {...candidates, histories:['301']}, lookup), emptyBatch);
+        assert.equal(scans, 2);
+      } finally { rotateHistorySession = false; }
+      scenario = 'auth'; stored = cookie(); rotate = false;
+      const beforeAuth = served;
+      assert.deepEqual(await item.readBatch(id, randomUUID(), candidates, lookup), emptyBatch);
+      assert.equal(served - beforeAuth, 1); assert.equal(scans, 2);
     });
     await check('BATCH_WITHOUT_AUTHENTICATION_OR_CURRENT_CONTEXT_NEVER_RETURNS_RECEIPTS', async () => {
       const before = served;

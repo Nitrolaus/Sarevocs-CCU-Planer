@@ -224,12 +224,12 @@ await check('UPGRADED_SHIP_SHOWS_ONLY_A_PROVEN_TOTAL',async()=>{
   assert.equal(orders.length,1);
 });
 await check('CONNECTED_INVENTORY_APPLIES_BATCH_RECEIPTS_WITHOUT_PER_SHIP_CLICKS',async()=>{
-  const upgraded=pledge('1070',['Sabre Firebird'],'$185.00 USD'); upgraded.name='Standalone Ships - MDC';
+  const upgraded=pledge('1070',['Sabre Firebird'],'$185.00 USD'); upgraded.name='Standalone Ships - MDC plus Icefront Camo Paint';
   const unchanged=pledge('1071',['Ursa'],'$70.00 USD'); unchanged.name='Standalone Ships - Synthetic Ursa Promotion';
-  const revision='77777777-7777-4777-8777-777777777777';
+  const revision='c0ffee00-0000-4000-8000-000000000125';
   await app.evaluate(({}, {revision,upgraded,unchanged})=>{
     const fixture=globalThis.fixture, view=fixture.views[fixture.state.selectedAccountId];
-    view.document.account={identityKind:'rsi-handle',reference:'SYNTHETIC_ACCOUNT'};
+    view.document.account={identityKind:'manual-reference',reference:'rsi-local:'+fixture.state.selectedAccountId};
     view.document.pledges.push(upgraded,unchanged);
     view.revision=revision; view.observedAt=new Date().toISOString();
     const receipt=minor=>({status:'documented',source:'order',currency:'EUR',minor});

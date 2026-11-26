@@ -171,6 +171,8 @@ app.whenReady().then(async () => {
         assert.equal(called, 1);
         assert.equal(candidate?.document.account.identityKind, 'manual-reference');
         assert.equal(candidate?.document.pledges[0]?.rsiPurchase?.status, stable ? 'documented' : undefined);
+        assert.equal(!!candidate && !!login.purchaseSessionFor(candidate), stable);
+        assert.equal(login.purchaseSessionFor(structuredClone(candidate!)), undefined);
         assert.ok(observations.includes(stable ? 'purchase-matched' : 'purchase-auth-changed'));
         assert.equal(saves.length, 0);
         noPresentation();

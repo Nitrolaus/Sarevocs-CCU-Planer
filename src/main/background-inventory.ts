@@ -8,7 +8,7 @@ import type { UpgradeHistoryResult } from '../domain/upgrade-history';
 export type BackgroundStatus = 'idle' | 'connecting' | 'connected' | 'auth-required' | 'unavailable';
 export type BackgroundSnapshot = { status: BackgroundStatus; revision: string | null; changed: boolean; view?: LastSeen | null; progress?: HangarRefreshProgress };
 export type AuthorizationSnapshot = BackgroundSnapshot & { sessionSave: SessionSaveResult };
-type StoredState = { status: BackgroundStatus; view: LastSeen | null; conciergeRank?: ObservedConciergeRank };
+type StoredState = { status: BackgroundStatus; view: LastSeen | null; conciergeRank?: ObservedConciergeRank; purchaseSession?: string };
 
 /** Each result belongs to a profile and generation. This class never stages or commits an import. */
 export class BackgroundInventory {
@@ -17,7 +17,8 @@ export class BackgroundInventory {
   private jobs = new Map<string, Promise<void>>();
   private stopping = false;
   constructor(private cache: LastSeenStore, private account: (id: string) => Account,
-    private restore: (id: string) => Promise<ImportCandidate | null>, private close: (id: string) => Promise<unknown>) {}
+    private restore: (id: string) => Promise<ImportCandidate | null>, private close: (id: string) => Promise<unknown>,
+    private observedPurchaseSession?: (candidate: ImportCandidate) => string | undefined) {}
   private state(id: string): StoredState {
     const account = this.account(id);
     let state = this.states.get(id);
@@ -41,6 +42,10 @@ export class BackgroundInventory {
     const state = this.state(id);
     return state.status === 'connected' ? state.conciergeRank : undefined;
   }
+  purchaseSession(id: string, revision: string): string | undefined {
+    const state = this.state(id);
+    return state.status === 'connected' && state.view?.revision === revision ? state.purchaseSession : undefined;
+  }
   rememberAppliedPurchases(id: string, revision: string, pledgeId: string, result: UpgradeHistoryResult): void {
     this.rememberPurchaseHistories(id, revision, { [pledgeId]: result });
   }
@@ -61,6 +66,7 @@ export class BackgroundInventory {
     const state = this.state(id);
     const view = this.cache.save(this.account(id), candidate, state.view);
     state.view = view; state.status = 'connected'; state.conciergeRank = conciergeRank;
+    state.purchaseSession = this.observedPurchaseSession?.(candidate);
     return view;
   }
   refresh(id: string): Promise<void> {
@@ -90,7 +96,7 @@ export class BackgroundInventory {
   }
   async cancel(id: string): Promise<void> {
     const state = this.states.get(id);
-    if (state) state.conciergeRank = undefined;
+    if (state) { state.conciergeRank = undefined; state.purchaseSession = undefined; }
     const job = this.jobs.get(id); if (!job) return;
     this.epochs.set(id, (this.epochs.get(id) ?? 0) + 1);
     this.state(id).status = 'idle';
