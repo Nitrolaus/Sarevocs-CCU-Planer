@@ -66,6 +66,28 @@ wstring property(MSIHANDLE session, const wchar_t* name, bool directory=false) {
 void setProperty(MSIHANDLE s,const wchar_t* key,const wstring& value) {
     require(MsiSetPropertyW(s,key,value.c_str())==ERROR_SUCCESS,L"Cannot set MSI property: "+wstring(key));
 }
+bool wholeReinstall(MSIHANDLE s) {
+    if(!same(property(s,L"REINSTALLMODE"),L"vamus") || !property(s,L"REMOVE").empty()) return false;
+    const wstring features=property(s,L"REINSTALL");
+    if(features==L"ALL") return true;
+    if(features!=L"Planner") return false;
+    // Full MSI UI expands ALL into installed feature names before the server sequence.
+    // Accept Planner only when it is the package's entire feature table.
+    PMSIHANDLE database=MsiGetActiveDatabase(s);
+    require(database!=0,L"Cannot inspect MSI features.");
+    MSIHANDLE rawView=0;
+    require(MsiDatabaseOpenViewW(database,L"SELECT `Feature` FROM `Feature`",&rawView)==ERROR_SUCCESS,L"Cannot inspect MSI feature table.");
+    PMSIHANDLE view=rawView;
+    require(MsiViewExecute(view,0)==ERROR_SUCCESS,L"Cannot read MSI features.");
+    MSIHANDLE rawRow=0;
+    require(MsiViewFetch(view,&rawRow)==ERROR_SUCCESS,L"MSI feature table is empty.");
+    PMSIHANDLE row=rawRow;
+    wchar_t name[64]{};DWORD size=64;
+    require(MsiRecordGetStringW(row,1,name,&size)==ERROR_SUCCESS,L"Cannot read MSI feature name.");
+    MSIHANDLE rawNext=0;const UINT nextCode=MsiViewFetch(view,&rawNext);PMSIHANDLE next=rawNext;
+    require(nextCode==ERROR_SUCCESS || nextCode==ERROR_NO_MORE_ITEMS,L"Cannot finish MSI feature inspection.");
+    return wstring(name)==L"Planner" && nextCode==ERROR_NO_MORE_ITEMS;
+}
 Handle effectiveToken() {
     HANDLE raw=nullptr;
     if (!OpenThreadToken(GetCurrentThread(),TOKEN_QUERY|TOKEN_DUPLICATE|TOKEN_IMPERSONATE,TRUE,&raw)) {
@@ -170,9 +192,13 @@ wstring canonical(const wstring& input,HANDLE token) {
     fs::path rebuilt=physical+4;
     for(auto i=missing.rbegin();i!=missing.rend();++i) rebuilt/=*i;
     require(same(trimSlash(rebuilt.wstring()),raw),L"Choose the physical local path.");
-    for(auto id:{&FOLDERID_Windows,&FOLDERID_ProgramFiles,&FOLDERID_ProgramFilesX86,&FOLDERID_ProgramData,&FOLDERID_RoamingAppData}) {
+    for(auto id:{&FOLDERID_Windows,&FOLDERID_ProgramData,&FOLDERID_RoamingAppData}) {
         wstring protectedPath=folder(*id,token);
         require(!within(raw,protectedPath)&&!within(protectedPath,raw),L"Protected program directory.");
+    }
+    for(auto id:{&FOLDERID_ProgramFiles,&FOLDERID_ProgramFilesX86}) {
+        wstring programs=folder(*id,token);
+        require(!within(programs,raw),L"Wähle einen eigenen Unterordner für den CCU-Planer.");
     }
     fs::path local=folder(FOLDERID_LocalAppData,token);
     for(const wchar_t* name:{L"SarevocsCCUPlaner-Daten",L"SarevocsCCUPlaner"}) {
@@ -187,7 +213,8 @@ wstring suggestedFolder(HANDLE token) {
 }
 
 struct UnsafeFolderPermissions { wstring message; };
-void verifyTree(const fs::path& root,HANDLE token);
+struct FolderChoiceCancelled {};
+void verifyTree(const fs::path& root,HANDLE token,bool acceptShared=false);
 
 bool unsafeLegacyFolder(const wstring& root,HANDLE token) {
     try { verifyTree(root,token); }
@@ -241,14 +268,8 @@ void prepareUi(MSIHANDLE s) {
     wstring previous=msi.root.empty()?readString(product.get(),L"InstallLocation"):msi.root;
     if(previous.empty()) previous=readString(arp.get(),L"InstallLocation");
     const bool update=!previous.empty();
-    const bool keepLegacy=arp && update && unsafeLegacyFolder(canonical(previous,token.get()),token.get());
     wstring target=!msi.root.empty()?msiUpgradeFolder(trimSlash(previous))
         :update?trimSlash(previous):suggestedFolder(token.get());
-    if(keepLegacy) {
-        const auto home=fs::path(folder(FOLDERID_Profile,token.get()));
-        target=(home/L"CCU_Planer-Neu").wstring();
-        if(within(target,previous)||within(previous,target)) target=(home/L"Sarevocs-CCU-Planer").wstring();
-    }
     wstring version=property(s,L"ProductVersion");
     wstring previousVersion=msi.version.empty()?readString(arp.get(),L"DisplayVersion"):msi.version;
     setProperty(s,L"CcuRoot",target+L"\\");
@@ -256,8 +277,7 @@ void prepareUi(MSIHANDLE s) {
     setProperty(s,L"CcuUiBanner",update?L"CcuSetupBannerUpdate":L"CcuSetupBannerFresh");
     setProperty(s,L"CcuUiButton",update?L"Update installieren":L"Installieren");
     setProperty(s,L"CcuUiVersion",update&&!previousVersion.empty()?L"Version "+previousVersion+L" \u2192 "+version:L"Version "+version);
-    setProperty(s,L"CcuUiHint",keepLegacy?L"Neuer Ordner nötig. Die alten Programmdateien bleiben erhalten.":
-        !msi.root.empty()?L"Das Update kommt in einen Unterordner. Die Altversion wird erst danach entfernt.":
+    setProperty(s,L"CcuUiHint",!msi.root.empty()?L"Das Update kommt in einen Unterordner. Die Altversion wird erst danach entfernt.":
         update?L"Dein bisheriger Programmordner ist vorausgewählt.":L"Wähle einen leeren Programmordner.");
     setProperty(s,L"CCUACCEPTTERMS",L"");
     setProperty(s,L"CCUUIREQUESTED",L"1");
@@ -302,8 +322,7 @@ void resolveRoot(MSIHANDLE s) {
         require(!within(previous,root),L"Wähle einen leeren Ordner für die neue Version.");
     }
     const bool moving=arp && !same(previous,root);
-    const bool keepLegacy=arp && unsafeLegacyFolder(previous,token.get());
-    require(!keepLegacy || moving,L"Der bisherige Programmordner darf von weiteren Konten geändert werden. Wähle einen anderen Programmordner.");
+    const bool keepLegacy=arp && moving && unsafeLegacyFolder(previous,token.get());
     require(!installed || same(previous,root),L"Die vorhandene MSI-Installation verwendet ihren registrierten Programmordner.");
     if(moving) {
         require(!within(root,previous) && !within(previous,root),L"Wähle einen Programmordner außerhalb des bisherigen Ordners.");
@@ -332,18 +351,25 @@ bool trusted(PSID sid,PSID user) {
     return EqualSid(sid,user) || IsWellKnownSid(sid,WinBuiltinAdministratorsSid) || IsWellKnownSid(sid,WinLocalSystemSid) ||
         sidText(sid)==L"S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";
 }
-void verifyAccess(const fs::path& p,PSID user,DWORD directMask,bool checkInheritance) {
+void verifyAccess(const fs::path& p,PSID user,DWORD directMask,bool checkInheritance,bool acceptShared=false) {
     PSECURITY_DESCRIPTOR security=nullptr;PACL dacl=nullptr;PSID owner=nullptr;
     DWORD error=GetNamedSecurityInfoW(p.c_str(),SE_FILE_OBJECT,OWNER_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,
         &owner,nullptr,&dacl,nullptr,&security);
     Local guard(security);
-    require(error==ERROR_SUCCESS && dacl && IsValidAcl(dacl) && owner && trusted(owner,user),L"Untrusted ACL/owner: "+p.filename().wstring());
+    require(error==ERROR_SUCCESS && owner && IsValidSid(owner) && (!dacl || IsValidAcl(dacl)),
+        L"Die Ordnerrechte konnten nicht gelesen werden: "+p.wstring());
+    if(!acceptShared && (!dacl || !trusted(owner,user)))
+        throw UnsafeFolderPermissions{L"Die Eigentümer- oder Zugriffsrechte erlauben weiteren Konten Änderungen: "+p.wstring()};
+    if(!dacl) return;
     for(WORD n=0;n<dacl->AceCount;++n) {
         void* entry=nullptr;
         require(GetAce(dacl,n,&entry)!=FALSE,L"Cannot inspect path ACL.");
         auto header=static_cast<ACE_HEADER*>(entry);
         if(header->AceType==ACCESS_DENIED_ACE_TYPE || header->AceType==ACCESS_DENIED_OBJECT_ACE_TYPE) continue;
-        require(header->AceType==ACCESS_ALLOWED_ACE_TYPE,L"Unsupported ACL on target.");
+        if(header->AceType!=ACCESS_ALLOWED_ACE_TYPE) {
+            if(!acceptShared) throw UnsafeFolderPermissions{L"Die Zugriffsregeln dieses Ordners sind nicht vollständig bewertbar: "+p.wstring()};
+            continue;
+        }
         auto ace=static_cast<ACCESS_ALLOWED_ACE*>(entry);
         PSID sid=&ace->SidStart;
         if(trusted(sid,user) || sidText(sid)==L"S-1-3-4") continue;
@@ -353,10 +379,10 @@ void verifyAccess(const fs::path& p,PSID user,DWORD directMask,bool checkInherit
         bool direct=!(header->AceFlags&INHERIT_ONLY_ACE) && (rights&directMask);
         bool inherited=checkInheritance && (header->AceFlags&(CONTAINER_INHERIT_ACE|OBJECT_INHERIT_ACE)) &&
             (rights&changeRights) && !IsWellKnownSid(sid,WinCreatorOwnerSid);
-        if(direct||inherited) throw UnsafeFolderPermissions{L"Andere Windows-Konten dürfen hier Änderungen vornehmen: "+p.wstring()};
+        if(!acceptShared && (direct||inherited)) throw UnsafeFolderPermissions{L"Andere Windows-Konten dürfen hier Änderungen vornehmen: "+p.wstring()};
     }
 }
-void verifyTree(const fs::path& root,HANDLE token) {
+void verifyTree(const fs::path& root,HANDLE token,bool acceptShared) {
     DWORD size=0;
     GetTokenInformation(token,TokenUser,nullptr,0,&size);
     std::vector<BYTE> info(size);
@@ -364,22 +390,45 @@ void verifyTree(const fs::path& root,HANDLE token) {
     PSID user=reinterpret_cast<TOKEN_USER*>(info.data())->User.Sid;
     bool missing=attributes(root)==INVALID_FILE_ATTRIBUTES;
     if(!missing) {
-        verifyAccess(root,user,changeRights,true);
+        verifyAccess(root,user,changeRights,true,acceptShared);
         for(const auto& entry:fs::recursive_directory_iterator(root)) {
             DWORD attr=attributes(entry.path());
             require(attr!=INVALID_FILE_ATTRIBUTES,L"Directory changed during validation.");
             bool directory=(attr&FILE_ATTRIBUTE_DIRECTORY)!=0;
             if(!directory) openRegular(entry.path());
-            verifyAccess(entry.path(),user,changeRights,directory);
+            verifyAccess(entry.path(),user,changeRights,directory,acceptShared);
         }
     }
     for(auto p=root.parent_path(); ;p=p.parent_path()) {
         if(attributes(p)!=INVALID_FILE_ATTRIBUTES) {
             bool drive=p==p.root_path();
-            verifyAccess(p,user,drive ? (FILE_DELETE_CHILD|WRITE_DAC|WRITE_OWNER) : replaceRights,missing);
+            verifyAccess(p,user,drive ? (FILE_DELETE_CHILD|WRITE_DAC|WRITE_OWNER) : replaceRights,missing,acceptShared);
             missing=false;
         } else missing=true;
         if(p==p.root_path()) break;
+    }
+}
+void verifyChosenTree(MSIHANDLE s,const fs::path& root,HANDLE token) {
+    try { verifyTree(root,token); }
+    catch(const UnsafeFolderPermissions& issue) {
+        const wstring approved=trimSlash(property(s,L"CCUFOLDERRISKROOT"));
+        if(!same(approved,trimSlash(root.wstring()))) {
+            require(property(s,L"UILevel")==L"5",
+                L"Dieser Programmordner benötigt eine bewusste Freigabe. Starte das MSI mit vollständiger Oberfläche oder gib CCUFOLDERRISKROOT für genau diesen Ordner an.");
+            PMSIHANDLE message=MsiCreateRecord(2);
+            require(message!=0,L"Die Ordnerwarnung konnte nicht angezeigt werden.");
+            MsiRecordSetStringW(message,0,
+                L"Gewählten Programmordner trotzdem verwenden?\n\n[1]\n\nAndere Windows-Konten können hier Programmdateien verändern. "
+                L"Manipulierte Programmdateien könnten beim nächsten Start unter deinem Windows-Konto ausgeführt werden und auch auf deine Hangar- und Sitzungsdaten zugreifen.\n\n"
+                L"[2]\n\nMit Ja akzeptierst du dieses Risiko für diesen Ordner.");
+            MsiRecordSetStringW(message,1,root.c_str());
+            MsiRecordSetStringW(message,2,issue.message.c_str());
+            const int answer=MsiProcessMessage(s,INSTALLMESSAGE(INSTALLMESSAGE_USER|MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2),message);
+            if(answer!=IDYES) throw FolderChoiceCancelled{};
+            setProperty(s,L"CCUFOLDERRISKROOT",trimSlash(root.wstring()));
+        }
+        // Continue checking every file and ancestor after consent, including reparse points and links.
+        verifyTree(root,token,true);
     }
 }
 void verifyDigest(const fs::path& p,const KnownFile& expected) {
@@ -475,7 +524,7 @@ void verifyOwnership(MSIHANDLE s) {
     require(attr==INVALID_FILE_ATTRIBUTES || (attr&FILE_ATTRIBUTE_DIRECTORY),L"Target is a file.");
     if((!legacy || moving) && !installed && attr!=INVALID_FILE_ATTRIBUTES)
         require(fs::is_empty(root),L"Wähle einen leeren Programmordner.");
-    verifyTree(root,token.get());
+    verifyChosenTree(s,root,token.get());
     if(moving&&!keepLegacy) verifyTree(oldRoot,token.get());
     if(legacy) {
         HKEY current=nullptr;
@@ -484,13 +533,13 @@ void verifyOwnership(MSIHANDLE s) {
         require(arp!=nullptr,L"Die registrierte Altinstallation fehlt.");
         const auto& build=checkLegacyKey(arp.get(),oldRoot);
         require(property(s,L"CcuLegacyVersion")==build.version,L"Die Altversion hat sich während des Setups geändert.");
-        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi126,false);
+        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi128,false);
     }
     if(msiUpgrade) {
         const auto prior=canonical(previousMsi.root,token.get());
         require(!within(prior,root),L"Der neue Programmordner darf die Altinstallation nicht ersetzen.");
-        verifyTree(prior,token.get());
-        verifyFiles(prior,installedFiles(previousMsi),msi126,false);
+        verifyChosenTree(s,prior,token.get());
+        verifyFiles(prior,installedFiles(previousMsi),msi128,false);
         verifyShortcut(desktop,legacyLinkName,prior,true);
         verifyShortcut(menu,legacyLinkName,prior,true);
     }
@@ -502,14 +551,15 @@ void verifyOwnership(MSIHANDLE s) {
         if(own.version==L"0.3.123") baseline=msi123;
         if(own.version==L"0.3.124") baseline=msi124;
         if(own.version==L"0.3.125") baseline=msi125;
+        if(own.version==L"0.3.126") baseline=msi126;
+        if(own.version==L"0.3.127") baseline=msi127;
         if(!baseline.empty()) {
-            require(property(s,L"REINSTALL")==L"ALL" && same(property(s,L"REINSTALLMODE"),L"vamus") &&
-                property(s,L"REMOVE").empty(),
+            require(wholeReinstall(s),
                 L"Starte dieses Update mit REINSTALL=ALL REINSTALLMODE=vamus. Die Anleitung steht im GitHub-Release.");
             verifyFiles(root,baseline,cab117,true);
         } else {
-            require(own.version==L"0.3.126",L"Unerwartete installierte Programmversion.");
-            verifyFiles(root,msi126,cab117,true);
+            require(own.version==L"0.3.128",L"Unerwartete installierte Programmversion.");
+            verifyFiles(root,msi128,cab117,true);
         }
     }
     if(legacy) {
@@ -525,6 +575,7 @@ void verifyOwnership(MSIHANDLE s) {
 UINT run(MSIHANDLE s,void(*action)(MSIHANDLE)) noexcept {
     wstring message;
     try {action(s);return ERROR_SUCCESS;}
+    catch(const FolderChoiceCancelled&){return ERROR_INSTALL_USEREXIT;}
     catch(const UnsafeFolderPermissions& error){message=error.message;}
     catch(const wstring& error){message=error;}
     catch(...){message=L"Unable to verify installation ownership.";}

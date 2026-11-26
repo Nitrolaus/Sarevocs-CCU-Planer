@@ -283,7 +283,7 @@ try{
     await notice.waitFor({state:'hidden'});
     await update.click();
     await app.evaluate(()=>{globalThis.fixture.helpFailure=true;});
-    const download=notice.getByRole('button',{name:'Auf GitHub downloaden',exact:true});
+    const download=notice.getByRole('button',{name:'GitHub öffnen und Planer beenden',exact:true});
     await download.click();
     await notice.getByRole('alert').waitFor();
     await app.evaluate(()=>{globalThis.fixture.helpFailure=false;});
@@ -299,7 +299,7 @@ try{
     await page.getByRole('button',{name:'Update available · 0.4.0 Alpha',exact:true}).click();
     const noticeEn=page.getByRole('dialog',{name:'Update available'});
     await noticeEn.getByText('Synthetic change for this test.',{exact:true}).waitFor();
-    await noticeEn.getByRole('button',{name:'Download on GitHub',exact:true}).waitFor();
+    await noticeEn.getByRole('button',{name:'Open GitHub and quit planner',exact:true}).waitFor();
     await page.keyboard.press('Escape');
     await noticeEn.waitFor({state:'hidden'});
     await navEn.getByRole('button',{name:/Data & settings/i}).click();

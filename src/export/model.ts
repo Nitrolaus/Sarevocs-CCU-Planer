@@ -1,14 +1,14 @@
 import {z} from 'zod';
 import {draftSchema,targetIdSchema} from '../planner/draft';
 import {reportFilterOptions} from './filters';
-export const inventoryReportSections=['ships','ccus','paints','packages','access','buyback','loaners'] as const;
+export const inventoryReportSections=['ships','ccus','addons','paints','packages','access','buyback','loaners'] as const;
 export const planningReportSections=['chain','offers'] as const;
 export const reportSections=[...inventoryReportSections,...planningReportSections] as const;
 const reportSectionSchema=z.enum(reportSections);
 export const reportKindSchema=z.enum(['inventory',...reportSections]);
 export const reportSelectionSchema=z.array(reportSectionSchema).min(1).max(reportSections.length)
  .refine(kinds=>new Set(kinds).size===kinds.length);
-export const reportFiltersSchema=z.partialRecord(reportSectionSchema,z.array(z.string().max(32)).min(1).max(5))
+export const reportFiltersSchema=z.partialRecord(reportSectionSchema,z.array(z.string().max(32)).min(1).max(8))
  .refine(filters=>reportSections.every(kind=>{
   const values=filters[kind];
   return !values||(new Set(values).size===values.length&&values.every(id=>reportFilterOptions[kind].some(option=>option[0]===id)));

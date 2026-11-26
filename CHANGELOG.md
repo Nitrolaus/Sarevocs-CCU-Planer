@@ -1,5 +1,17 @@
 # Änderungen
 
+## 0.3.128 · Alpha
+
+Der neue Bestandsreiter „Add-ons & Gear“ steht zwischen CCUs und Spielpaketen. Er zeigt gespeicherte Paketbestandteile mit Suche, Gegenstandsart, Schiffszuordnung und belegtem Einzelpreis. Der Export unterstützt den Bereich mit Filtern nach Gegenstandsart. Die Oberfläche wurde auch mit 200 Einträgen geprüft.
+
+„Mein Kaufpreis“ zeigt den belegten Gesamtbetrag ohne zusätzliche Gesamtkosten-Zeile. Beim Darüberfahren erscheinen Startbasis und angewendete CCUs. Gemeinsame Paketpreise bleiben als Paketpreise gekennzeichnet.
+
+Ein gemeinsam beschreibbarer Programmordner kann nach einer ausdrücklichen Risikoabfrage verwendet werden. Prüfsummen, physische Pfad- und Verknüpfungsprüfungen sowie Rücksicherung bleiben aktiv. Beim MSI-Update wird die von Windows aufgelöste vollständige Funktionsliste korrekt erkannt.
+
+Der Update-Button nennt das Öffnen von GitHub und das vollständige Beenden des Planers einschließlich Tray. Vor dem Beenden fragt der Planer nach. Abbruch und ein Fehler beim Browserstart lassen ihn geöffnet.
+
+Update und Rücksicherung von 0.3.127, die erneute Aktualisierung sowie Start und Datenübernahme wurden mit Testprofilen und verschlüsselter Testsitzung in der Offline-Windows-Sandbox geprüft. Die Update-Anleitung steht im Release.
+
 ## 0.3.121 · Alpha
 
 Der Planer prüft einen verspätet sichtbaren RSI-Kontonamen erneut und zeigt an, ob Windows die Sitzung gespeichert hat. Belegte Euro-Beträge werden auch erkannt, wenn der Beleg nur das Eurozeichen enthält. Ein gemeinsames Preisfeld für ein Mehrschiffpaket bleibt auch bei fehlendem Kaufbeleg als Paketgesamtpreis erkennbar.

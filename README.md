@@ -8,13 +8,15 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs und Spielzugängen einsehen und Upgrade-Ketten planen. **0.3.126 Alpha** ist als kostenlose Testversion verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.128 Alpha** ist als kostenlose Testversion verfügbar.
 
-[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.126-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.128-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
-Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update von MSI 0.3.121 bis 0.3.125 übernimmt Windows Installer den registrierten Ordner. Die Release-Anleitung zeigt den Update-Befehl und erklärt, wie du das ursprünglich verwendete MSI als Quelle bereithältst.
+Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update von MSI 0.3.121 bis 0.3.127 übernimmt Windows Installer den registrierten Ordner. Die Release-Anleitung zeigt den Update-Befehl und erklärt, wie du das ursprünglich verwendete MSI als Quelle bereithältst. Einen gemeinsam beschreibbaren Programmordner kannst du nach einer deutlichen Risikoabfrage freigeben. Windows muss dir den Schreibzugriff erlauben.
 
 #### Bestand und Angebote
+
+Der Reiter **Add-ons & Gear** zeigt vorhandene Paketbestandteile mit Suche sowie Filtern nach Gegenstandsart und zugehörigem Schiff. Auch Excel- und PDF-Exporte können diesen Bereich aufnehmen. Unter **Mein Kaufpreis** steht der belegte Gesamtbetrag für das aktuelle Schiff. Die Zusammensetzung aus Startbasis und angewendeten CCUs findest du beim Darüberfahren.
 
 Im Bestand siehst du Store Credits am Profil, das RSI-Datum an den CCUs und den Hersteller des aktuellen Schiffsmodells. Angaben zu Loanern und Beibooten stammen aus öffentlichen Regeln. Du kannst sie per Rechtsklick für dein Profil als vorhanden oder nicht vorhanden bestätigen und die Bestätigung zurücksetzen. Deine Angabe erscheint mit Datum. Ob ein Loaner verfügbar ist, prüfst du im Spiel.
 
@@ -68,13 +70,15 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, and game access in your hangar and plan ship upgrade chains. **0.3.126 Alpha** is available as a free test release.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.128 Alpha** is available as a free test release.
 
-[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.126-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.128-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
-Choose the program folder when installing for the first time. When updating from MSI 0.3.121 through 0.3.125, Windows Installer reuses the registered folder. See the release instructions for the update command and how to make the original MSI available as a source.
+Choose the program folder when installing for the first time. When updating from MSI 0.3.121 through 0.3.127, Windows Installer reuses the registered folder. See the release instructions for the update command and how to make the original MSI available as a source. You can approve a shared writable program folder after an explicit risk warning. Windows must still grant you write access.
 
 #### Inventory and offers
+
+The **Add-ons & Gear** tab lists retained package contents with search and filters for item type and related ship. Excel and PDF exports can include this area. **My purchase price** shows the documented total for the current ship. Hover over it to see the starting ship and applied CCU costs.
 
 The inventory shows Store Credits next to your profile, the RSI date on CCUs, and the manufacturer of each current ship model. Loaner and snub craft suggestions come from published rules. Right click a row to mark it as present or absent for your profile or clear your confirmation. Your confirmation includes the date. Check actual loaner availability in Star Citizen.
 

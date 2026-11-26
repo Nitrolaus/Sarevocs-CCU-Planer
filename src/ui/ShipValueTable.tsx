@@ -192,11 +192,12 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
         poundPurchase&&cost.value?.poundRate?t('Historischer EZB-Kurs')+' · '+cost.value.poundRate.sourceDate:null,
         p.name,
         ...(upgradedShip&&!originalShip?[
+          t('Der Kaufpreis umfasst den belegten Preis der Startbasis (z. B. LTI-Token) und die belegten Preise der angewendeten CCUs.'),
           t('Basisschiff')+' · '+standaloneModel(p)+' · '+(cost.value?money(cost.value.minor,cost.value.currency):t('Nicht belegt')),
           ...steps.map(({step,price})=>step.from+' → '+step.to+' · '+
             (price?.status==='documented'&&price.source==='order'?money(price.minor,price.currency):t('Nicht belegt'))),
         ]:[]),
-        totalAmount?t('Gesamtkosten')+' · '+totalAmount:upgradedShip&&!originalShip?t('Der Kaufpreis ist noch nicht vollständig belegt.'):null,
+        totalAmount?t('Mein Kaufpreis')+' · '+totalAmount:upgradedShip&&!originalShip?t('Der Kaufpreis ist noch nicht vollständig belegt.'):null,
         history?.status==='loaded'&&history.purchases?.length===0?t('Für die angewendeten CCUs wurde kein Kaufpreis gefunden.'):null,
         mayCheckPurchase?t('Rechtsklick für „Hangar-Log prüfen“.'):null,
         packageRows>1?t('Gemeinsamer Paketwert, kein Einzelpreis je Schiff.'):null].filter(Boolean).join('\n');
@@ -232,7 +233,6 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
             {visiblePurchase?<strong>{visiblePurchase}</strong>:<span className="ship-price-unavailable"
               aria-label={t(checkingPurchases?'Kaufpreis wird gesucht …':'Kaufpreis beim Erwerb nicht belegt.')}>
               {checkingPurchases?'…':'—'}</span>}
-            {totalAmount&&<small className="ship-package-total">{t('Gesamtkosten')}</small>}
             {paidAmount&&poundPurchase&&!upgradedShip&&<small className="ship-package-total">{converted.minor===null?t('Umrechnung offen'):money(converted.minor,display.settings.currency,true)}</small>}
             {packageRows>1&&<small className="ship-package-total">{t('Paketgesamt')} ({packageRows})</small>}
             {paidAmount&&packageRows===1&&!upgradedShip&&packagePrice&&<small className="ship-package-total">

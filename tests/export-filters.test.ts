@@ -4,6 +4,30 @@ import {createReport,createReports} from '../src/export/document';
 import {commandSchema} from '../src/main/commands';
 import {reportAccountId,reportFixture} from './fixtures/report-data';
 
+test('add-on reports preserve individual package contents and only documented singleton costs', async()=>{
+ const input=reportFixture(),template=input.inventory.items[0]!;
+ const module={...template,pledge:structuredClone(template.pledge)};
+ module.pledge.pledgeId='addon-module';
+ module.pledge.name='Synthetic Module';
+ module.pledge.ships=[];
+ module.pledge.sourceValues.items=JSON.stringify([{title:'Galaxy - Cargo Module',kind:'Module'}]);
+ module.pledge.rsiPurchase={status:'documented',source:'order',minor:4125,currency:'EUR'};
+ module.pledge.acquisitionCost=null;
+ const bundle={...template,pledge:structuredClone(template.pledge)};
+ bundle.pledge.pledgeId='addon-paint-package';
+ bundle.pledge.sourceValues.items=JSON.stringify([{title:'Included Paint',kind:'Skin'}]);
+ input.inventory.items.push(module,bundle);
+ const doc=createReport({...input,kind:'addons'});
+ assert.equal(doc.rows.length,2);
+ assert.equal(doc.rows.find(row=>row.cells[0]==='Galaxy - Cargo Module')!.cells[4],41.25);
+ assert.equal(doc.rows.find(row=>row.cells[0]==='Included Paint')!.cells[4],null);
+ assert.doesNotMatch(JSON.stringify(doc),/SECRET_NOT_FOR_REPORT|session|originalDescription|rsi-local/);
+ const selection=await createReports(input,['addons'],undefined,{addons:['paints']});
+ assert.deepEqual(selection.sections![0]!.rows.map(row=>row.cells[0]),['Included Paint']);
+ assert.equal(commandSchema.safeParse({action:'report.selection',accountId:reportAccountId,
+  kinds:['addons'],filters:{addons:['modules','weapons','armor','clothing','paints','decorations','collectibles','other']}}).success,true);
+});
+
 test('paint filters distinguish a reported reclaim action, ship bundles and unknown status',async()=>{
  const input=reportFixture(),ship=input.inventory.items[0]!,template=input.inventory.items[1]!;
  ship.pledge.sourceValues.items=JSON.stringify([{title:'Included paint',kind:'Skin'}]);

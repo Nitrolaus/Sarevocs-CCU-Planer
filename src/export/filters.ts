@@ -1,3 +1,5 @@
+import {addonCategories} from '../domain/inventory-addons';
+
 const insurance = [
  ['lti','LTI','LTI'], ['months','Befristet versichert','Time-limited insurance'], ['unknown','Versicherung offen','Insurance unknown'],
 ] as const;
@@ -7,6 +9,7 @@ export const reportFilterOptions = {
  ccus: [
   ['unused','Ungenutzt','Unused'], ['applied','Angewendet','Applied'], ['unverified','Status offen','Status unknown'],
  ],
+ addons: addonCategories,
  paints: [
   ['meltable','Einschmelzbar laut RSI','Reclaimable according to RSI'], ['ship-package','Im Schiffspaket','In a ship package'],
   ['mixed-contents','In sonstigem Paket','In another package'], ['not-meltable','Nicht einschmelzbar laut RSI','Non-reclaimable according to RSI'],

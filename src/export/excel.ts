@@ -4,7 +4,7 @@ import type {ReportDocument} from './model';
 /** Only typed values, never formulas, links, macros or user-supplied workbook metadata. */
 export async function excelReport(document:ReportDocument):Promise<Buffer>{
  const book=new ExcelJS.Workbook();book.creator='Sarevoc';book.created=new Date(document.createdAt);book.modified=new Date(document.createdAt);
- const names={inventory:'Bestand',ships:'Schiffe & Fahrzeuge',ccus:'CCUs im Bestand',paints:'Paints',packages:'Spielpakete',access:'Spielzugänge',
+ const names={inventory:'Bestand',ships:'Schiffe & Fahrzeuge',ccus:'CCUs im Bestand',addons:'Add-ons & Gear',paints:'Paints',packages:'Spielpakete',access:'Spielzugänge',
   buyback:'Buy Back',loaners:'Loaner & Beiboote',chain:'CCU-Kette',offers:'Angebote'} as const;
  for(const section of document.sections??[document])addReportSheet(book,section,names[section.kind]);
  const buffer=Buffer.from(await book.xlsx.writeBuffer());if(buffer.length>64*1024*1024)throw new UserError('Excel-Export ist zu groß.');return buffer;

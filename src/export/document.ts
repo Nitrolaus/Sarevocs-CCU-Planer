@@ -21,6 +21,8 @@ import {LOANER_ARTICLES,type LoanerCache} from '../loaners/model';
 import {loanerReviewBasis,loanerReviewKey,type LoanerReviewsSnapshot} from '../loaners/review-model';
 import {paintAdvice} from '../paints/advice';
 import {gameAccessEvidence} from '../domain/game-access';
+import {addonCategories,inventoryAddons} from '../domain/inventory-addons';
+import {pledgeDate} from '../domain/pledge-date';
 import type {PackageShare} from '../planner/package-shares';
 
 export type ReportInput={kind:ReportKind;inventory:AccountInventory;observed:LastSeen|null;market:MarketSnapshot;display:PricingSnapshot;
@@ -97,6 +99,24 @@ export function createReport(input:ReportInput):ReportDocument{
   }
   for(const [basis,amount]of known)totals.push({label:l('Bekannte Paket-Kaufwerte','Known pledge purchase values')+' · '+(basis==='net'?l('netto','net'):basis==='gross'?l('brutto','gross'):l('Steuerbasis ungeklärt','unknown tax basis')),value:money(amount)});
   if(missing)totals.push({label:l('Kaufwerte offen','Purchase values unknown'),value:String(missing)});
+ }else if(kind==='addons'){
+  title=l('Add-ons & Gear','Add-ons & Gear');
+  const source=snapshot.origin==='last-observed'?pledges.map(pledge=>({pledge,source:'rsi-dom-probe/1'})):
+   input.inventory.items.filter(item=>item.availability==='present');
+  col(l('Gegenstand','Item'),32);col(l('Art','Type'),22);col(l('Zuordnung','Association'),24);
+  col(l('Enthalten in','Included in'),36);col(l('Mein Kaufpreis','My purchase price'),18,'money');
+  col(l('Währung','Currency'),12);col(l('Preisumrechnung','Price conversion'),20);
+  col(l('RSI-Datum','RSI date'),14,'date');
+  notes.push(l('Einzelpreise erscheinen nur für einen belegten Einzelkauf. Gemeinsame Paketpreise werden nicht aufgeteilt.',
+   'Individual prices require a documented single-item purchase. Shared package prices are not divided between items.'));
+  for(const item of inventoryAddons(source,market.catalogue?.ships.map(ship=>ship.name)??[])){
+   if(!matches(item.category))continue;
+   const converted=convertPurchaseValue(item.purchase,display),cost=item.purchase;
+   const date=pledgeDate(item.pledge),category=addonCategories.find(([id])=>id===item.category)!;
+   rows.push({cells:[item.name,category[en?2:1],item.relatedShips.join(' / '),item.pledge.name,
+    cost?(converted.minor??cost.minor)/100:null,cost?(converted.minor===null?cost.currency:currency):'',
+    converted.minor!==null&&converted.approximate?l('Richtwert','Estimate'):'',date?new Date(date):null]});
+  }
  }else if(kind==='paints'){
   title='Paints';
   const source=snapshot.origin==='last-observed'?pledges.map(pledge=>({pledge,source:'rsi-dom-probe/1'})):

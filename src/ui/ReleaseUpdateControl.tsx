@@ -4,12 +4,14 @@ import { LanguageContext } from './i18n';
 
 const copy = {
   de: {
-    title: 'Update verfügbar', notes: 'Was ist neu?', close: 'Schließen', open: 'Auf GitHub downloaden',
+    title: 'Update verfügbar', notes: 'Was ist neu?', close: 'Schließen', open: 'GitHub öffnen und Planer beenden',
+    warning: 'Nach deiner Bestätigung öffnet sich GitHub im Browser. Der Planer wird vollständig beendet, auch im Windows-Infobereich.',
     fallback: 'Die Details zu dieser Version stehen auf GitHub.',
     error: 'Die Release-Seite konnte nicht geöffnet werden.',
   },
   en: {
-    title: 'Update available', notes: 'What’s new?', close: 'Close', open: 'Download on GitHub',
+    title: 'Update available', notes: 'What’s new?', close: 'Close', open: 'Open GitHub and quit planner',
+    warning: 'After you confirm, GitHub opens in your browser and the planner quits completely, including its system tray icon.',
     fallback: 'Details about this version are available on GitHub.',
     error: 'Could not open the release page.',
   },
@@ -49,6 +51,7 @@ export function ReleaseUpdateControl({ update }: { update: ReleaseUpdate }) {
       <div className="help-update-notes">
         {notes?.length ? notes.map((line, index) => <p key={index}>{line}</p>) : <p>{label.fallback}</p>}
       </div>
+      <p className="help-update-warning">{label.warning}</p>
       {failed && <p className="help-error" role="alert">{label.error}</p>}
       <div className="dialog-actions">
         <button type="button" className="secondary" autoFocus onClick={() => dialog.current?.close()}>{label.close}</button>

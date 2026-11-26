@@ -15,7 +15,7 @@ export function ExportDialog({accountId,initialKind,chainContext,onClose,onSaved
  const kinds=reportSections.filter(kind=>selected.includes(kind)&&(kind!=='chain'||!!context));
  const filters:ReportFilters=Object.fromEntries(kinds.flatMap(kind=>chosenFilters[kind]?.length?[[kind,chosenFilters[kind]]]:[]));
  const scope=JSON.stringify([accountId,kinds,filters,signature]),preview=prepared?.scope===scope?prepared.data:null;
- const labels:Record<Section,string>={ships:'Schiffe & Fahrzeuge',ccus:'CCUs im Bestand',paints:'Paints',packages:'Spielpakete',access:'Spielzugänge',buyback:'Buy Back',loaners:'Loaner & Beiboote',chain:'Aktuelle CCU-Kette',offers:'Messeangebote'};
+ const labels:Record<Section,string>={ships:'Schiffe & Fahrzeuge',ccus:'CCUs im Bestand',addons:'Add-ons & Gear',paints:'Paints',packages:'Spielpakete',access:'Spielzugänge',buyback:'Buy Back',loaners:'Loaner & Beiboote',chain:'Aktuelle CCU-Kette',offers:'Messeangebote'};
  function checkbox(kind:Section){
   const unavailable=kind==='chain'&&!context;
   const checked=!unavailable&&selected.includes(kind);

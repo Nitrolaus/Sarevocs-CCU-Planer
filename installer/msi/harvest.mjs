@@ -28,9 +28,8 @@ function guid(name) {
   const h = digest('SarevocsCCUPlanerMSI|file|' + name.toLowerCase());
   return `{${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}}`;
 }
-const manifest = readManifest('msi126.tsv');
-const previous = readManifest('msi125.tsv','2aaec0d6dd8bf485effe335b59fb738c7ec2d1bef9d7e8c81d5554db6122a9dd');
-const earlier = readManifest('msi124.tsv','b1ee0adc29ef1e3d8caa8a50045e70517d002f88bbecc7fb273b0c962808094f');
+const manifest = readManifest('msi128.tsv');
+const previous = readManifest('msi127.tsv','f7d5ae8d0045299b5b4a36cd871989e6b2bc4df05c703e7e95fa2f830680fc38');
 if (manifest.size !== previous.size || [...previous.keys()].some(name => !manifest.has(name))) {
   throw Error('The in-place MSI update must keep the existing file components.');
 }
@@ -44,7 +43,10 @@ const header = [
   'struct KnownFile { const wchar_t* path; long long size; const char* sha; };',
   'struct KnownCabBuild { const wchar_t* version; std::span<const KnownFile> files; };',
 ];
-for(const [id,entries] of [['msi126',manifest], ['msi125',previous], ['msi124',earlier],
+for(const [id,entries] of [['msi128',manifest], ['msi127',previous],
+  ['msi126',readManifest('msi126.tsv','9d176d84411d8e0e95121d4ca60cef806dc7e03a14d25d3146ab0edec1f463d8')],
+  ['msi125',readManifest('msi125.tsv','2aaec0d6dd8bf485effe335b59fb738c7ec2d1bef9d7e8c81d5554db6122a9dd')],
+  ['msi124',readManifest('msi124.tsv','b1ee0adc29ef1e3d8caa8a50045e70517d002f88bbecc7fb273b0c962808094f')],
   ['msi123',readManifest('msi123.tsv','9740a11756d36605fc48f100bcbe312f4cb5e2a44b73e8151cff71d7ab65d977')],
   ['msi122',readManifest('msi122.tsv','a7b8799abb9b488b70a5632c48623e043765453e0a8000a4850050af8e3a1031')],
   ['msi121',readManifest('msi121.tsv','b69d8831b06345be07b5ff1e83b6e04fefe5c2c577211e2b118eb53b941111ca')],

@@ -31,6 +31,9 @@ import { LanguageContext, translate, useText } from './i18n';
 import { LoanerTable } from './LoanerTable';
 import { BuybackTable } from './BuybackTable';
 import {ShipValueTable} from './ShipValueTable';
+import {AddonFilters, AddonsTable} from './AddonsTable';
+import {inventoryAddons, type AddonCategory} from '../domain/inventory-addons';
+import type {MarketSnapshot} from '../market/model';
 import {PaintAdvisor} from './PaintAdvisor';
 import {ProfileDialog} from './ProfileDialog';
 import {StoreCreditBadge} from './StoreCreditBadge';
@@ -108,6 +111,18 @@ function App() {
   const [inventory, setInventory] = useState<AccountInventory>();
   const [filter, setFilter] = useState('CCUs');
   const [inventoryQuery, setInventoryQuery] = useState('');
+  const [addonCategory, setAddonCategory] = useState<AddonCategory | ''>('');
+  const [addonShip, setAddonShip] = useState('');
+  const [addonCatalogue, setAddonCatalogue] = useState<readonly string[]>([]);
+  useEffect(() => {
+    if (page !== 'inventory' || filter !== 'Add-ons & Gear') return;
+    let active = true;
+    void call<MarketSnapshot>({action:'market.status'}).then(snapshot => {
+      if (active) setAddonCatalogue((snapshot.catalogue?.ships ?? []).map(ship => ship.name));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [page,filter]);
+  useEffect(() => { setAddonCategory(''); setAddonShip(''); }, [accountId]);
   const [inventoryCount, setInventoryCount] = useState({ shown: 0, total: 0 });
   const inventorySearchInput = useRef<HTMLInputElement>(null);
   const reportInventoryCount = useCallback((shown: number, total: number) => {
@@ -283,6 +298,11 @@ function App() {
   const present = useMemo(() => observed ? observedPledges.map(pledge => ({ pledge, availability: 'present' as const,
     source: 'rsi-dom-probe/1', importedAt: observed.observedAt })) : acceptedInventory?.items.filter(x => x.availability === 'present') ?? [],
   [observed, observedPledges, acceptedInventory]);
+  const addons = useMemo(() => filter === 'Add-ons & Gear' ? inventoryAddons(present, addonCatalogue) : [],
+    [present, addonCatalogue, filter]);
+  useEffect(() => {
+    if (addonShip && addonShip !== 'none' && !addons.some(item => item.relatedShips.includes(addonShip))) setAddonShip('');
+  }, [addons, addonShip]);
   const plannerInventory = useMemo(() => observed ? { accountId, pledges: observed.document.pledges,
     observation: { kind: 'rsi-hangar' as const, observedAt: observed.observedAt } }
     : acceptedInventory ? { accountId, pledges: acceptedInventory.items.filter(x => x.availability === 'present').map(x => x.pledge),
@@ -436,7 +456,7 @@ function App() {
           {account?.mode==='real'&&<StoreCreditBadge credit={storeCredit} language={display.settings.language}/>}
           {releaseUpdate && <ReleaseUpdateControl update={releaseUpdate} />}
           <button className="export-open" disabled={!accountId} onClick={()=>setExportKind(
-            filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':filter==='Buy Back'?'buyback':filter==='Loaner & Beiboote'?'loaners':'ships'
+            filter==='Add-ons & Gear'?'addons':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':filter==='Buy Back'?'buyback':filter==='Loaner & Beiboote'?'loaners':'ships'
           )}>{t('Exportieren …')}</button>
         </div>
       </header>
@@ -450,7 +470,7 @@ function App() {
         <div className="stat"><label>{t("Erkannte CCUs")}</label><strong>{ccus}</strong><small>{t("Einzelne Exemplare · ungeprüfte bleiben erkennbar")}</small></div>
         <div className="stat"><label>{t("Noch zu prüfen")}</label><strong>{unresolved}</strong><small>{t("Lesefehler oder Zuordnungsprobleme")}</small></div></div>
       <section className="panel inventory-panel"><div className="inventory-panel-head">
-        <div className="inventory-panel-line"><h2>{t("Schiffe, Fahrzeuge & CCUs")}</h2>
+        <div className="inventory-panel-line"><h2>{t("Schiffe, Fahrzeuge & Gegenstände")}</h2>
           <div className="actions inventory-actions" data-tooltip-dismissed={importTooltipDismissed}
             onPointerEnter={() => setImportTooltipDismissed(false)}>
             <button className="secondary" aria-describedby="inventory-import-tooltip" disabled={busy||!state}
@@ -467,14 +487,14 @@ function App() {
         </div>
         <div className="inventory-panel-line inventory-panel-tabs">
           <div className="filters" aria-label={t("Bestandsfilter")}>
-            {['Alle Gegenstände', 'Schiffe & Fahrzeuge', 'CCUs', 'Spielpakete', 'Spielzugänge', 'Buy Back', 'Loaner & Beiboote'].map(f => <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>{t(f)}</button>)}
+            {['Alle Gegenstände', 'Schiffe & Fahrzeuge', 'CCUs', 'Add-ons & Gear', 'Spielpakete', 'Spielzugänge', 'Buy Back', 'Loaner & Beiboote'].map(f => <button key={f} aria-pressed={filter === f} onClick={() => setFilter(f)}>{t(f)}</button>)}
           </div>
         </div>
       </div>
         <ConciergeCard key={'concierge:' + accountId} accountId={account?.mode === 'real' ? accountId : undefined}
           revision={lastSeen?.revision} connected={backgroundStatus === 'connected'} busy={connectionBusy}
           language={display.settings.language} request={call} />
-        <div className="inventory-search-row">
+        <div className={'inventory-search-row' + (filter === 'Add-ons & Gear' ? ' addon-inventory-search' : '')}>
           <div className="inventory-search">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>
             <input id="inventory-search-input" ref={inventorySearchInput} autoComplete="off" aria-label={t('Bestand durchsuchen')} placeholder={t('Bestand durchsuchen …')} value={inventoryQuery}
@@ -482,12 +502,18 @@ function App() {
               onKeyDown={event=>{if(event.key==='Escape'&&inventoryQuery){event.preventDefault();clearInventorySearch();}}}/>
             <button type="button" className="inventory-search-clear" aria-label={t('Suche löschen')} disabled={!inventoryQuery} onClick={clearInventorySearch}>×</button>
           </div>
+          {filter === 'Add-ons & Gear' && <AddonFilters items={addons} category={addonCategory} ship={addonShip}
+            onCategory={setAddonCategory} onShip={setAddonShip}/>}
           {purchaseTableVisible&&currentPurchaseBatch&&!purchaseEvidence&&<span role="status" className="inventory-search-count">{t('Kaufpreise werden geprüft …')}</span>}
-          <output htmlFor="inventory-search-input" aria-live="polite" className="inventory-search-count">{t(inventoryCount.total===1?'{shown} von {total} Eintrag':'{shown} von {total} Einträgen')
+          <output htmlFor="inventory-search-input" aria-live="polite" className="inventory-search-count">{t(filter==='Add-ons & Gear'
+            ? inventoryCount.total===1?'{shown} von {total} Gegenstand':'{shown} von {total} Gegenständen'
+            : inventoryCount.total===1?'{shown} von {total} Eintrag':'{shown} von {total} Einträgen')
             .replace('{shown}', inventoryCount.shown.toLocaleString(display.settings.language))
             .replace('{total}', inventoryCount.total.toLocaleString(display.settings.language))}</output>
         </div>
         {viewingBuybacks ? <BuybackTable {...inventorySearchProps} entries={liveBuybacks?.buybacks ?? acceptedInventory?.buybacks ?? []} observation={liveBuybacks?.buybackObservation} display={display} balance={storeCredit} />
+          : filter === 'Add-ons & Gear' ? <AddonsTable {...inventorySearchProps} items={addons} category={addonCategory} ship={addonShip}
+            display={display} demo={account?.mode==='demo'} />
           : filter === 'Loaner & Beiboote' ? <LoanerTable {...inventorySearchProps} accountId={accountId||null} pledges={present.map(x => x.pledge)} snapshot={loanerSnapshot} /> : <ShipValueTable {...inventorySearchProps} key={accountId} accountId={accountId} rows={visible} emptyText={filter==='Spielzugänge'&&present.some(x=>gameAccessAssignment(x.pledge,x.source).state!=='observed')?t('RSI-Zugangsmarkierungen im gespeicherten Stand noch nicht erfasst. Bestand aktualisieren.'):undefined} display={display} demo={account?.mode==='demo'} view={filter==='Schiffe & Fahrzeuge'?'ships':filter==='CCUs'?'ccus':filter==='Spielpakete'?'packages':filter==='Spielzugänge'?'access':'all'} sourceLabel={sourceLabel} historyFor={inventoryHistory} historyPurchases={historyPurchases} onHistory={p=>void loadUpgradeHistory(p)} lookupPurchases={p=>void loadUpgradeHistory(p,true)} canLookUpPurchases={p=>!(currentPurchaseBatch&&!purchaseEvidence)&&!!historyKey(p,account,observed)} crownFor={p=>hasGameAccess(gameAccessEvidence(p))?<GameAccessCrown/>:null} statusFor={p=>gameAccessRowStatus(p,gameAccessEvidence(p))} titleFor={(p,catalogue)=>{const key=historyKey(p,account,observed);return gameAccessTitle(p,upgradeHistoryTitle(p,!!key,inventoryHistory(p),catalogue),gameAccessEvidence(p));}}/>}</section>
       <div className="bottom" id="data-location"><span>Letzter vollständiger Import: {account?.lastComplete ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Berlin' }).format(new Date(account.lastComplete)) : 'noch keiner'}<br />Datenordner: {state?.dataDir ?? 'wird geladen'}</span>
         <span><button className="text-button" disabled={busy || !account?.reference} onClick={() => void run(async () => { const r = await call<{ exported: boolean; backup: string } | null>({ action: 'export', accountId }); if (r) setMessage(`Inventar exportiert. Konsistente Datenbanksicherung: ${r.backup}`); })}>{t("Sicherung / Export")}</button>

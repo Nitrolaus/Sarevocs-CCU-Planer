@@ -1,0 +1,6 @@
+.inventory-search-row.addon-inventory-search { flex-wrap:wrap; justify-content:flex-start; }
+.addon-inventory-search .inventory-search { flex:1 1 170px; max-width:400px; }
+.addon-inventory-search .addon-filter { flex:0 1 168px; min-width:115px; max-width:220px; margin:0; padding:4px 25px 4px 8px; font-size:13px; min-height:27px; border-radius:6px; }
+.addon-inventory-search .inventory-search-count { margin-left:auto; }
+.inventory-table.addons-table td,.inventory-table.addons-table th { padding-top:8px; padding-bottom:8px; }
+.inventory-table.addons-table tr td { line-height:1.4; }

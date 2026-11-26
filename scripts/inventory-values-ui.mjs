@@ -203,10 +203,12 @@ await check('UPGRADED_SHIP_SHOWS_ONLY_A_PROVEN_TOTAL',async()=>{
     throw Error('EXPECTED_ORDER_LOOKUP_FOR_EXPLICIT_REQUEST');
   },orderHistory);
   await cost.locator('strong').filter({hasText:'141,05'}).waitFor();
-  assert.equal(await cost.getByText('Gesamtkosten',{exact:true}).count(),1);
-  assert.match(await cost.getAttribute('title'),/Basisschiff · MDC · 41,25/);
-  assert.match(await cost.getAttribute('title'),/MDC → Sabre Firebird Imperator Subscribers Edition · 99,80/);
-  assert.doesNotMatch(await cost.innerText(),/41,25|99,80/);
+  assert.match(await cost.innerText(),/^141,05\s*€$/);
+  const details=await cost.getAttribute('title');
+  assert.match(details,/Startbasis \(z\. B\. LTI-Token\).*Preise der angewendeten CCUs/);
+  assert.match(details,/Basisschiff · MDC · 41,25/);
+  assert.match(details,/MDC → Sabre Firebird Imperator Subscribers Edition · 99,80/);
+  assert.match(details,/Mein Kaufpreis · 141,05/);
   await app.evaluate(({},orderHistory)=>{
     const view=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];
     view.revision='88888888-8888-4888-8888-888888888888';
@@ -247,6 +249,95 @@ await check('CONNECTED_INVENTORY_APPLIES_BATCH_RECEIPTS_WITHOUT_PER_SHIP_CLICKS'
   assert.equal(commands.some(command=>command.action==='rsi.upgradeHistory'&&['1070','1071'].includes(command.pledgeId)),false);
 });
 await check('TWO_HUNDRED_SHIPS_STAY_COMPACT_AT_1440_1024_AND_125_PERCENT',async()=>{await row('1005').locator('.ship-current-value strong').filter({hasText:'54,59'}).waitFor();await table.evaluate(t=>{const c=t.createCaption();c.textContent='SYNTHETISCHE TESTDATEN · KOMPAKTE PREISANSICHT';c.style.cssText='text-align:left;color:#ffbd69;padding:6px 10px;font-size:11px';});await table.screenshot({path:path.join(folder,'compact-prices.png')});await table.evaluate(t=>t.caption.remove());await app.evaluate(({},pledges)=>{const v=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];v.document.pledges=pledges;v.revision='55555555-5555-4555-8555-555555555555';v.observedAt=new Date().toISOString();},Array.from({length:200},(_,i)=>({...pledge(String(5000+i),[i%2?'Prospector':'Ursa'],'$95.00 USD'),name:i%2?'Standalone Ships - Prospector':'Standalone Ships - Ursa'})));await page.waitForFunction(()=>document.querySelectorAll('.ship-value-table tbody tr').length===200);for(const [width,scale]of [[1440,1],[1024,1],[1024,1.25]]){await page.setViewportSize({width,height:1000});const cdp=await page.context().newCDPSession(page);await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,mobile:false,deviceScaleFactor:scale});const geometry=await table.locator('tbody tr').evaluateAll(rows=>rows.map(r=>({height:r.getBoundingClientRect().height,overflow:r.scrollWidth>r.clientWidth})));assert.ok(geometry.every(r=>r.height<=44&&!r.overflow),JSON.stringify(geometry.slice(0,3)));assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await table.locator('tbody tr').first().scrollIntoViewIfNeeded();await page.screenshot({path:path.join(folder,'compact-'+width+'-'+scale+'.png')});await cdp.detach();}await page.setViewportSize({width:1440,height:1000});});
+await check('ADDONS_FILTER_PACKAGE_CONTENTS_AND_RESET_WITH_THE_PROFILE',async()=>{
+  const previous=await app.evaluate(()=>structuredClone(globalThis.fixture.views[globalThis.fixture.state.selectedAccountId]));
+  const module=pledge('7100',[],'$999.00 USD');
+  module.name='Galaxy - Cargo Module';
+  module.sourceValues.items=JSON.stringify([{title:module.name,kind:'Module'}]);
+  module.rsiPurchase={status:'documented',source:'order',minor:4125,currency:'EUR'};
+  const pack=pledge('7101',['MTC'],'$99.00 USD');
+  pack.name='Synthetic MTC Pack plus Paints';
+  pack.sourceValues.items=JSON.stringify([{title:'MTC',kind:'Vehicle'},
+    {title:'MTC - Icefront Camo Paint',kind:'Skin'},{title:'MTC - Sunset Paint',kind:'Skin'}]);
+  pack.sourceValues.alsoContains=JSON.stringify([{title:'MTC - Icefront Camo Paint'}]);
+  pack.rsiPurchase={status:'documented',source:'order',minor:7810,currency:'EUR'};
+  const armor=pledge('7102',[],'$10.00 USD');
+  armor.sourceValues.items=JSON.stringify([{title:'Synthetic Helmet',kind:'Armor'}]);
+  const unknown=pledge('7103',[],'$5.00 USD');
+  unknown.sourceValues.items=JSON.stringify([{title:'Synthetic Mystery',kind:'New RSI kind'}]);
+  await app.evaluate(({},pledges)=>{
+    const view=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];
+    view.document.pledges.push(...pledges);
+    view.revision='22222222-2222-4222-8222-222222222127';
+    view.observedAt=new Date().toISOString();
+    globalThis.fixture.market.catalogue.ships.push({id:9000,name:'Galaxy',chassisId:null,
+      manufacturer:'Synthetic',manufacturerCode:'T',status:'unknown',focus:'',length:null});
+  },[module,pack,armor,unknown]);
+  await page.getByRole('button',{name:'Add-ons & Gear',exact:true}).click();
+  const gear=page.getByRole('table',{name:'Add-ons & Gear',exact:true});
+  await page.waitForFunction(()=>document.querySelectorAll('.addons-table tbody tr[data-addon]').length===5);
+  const tabs=await page.locator('.inventory-panel-tabs .filters button').allTextContents();
+  assert.equal(tabs[tabs.indexOf('Add-ons & Gear')-1],'CCUs');
+  assert.equal(tabs[tabs.indexOf('Add-ons & Gear')+1],'Spielpakete');
+  const kind=page.getByRole('combobox',{name:'Gegenstandsart',exact:true});
+  const ship=page.getByRole('combobox',{name:'Zugehöriges Schiff',exact:true});
+  const search=page.getByRole('textbox',{name:'Bestand durchsuchen',exact:true});
+  assert.match(await gear.locator('tr[data-pledge="7100"] .ship-price').innerText(),/^41,25\s*€$/);
+  await kind.selectOption('paints');
+  assert.equal(await gear.locator('tbody tr[data-addon]').count(),2);
+  await ship.selectOption('MTC');
+  await search.fill('icefront camo');
+  assert.equal(await gear.locator('tbody tr[data-addon]').count(),1);
+  const paint=gear.locator('tbody tr[data-addon]');
+  assert.equal(await paint.locator('.ship-price').innerText(),'—');
+  assert.match(await paint.locator('.ship-price').getAttribute('title'),/Ein Einzelpreis ist nicht belegt/);
+  assert.equal(await paint.locator('td').nth(3).innerText(),'Synthetic MTC Pack plus Paints');
+  await search.fill('');
+  await ship.selectOption('Galaxy');
+  await gear.getByText('Keine passenden Einträge gefunden.',{exact:true}).waitFor();
+  await kind.selectOption('');
+  assert.equal(await gear.locator('tbody tr[data-addon]').count(),1);
+  await ship.selectOption('none');
+  await kind.selectOption('other');
+  assert.equal(await gear.locator('tbody tr[data-addon]').count(),1);
+  await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(b);
+  await gear.getByText('Keine Add-ons oder Gear im gespeicherten Bestand erkannt.',{exact:true}).waitFor();
+  assert.equal(await kind.inputValue(),'');
+  assert.equal(await ship.inputValue(),'');
+  await page.getByLabel('Lokales Kontoprofil',{exact:true}).selectOption(a);
+  await page.waitForFunction(()=>document.querySelectorAll('.addons-table tbody tr[data-addon]').length===5);
+  await gear.screenshot({path:path.join(folder,'addons-inventory.png')});
+  const many=Array.from({length:200},(_,index)=>{
+    const entry=pledge(String(8000+index),[],'$10.00 USD');
+    entry.sourceValues.items=JSON.stringify([{title:'Synthetic Paint '+index,kind:'Skin'}]);
+    return entry;
+  });
+  await app.evaluate(({},pledges)=>{
+    const view=globalThis.fixture.views[globalThis.fixture.state.selectedAccountId];
+    view.document.pledges=pledges;
+    view.revision='22222222-2222-4222-8222-222222222129';
+    view.observedAt=new Date().toISOString();
+  },many);
+  await page.waitForFunction(()=>document.querySelectorAll('.addons-table tbody tr[data-addon]').length===200);
+  for(const [width,scale] of [[1440,1],[1024,1],[1024,1.25]]){
+    await page.setViewportSize({width,height:1000});
+    const cdp=await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,mobile:false,deviceScaleFactor:scale});
+    const geometry=await gear.locator('tbody tr').evaluateAll(rows=>rows.map(row=>({
+      height:row.getBoundingClientRect().height,overflow:row.scrollWidth>row.clientWidth
+    })));
+    assert.ok(geometry.every(row=>row.height<=44&&!row.overflow));
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await cdp.detach();
+  }
+  await page.setViewportSize({width:1440,height:1000});
+  await app.evaluate(({},previous)=>{
+    previous.revision='22222222-2222-4222-8222-222222222128';
+    previous.observedAt=new Date().toISOString();
+    globalThis.fixture.views[globalThis.fixture.state.selectedAccountId]=previous;
+  },previous);
+  await page.getByRole('button',{name:'Schiffe & Fahrzeuge',exact:true}).click();
+});
 await check('NO_LOGIN_MUTATION_NETWORK_OR_REAL_USER_DATA',async()=>{
   assert.equal(await page.locator('dialog[open]').count(),0);
   const commands=await app.evaluate(()=>globalThis.fixture.commands);
