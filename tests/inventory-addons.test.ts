@@ -5,6 +5,15 @@ import {parseImport} from '../src/importers/files';
 import {basePledge} from './fixtures';
 
 const source = 'rsi-dom-probe/1';
+test('game access and insurance with whitespace variants never become add-ons and source titles remain untouched',()=>{
+ for(const space of [' ','  ','\n','\u00a0']){
+  const imported=parseImport(JSON.stringify({type:'hangarexport',version:2,handle:'SYNTHETIC',pledges:[{pledgeId:'whitespace',pledgeName:'Synthetic package',
+   items:[{title:'Synthetic Ship',kind:'Ship'},{title:'Synthetic Paint',kind:'Skin'}],alsoContains:[{title:'Star'+space+'Citizen'+space+'Digital'+space+'Download'},{title:'Lifetime'+space+'Insurance'},{title:'5,000'+space+'UEC'},{title:'Insurance case',kind:'Clothing'}]}]}));
+  const pledge=imported.document.pledges[0]!,before=JSON.stringify(pledge);
+  assert.deepEqual(inventoryAddons([{pledge,source}]).map(s=>s.name),['Synthetic Paint','Insurance case']);
+  assert.equal(JSON.stringify(pledge),before);
+ }
+});
 function addon(id: string, items: {title: string; kind?: string}[]) {
   const pledge = basePledge(id);
   pledge.ships = [];

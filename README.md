@@ -8,13 +8,15 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.128 Alpha** ist als kostenlose Testversion verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.129 Alpha** ist als kostenlose Testversion verfügbar.
 
-[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.128-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.129-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
-Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update von MSI 0.3.121 bis 0.3.127 übernimmt Windows Installer den registrierten Ordner. Die Release-Anleitung zeigt den Update-Befehl und erklärt, wie du das ursprünglich verwendete MSI als Quelle bereithältst. Einen gemeinsam beschreibbaren Programmordner kannst du nach einer deutlichen Risikoabfrage freigeben. Windows muss dir den Schreibzugriff erlauben.
+Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update von MSI 0.3.121 bis 0.3.128 übernimmt Windows Installer den registrierten Ordner. Die Release-Anleitung zeigt den Update-Befehl und erklärt, wie du das ursprünglich verwendete MSI als Quelle bereithältst. Einen gemeinsam beschreibbaren Programmordner kannst du nach einer deutlichen Risikoabfrage freigeben. Windows muss dir den Schreibzugriff erlauben.
 
 #### Bestand und Angebote
+
+**FleetYards-Dateiexport:** Unter „Exportieren …“ wählst du einzelne Schiffexemplare in einer kompakten Tabelle mit Suche, Herstellerfilter und Seitenwahl aus. Die JSON-Vorschau zeigt, was du weitergibst. Kontodaten, Preise und Seriennummern bleiben draußen; gespeichert wird ausschließlich lokal. [Anleitung und Schutzgrenzen](docs/public/FLEETYARDS.md)
 
 Der Reiter **Add-ons & Gear** zeigt vorhandene Paketbestandteile mit Suche sowie Filtern nach Gegenstandsart und zugehörigem Schiff. Auch Excel- und PDF-Exporte können diesen Bereich aufnehmen. Unter **Mein Kaufpreis** steht der belegte Gesamtbetrag für das aktuelle Schiff. Die Zusammensetzung aus Startbasis und angewendeten CCUs findest du beim Darüberfahren.
 
@@ -70,13 +72,15 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.128 Alpha** is available as a free test release.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.129 Alpha** is available as a free test release.
 
-[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.128-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.129-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
-Choose the program folder when installing for the first time. When updating from MSI 0.3.121 through 0.3.127, Windows Installer reuses the registered folder. See the release instructions for the update command and how to make the original MSI available as a source. You can approve a shared writable program folder after an explicit risk warning. Windows must still grant you write access.
+Choose the program folder when installing for the first time. When updating from MSI 0.3.121 through 0.3.128, Windows Installer reuses the registered folder. See the release instructions for the update command and how to make the original MSI available as a source. You can approve a shared writable program folder after an explicit risk warning. Windows must still grant you write access.
 
 #### Inventory and offers
+
+**FleetYards file export:** Use “Export …” to select individual ship copies in a compact table with search, manufacturer filters, and pagination. Review the JSON before sharing. Account details, prices, and serial numbers are excluded; saving is local only. [Instructions and privacy boundaries](docs/public/FLEETYARDS.md#english)
 
 The **Add-ons & Gear** tab lists retained package contents with search and filters for item type and related ship. Excel and PDF exports can include this area. **My purchase price** shows the documented total for the current ship. Hover over it to see the starting ship and applied CCU costs.
 

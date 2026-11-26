@@ -1,5 +1,14 @@
 # Änderungen
 
+## 0.3.129 · Alpha
+
+Der FleetYards-Dateiexport ist im Exportdialog neben Excel und PDF verfügbar. Die Tabelle bietet Suche, Herstellerfilter, einzelne Exemplare, Auswahlansichten und gefilterte Sammelauswahl. Die kompakten Zeilen und Seitenwahl wurden mit 240 Schiffen geprüft.
+
+Die JSON-Datei enthält ausschließlich ausgewählte, eindeutig zugeordnete Modellnamen und private Sichtbarkeitsangaben. Profilname, lokale Kennungen, Kaufpreise, Seriennummern und RSI-Kontodaten werden ausgeschlossen. Nicht belegte eigene Schiffsnamen oder FleetYards-Paintzuordnungen werden nicht ergänzt; die entsprechenden Optionen bleiben dann inaktiv. Der Export speichert lokal und lädt nichts hoch. Ein Profilwechsel während des Speicherns bricht den Export ab.
+
+Bekannte Spielzugänge und Versicherungen werden auch bei Zeilenumbrüchen, doppelten oder geschützten Leerzeichen korrekt aus „Add-ons & Gear“ ausgeschlossen. Originaldaten bleiben erhalten.
+
+
 ## 0.3.128 · Alpha
 
 Der neue Bestandsreiter „Add-ons & Gear“ steht zwischen CCUs und Spielpaketen. Er zeigt gespeicherte Paketbestandteile mit Suche, Gegenstandsart, Schiffszuordnung und belegtem Einzelpreis. Der Export unterstützt den Bereich mit Filtern nach Gegenstandsart. Die Oberfläche wurde auch mit 200 Einträgen geprüft.

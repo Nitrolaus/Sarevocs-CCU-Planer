@@ -36,7 +36,7 @@ try {
     Run "$($vc.FullName)\bin\Hostx64\x64\cl.exe" $flags
     Run "$WixDirectory\candle.exe" @('-nologo','-arch','x64',"-dMsiSources=$PSScriptRoot","-dBuildDir=$BuildDirectory",
         "-dAppDir=$Application","-dProductCode=$ProductCode","-I$BuildDirectory",'-out',"$BuildDirectory\","$PSScriptRoot\Product.wxs","$PSScriptRoot\SetupUI.wxs","$BuildDirectory\Payload.wxs")
-    $msi = Join-Path $BuildDirectory 'Sarevocs-CCU-Planer-Setup-0.3.128-Alpha.msi'
+    $msi = Join-Path $BuildDirectory 'Sarevocs-CCU-Planer-Setup-0.3.129-Alpha.msi'
     # ICE uses the host Windows Installer service. The offline sandbox is the installation test.
     Run "$WixDirectory\light.exe" @('-nologo','-sval','-ct','1','-cultures:de-de','-ext',"$WixDirectory\WixUIExtension.dll",'-out',$msi,
         "$BuildDirectory\Product.wixobj","$BuildDirectory\SetupUI.wixobj","$BuildDirectory\Payload.wixobj")

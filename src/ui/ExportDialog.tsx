@@ -4,11 +4,12 @@ import type {ExportContext,ReportFilters,ReportKind,ReportPreview,ReportSaveResu
 import {reportSections,inventoryReportSections,planningReportSections} from '../export/model';
 import {reportFilterLabels,reportFilterOptions} from '../export/filters';
 import {LanguageContext,useText} from './i18n';
+import {FleetYardsExport} from './FleetYardsExport';
 import './export.css';
 async function request<T>(command:Command):Promise<T>{const r=await window.ccu.request(command);if(!r.ok)throw Error(r.error);return r.data as T;}
 export function ExportDialog({accountId,initialKind,chainContext,onClose,onSaved}:{accountId:string;initialKind:ReportKind;chainContext:ExportContext;onClose:()=>void;onSaved:()=>void}){
  type Section=(typeof reportSections)[number];
- const t=useText(),[selected,setSelected]=useState<Section[]>([initialKind==='inventory'?'ships':initialKind]),[format,setFormat]=useState<'xlsx'|'pdf'>('xlsx'),[prepared,setPrepared]=useState<{scope:string;data:ReportPreview}|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
+ const t=useText(),[selected,setSelected]=useState<Section[]>([initialKind==='inventory'?'ships':initialKind]),[format,setFormat]=useState<'xlsx'|'pdf'|'fleetyards'>('xlsx'),[prepared,setPrepared]=useState<{scope:string;data:ReportPreview}|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
  const language=useContext(LanguageContext),[chosenFilters,setChosenFilters]=useState<ReportFilters>({});
  const modal=useRef<HTMLDialogElement>(null),pending=useRef(false),generation=useRef(0),close=useRef(onClose);close.current=onClose;
  const context=chainContext?.accountId===accountId?chainContext.chain:undefined,signature=JSON.stringify(context);
@@ -37,18 +38,19 @@ export function ExportDialog({accountId,initialKind,chainContext,onClose,onSaved
  }
  useEffect(()=>{const dialog=modal.current!,previous=document.activeElement as HTMLElement|null;dialog.showModal();return ()=>{generation.current++;dialog.close();previous?.focus();};},[]);
  useEffect(()=>{const epoch=++generation.current;setLoading(true);setPrepared(null);setError('');
-  if(!kinds.length){setLoading(false);return;}
+  if(!kinds.length||format==='fleetyards'){setLoading(false);return;}
   void request<ReportPreview>({action:'report.selection',accountId,kinds,filters,...(kinds.includes('chain')?{chain:context}:{} )}).then(data=>{if(generation.current===epoch)setPrepared({scope,data});}).catch(e=>{if(generation.current===epoch)setError(e.message);}).finally(()=>{if(generation.current===epoch)setLoading(false);});
- },[scope]);
- async function save(){if(pending.current||!preview)return;pending.current=true;const epoch=generation.current;setSaving(true);setError('');
+ },[scope,format==='fleetyards']);
+ async function save(){if(pending.current||!preview||format==='fleetyards')return;pending.current=true;const epoch=generation.current;setSaving(true);setError('');
   try{const result=await request<ReportSaveResult>({action:'report.save',accountId,token:preview.token,format});if(epoch===generation.current&&result.exported){onSaved();close.current();}}
   catch(e){if(epoch===generation.current)setError(e instanceof Error?e.message:t('Export fehlgeschlagen.'));}
   finally{pending.current=false;if(epoch===generation.current)setSaving(false);}
  }
- return <dialog ref={modal} className="export-dialog" aria-labelledby="export-title" onCancel={event=>{event.preventDefault();if(!pending.current)close.current();}}>
-  <header className="export-header"><div><h2 id="export-title">{t('Exportieren')}</h2><span className="export-meta">{preview?.profileName}</span></div>
-   <div className="export-formats" role="group" aria-label={t('Dateiformat')}><button aria-pressed={format==='xlsx'} className={format==='xlsx'?'primary':''} disabled={saving} onClick={()=>setFormat('xlsx')}>Excel (.xlsx)</button><button aria-pressed={format==='pdf'} className={format==='pdf'?'primary':''} disabled={saving} onClick={()=>setFormat('pdf')}>PDF</button></div>
+ return <dialog ref={modal} className={'export-dialog'+(format==='fleetyards'?' fy-dialog':'')} aria-labelledby="export-title" onCancel={event=>{event.preventDefault();if(!pending.current&&!saving)close.current();}}>
+  <header className="export-header"><div><h2 id="export-title">{t(format==='fleetyards'?'Für FleetYards exportieren':'Exportieren')}</h2><span className="export-meta">{preview?.profileName}</span></div>
+   <div className="export-formats" role="group" aria-label={t('Dateiformat')}><button aria-pressed={format==='xlsx'} className={format==='xlsx'?'primary':''} disabled={saving} onClick={()=>setFormat('xlsx')}>Excel (.xlsx)</button><button aria-pressed={format==='pdf'} className={format==='pdf'?'primary':''} disabled={saving} onClick={()=>setFormat('pdf')}>PDF</button><button aria-pressed={format==='fleetyards'} className={format==='fleetyards'?'primary':''} disabled={saving} onClick={()=>setFormat('fleetyards')}>FleetYards (.json)</button></div>
   </header>
+  {format==='fleetyards'?<FleetYardsExport key={accountId} accountId={accountId} onClose={onClose} onSaved={onSaved} onBusy={setSaving}/>:<>
   <h3>{t('Inhalte auswählen')}</h3>
   <div className="export-choices">
    <fieldset><legend>{t('Bestand')}</legend>{inventoryReportSections.map(checkbox)}</fieldset>
@@ -62,5 +64,6 @@ export function ExportDialog({accountId,initialKind,chainContext,onClose,onSaved
   </div>
   {error&&<p className="error" role="alert">{error}</p>}
   <div className="export-actions"><button disabled={saving} onClick={onClose}>{t('Abbrechen')}</button><button className="primary" disabled={loading||saving||!preview} onClick={()=>void save()}>{saving?t('Wird gespeichert …'):t('Speicherort wählen …')}</button></div>
+  </>}
  </dialog>;
 }

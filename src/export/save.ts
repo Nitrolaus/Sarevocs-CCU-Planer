@@ -1,7 +1,7 @@
 import fs from 'node:fs';import path from 'node:path';import {randomUUID} from 'node:crypto';
 import {UserError} from '../domain/model';
 /** Save-dialog result only. Never write directly into an existing report. */
-export function reportTarget(file:string,format:'xlsx'|'pdf'){
+export function reportTarget(file:string,format:'xlsx'|'pdf'|'json'){
  if(path.extname(file).toLowerCase()!=='.'+format)throw new UserError('Dateiendung passt nicht zum gewählten Exportformat.');
  const directory=path.dirname(file);
  function folder(){

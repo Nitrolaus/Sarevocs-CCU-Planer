@@ -14,6 +14,7 @@ import { releaseTagSchema } from './release-updates';
 import { creditBudgetSchema } from '../planner/credit-budget';
 import { giveawayEditSchema } from '../storage/giveaway-origins';
 import { packageShareEditSchema } from '../planner/package-shares';
+import {fleetSelectionSchema,fleetOptionsSchema} from '../export/fleetyards';
 export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('state') }).strict(),
   z.object({ action: z.literal('help.openRsi'), topic: rsiHelpTopicSchema }).strict(),
@@ -25,6 +26,8 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({action:z.literal('report.selection'),accountId:z.uuid(),kinds:reportSelectionSchema,chain:reportChainSchema.optional(),filters:reportFiltersSchema.optional()}).strict()
     .refine(command=>Object.keys(command.filters??{}).every(key=>command.kinds.some(kind=>kind===key))),
   z.object({action:z.literal('report.save'),accountId:z.uuid(),token:z.uuid(),format:z.enum(['xlsx','pdf'])}).strict(),
+  z.object({action:z.literal('fleetyards.preview'),accountId:z.uuid()}).strict(),
+  z.object({action:z.literal('fleetyards.save'),accountId:z.uuid(),token:z.uuid(),selected:fleetSelectionSchema,options:fleetOptionsSchema}).strict(),
   z.object({ action: z.literal('market.status'), includeLastShopPrices: z.literal(true).optional() }).strict(),
   z.object({ action: z.literal('market.fairSeen'), noticeId: fairNoticeIdSchema }).strict(),
   z.object({action:z.literal('paints.status')}).strict(),

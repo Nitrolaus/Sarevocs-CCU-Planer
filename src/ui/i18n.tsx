@@ -2,6 +2,7 @@ import React, { createContext, useContext } from 'react';
 import {paintEnglish} from './paint-english';
 export const LanguageContext=createContext<'de'|'en'>('de');
 const english:Record<string,string>={
+  'Für FleetYards exportieren':'Export for FleetYards',
   'Daten aktualisieren':'Refresh data',
   'Preisquelle für CCUs · Automatisch · RSI-Shoppreis, sonst EZB':'CCU price source · Automatic · RSI shop price, otherwise ECB',
   'Sprache, Preise & Fenster':'Language, prices & window',

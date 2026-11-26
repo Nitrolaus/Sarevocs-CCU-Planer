@@ -533,13 +533,13 @@ void verifyOwnership(MSIHANDLE s) {
         require(arp!=nullptr,L"Die registrierte Altinstallation fehlt.");
         const auto& build=checkLegacyKey(arp.get(),oldRoot);
         require(property(s,L"CcuLegacyVersion")==build.version,L"Die Altversion hat sich während des Setups geändert.");
-        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi128,false);
+        if(!keepLegacy) verifyFiles(oldRoot,build.files,msi129,false);
     }
     if(msiUpgrade) {
         const auto prior=canonical(previousMsi.root,token.get());
         require(!within(prior,root),L"Der neue Programmordner darf die Altinstallation nicht ersetzen.");
         verifyChosenTree(s,prior,token.get());
-        verifyFiles(prior,installedFiles(previousMsi),msi128,false);
+        verifyFiles(prior,installedFiles(previousMsi),msi129,false);
         verifyShortcut(desktop,legacyLinkName,prior,true);
         verifyShortcut(menu,legacyLinkName,prior,true);
     }
@@ -553,13 +553,14 @@ void verifyOwnership(MSIHANDLE s) {
         if(own.version==L"0.3.125") baseline=msi125;
         if(own.version==L"0.3.126") baseline=msi126;
         if(own.version==L"0.3.127") baseline=msi127;
+        if(own.version==L"0.3.128") baseline=msi128;
         if(!baseline.empty()) {
             require(wholeReinstall(s),
                 L"Starte dieses Update mit REINSTALL=ALL REINSTALLMODE=vamus. Die Anleitung steht im GitHub-Release.");
             verifyFiles(root,baseline,cab117,true);
         } else {
-            require(own.version==L"0.3.128",L"Unerwartete installierte Programmversion.");
-            verifyFiles(root,msi128,cab117,true);
+            require(own.version==L"0.3.129",L"Unerwartete installierte Programmversion.");
+            verifyFiles(root,msi129,cab117,true);
         }
     }
     if(legacy) {

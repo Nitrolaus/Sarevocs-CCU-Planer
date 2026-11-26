@@ -45,6 +45,7 @@ import {PaintService} from './paints/service';
 import {publicPaintReader} from './paints/transport';
 import {readPaintCatalogue} from './paints/source';
 import {ReportService} from './export/service';
+import {FleetYardsService} from './export/fleetyards-service';
 import {excelReport} from './export/excel';
 import {pdfReport,closeReportWindows} from './export/pdf';
 import {reportTarget} from './export/save';
@@ -96,6 +97,7 @@ function cancelConciergeReads() {
   }
 }
 const reports=new ReportService();let reportSaving=false;
+const fleetYards=new FleetYardsService();
 function beginInteractive(id: string): InteractiveTask {
   if (revokingSessions.has(id)) throw new UserError('Die gespeicherte RSI-Sitzung wird gerade gelöscht.');
   const previous = interactive.get(id); previous?.controller.abort();
@@ -199,6 +201,22 @@ async function start() {
       if (shuttingDown) throw new UserError('Programm wird beendet.');
       let data: unknown;
       switch (cmd.action) {
+        case 'fleetyards.preview':{
+          if(selectedAccountId!==cmd.accountId)throw new UserError('Exportprofil ist nicht mehr ausgewählt.');
+          data=fleetYards.preview(store.inventory(cmd.accountId),background.snapshot(cmd.accountId).view??null,market.snapshot().catalogue?.ships??[]);break;
+        }
+        case 'fleetyards.save':{
+          if(reportSaving)throw new UserError('Ein Export wird bereits gespeichert.');
+          if(selectedAccountId!==cmd.accountId)throw new UserError('Exportprofil ist nicht mehr ausgewählt.');
+          const json=fleetYards.file(cmd.accountId,cmd.token,cmd.selected,cmd.options),epoch=selectionEpoch;reportSaving=true;
+          try{
+            const target=await dialog.showSaveDialog(win,{title:'FleetYards-Export speichern',defaultPath:'FleetYards-Hangar.json',
+              filters:[{name:'FleetYards JSON',extensions:['json']}],properties:['showOverwriteConfirmation']});
+            if(target.canceled||!target.filePath){data={exported:false};break;}
+            if(shuttingDown||selectedAccountId!==cmd.accountId||selectionEpoch!==epoch)throw new UserError('Profil wurde gewechselt oder Programm beendet. Export abgebrochen.');
+            reportTarget(target.filePath,'json')(Buffer.from(json,'utf8'));fleetYards.remove(cmd.token);data={exported:true};
+          }finally{reportSaving=false;}break;
+        }
         case 'report.preview':
         case 'report.selection':{
           if(selectedAccountId!==cmd.accountId)throw new UserError('Exportprofil ist nicht mehr ausgewählt.');
@@ -567,7 +585,7 @@ app.on('before-quit', event => {
   if (!single || shutdownComplete) return;
   event.preventDefault();
   if (shuttingDown) return;
-  shuttingDown = true; cancelConciergeReads(); pending.clear();reports.clear();closeReportWindows();
+  shuttingDown = true; cancelConciergeReads(); pending.clear();reports.clear();fleetYards.clear();closeReportWindows();
   inventoryRefresh?.close();
   market?.close();
   paints?.close();

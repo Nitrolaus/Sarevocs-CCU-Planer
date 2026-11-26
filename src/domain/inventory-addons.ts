@@ -45,10 +45,11 @@ function contents(raw: string | undefined): Content[] | null {
 }
 
 function entitlement(item: Content): boolean {
-  return /^(ship|vehicle|insurance|upgrade|game|game access|currency)$/i.test(item.kind) ||
-    /^(?:Star Citizen|Squadron\s*42) (?:Digital Download|Game Access)$/i.test(item.title) ||
-    /^(?:Lifetime|\d+\s+Months?) Insurance$/i.test(item.title) ||
-    /^(?:\d[\d,.]*\s+(?:UEC|REC)|(?:UEC|REC)\s+\d[\d,.]*)$/i.test(item.title);
+  const kind=normalized(item.kind),title=normalized(item.title);
+  return /^(ship|vehicle|insurance|upgrade|game|game access|currency)$/i.test(kind) ||
+    /^(?:Star Citizen|Squadron\s*42) (?:Digital Download|Game Access)$/i.test(title) ||
+    /^(?:Lifetime|\d+\s+Months?) Insurance$/i.test(title) ||
+    /^(?:\d[\d,.]*\s+(?:UEC|REC)|(?:UEC|REC)\s+\d[\d,.]*)$/i.test(title);
 }
 
 function category(item: Content): AddonCategory {
