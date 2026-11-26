@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {productIdentity} from './product-identity.mjs';
 
 const source = path.dirname(fileURLToPath(import.meta.url));
 const [application, buildDir] = process.argv.slice(2);
@@ -28,8 +29,10 @@ function guid(name) {
   const h = digest('SarevocsCCUPlanerMSI|file|' + name.toLowerCase());
   return `{${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}}`;
 }
-const manifest = readManifest('msi129.tsv');
-const previous = readManifest('msi128.tsv','bff72a80e8467c9c5589e0ced281440ba36fee858b6ed13d9e382c57ca9b3c12');
+const identity=productIdentity(JSON.parse(fs.readFileSync(path.join(source,'../../package.json'),'utf8')).version);
+fs.writeFileSync(path.join(buildDir,'PackageIdentity.json'),JSON.stringify(identity,null,2)+'\n');
+const manifest = readManifest('msi130.tsv');
+const previous = readManifest('msi129.tsv','015cf909ce4fa65f8d83c8c89cc50ae83307bef9d5891cc3957f2acf16d73764');
 if (manifest.size !== previous.size || [...previous.keys()].some(name => !manifest.has(name))) {
   throw Error('The in-place MSI update must keep the existing file components.');
 }
@@ -42,8 +45,10 @@ const header = [
   '#pragma once',
   'struct KnownFile { const wchar_t* path; long long size; const char* sha; };',
   'struct KnownCabBuild { const wchar_t* version; std::span<const KnownFile> files; };',
+  `constexpr wchar_t currentMsiVersion[] = L"${identity.version}";`,
 ];
-for(const [id,entries] of [['msi129',manifest], ['msi128',previous],
+for(const [id,entries] of [['currentMsiFiles',manifest], ['msi129',previous],
+  ['msi128',readManifest('msi128.tsv','bff72a80e8467c9c5589e0ced281440ba36fee858b6ed13d9e382c57ca9b3c12')],
   ['msi127',readManifest('msi127.tsv','f7d5ae8d0045299b5b4a36cd871989e6b2bc4df05c703e7e95fa2f830680fc38')],
   ['msi126',readManifest('msi126.tsv','9d176d84411d8e0e95121d4ca60cef806dc7e03a14d25d3146ab0edec1f463d8')],
   ['msi125',readManifest('msi125.tsv','2aaec0d6dd8bf485effe335b59fb738c7ec2d1bef9d7e8c81d5554db6122a9dd')],

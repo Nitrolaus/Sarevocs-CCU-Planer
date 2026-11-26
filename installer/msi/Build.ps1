@@ -4,7 +4,6 @@ param(
     [string]$WixDirectory = 'C:\Codex\tools\WiX-3.14.1-CCU'
 )
 $ErrorActionPreference = 'Stop'
-$ProductCode = '{142B7731-1211-4ED2-AE86-C572D7053121}'
 $Application = (Resolve-Path -LiteralPath $Application).Path
 $BuildDirectory = [IO.Path]::GetFullPath($BuildDirectory)
 [void][IO.Directory]::CreateDirectory($BuildDirectory)
@@ -27,6 +26,7 @@ try {
     $env:TEMP = $scratch
     $env:TMP = $scratch
     Run 'node.exe' @("$PSScriptRoot\harvest.mjs", $Application, $BuildDirectory)
+    $identity = Get-Content -LiteralPath (Join-Path $BuildDirectory 'PackageIdentity.json') -Raw | ConvertFrom-Json
     & "$PSScriptRoot\Build-DialogResources.ps1" -BuildDirectory $BuildDirectory
     $flags = @('/nologo','/std:c++20','/EHsc','/O2','/MT','/LD','/utf-8',"/I$BuildDirectory","/I$($vc.FullName)\include")
     $flags += @('um','shared','ucrt','winrt') | ForEach-Object { "/I$($sdk.FullName)\$_" }
@@ -35,8 +35,8 @@ try {
         "/IMPLIB:$BuildDirectory\Preflight.lib",'msi.lib','shell32.lib','ole32.lib','uuid.lib','advapi32.lib','bcrypt.lib')
     Run "$($vc.FullName)\bin\Hostx64\x64\cl.exe" $flags
     Run "$WixDirectory\candle.exe" @('-nologo','-arch','x64',"-dMsiSources=$PSScriptRoot","-dBuildDir=$BuildDirectory",
-        "-dAppDir=$Application","-dProductCode=$ProductCode","-I$BuildDirectory",'-out',"$BuildDirectory\","$PSScriptRoot\Product.wxs","$PSScriptRoot\SetupUI.wxs","$BuildDirectory\Payload.wxs")
-    $msi = Join-Path $BuildDirectory 'Sarevocs-CCU-Planer-Setup-0.3.129-Alpha.msi'
+        "-dAppDir=$Application","-dProductCode=$($identity.productCode)","-dProductVersion=$($identity.version)","-I$BuildDirectory",'-out',"$BuildDirectory\","$PSScriptRoot\Product.wxs","$PSScriptRoot\SetupUI.wxs","$BuildDirectory\Payload.wxs")
+    $msi = Join-Path $BuildDirectory ("Sarevocs-CCU-Planer-Setup-$($identity.version)-Alpha.msi")
     # ICE uses the host Windows Installer service. The offline sandbox is the installation test.
     Run "$WixDirectory\light.exe" @('-nologo','-sval','-ct','1','-cultures:de-de','-ext',"$WixDirectory\WixUIExtension.dll",'-out',$msi,
         "$BuildDirectory\Product.wixobj","$BuildDirectory\SetupUI.wixobj","$BuildDirectory\Payload.wixobj")

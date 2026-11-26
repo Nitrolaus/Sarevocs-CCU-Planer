@@ -73,7 +73,8 @@
         </Control>
         <Control Id="Repair" Type="PushButton" X="216" Y="155" Width="88" Height="21" Default="yes" Text="Reparieren">
           <Publish Property="REINSTALL" Value="ALL" Order="1">1</Publish>
-          <Publish Event="EndDialog" Value="Return" Order="2">1</Publish>
+          <Publish Property="REINSTALLMODE" Value="vamus" Order="2">1</Publish>
+          <Publish Event="EndDialog" Value="Return" Order="3">1</Publish>
         </Control>
         <Control Id="Remove" Type="PushButton" X="312" Y="155" Width="97" Height="21" Text="Deinstallieren">
           <Publish Property="REMOVE" Value="ALL" Order="1">1</Publish>

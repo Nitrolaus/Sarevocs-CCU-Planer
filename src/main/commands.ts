@@ -51,6 +51,7 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('market.openShip'), shipId: z.number().int().positive().max(1_000_000_000) }).strict(),
   z.object({ action: z.literal('market.openUpgrades') }).strict(),
   z.object({ action: z.literal('market.refresh') }).strict(),
+  z.object({ action: z.literal('market.checkOffers') }).strict(),
   z.object({ action: z.literal('market.shopPrices'), pairs: z.array(shopPairSchema).min(1).max(MAX_SHOP_PAIRS) }).strict(),
   z.object({ action: z.literal('market.ccuQuote'), pair: shopPairSchema }).strict(),
   z.object({ action: z.literal('market.targets'), accountId: z.uuid(), ids: z.array(z.number().int().positive().max(1_000_000_000).nullable()).length(3).optional() }).strict(),

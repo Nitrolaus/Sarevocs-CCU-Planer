@@ -1,5 +1,13 @@
 # Änderungen
 
+## 0.3.130 · Alpha
+
+Der Messe-Infobereich prüft bei Auswahl von Schiff 1 automatisch ausgehende Warbond-CCUs und aktualisiert während der Anzeige alle fünf Minuten. Er zeigt nur frische, bei RSI bestätigte Paarpreise mit belegtem Rabatt und nachweislich fehlenden CCUs. Vorhandene, belegte oder gesperrte CCUs bleiben ausgeblendet. Offene Käufe erscheinen orangebraun mit leuchtend türkisem Warbond-Text. Der Nutzer kauft selbst im offiziellen Shop; die Prüfung nutzt keine RSI-Anmeldecookies.
+
+Der einzelne MSI-Installer verwendet eine eigene Produktkennung pro Version für ein reguläres Versionsupdate per Doppelklick. Der bisherige Ordner bleibt vorausgewählt; alte heruntergeladene MSI-Dateien und manuelle REINSTALL-Parameter sind nicht mehr nötig. Der Windows-Installer-Cache bleibt erforderlich. Schutzprüfungen, die pfadbezogene Risikoabfrage und transaktionale Rücksicherung bleiben erhalten. Dieselbe installierte Version bietet Reparatur und Deinstallation.
+
+Mit der zusammengeführten Release-Datei wurden das Update von 0.3.129 ohne alte Download-MSI, ein Abbruch nach Schreiben neuer Dateien und die Rücksicherung einschließlich altem Installer-Cache in der Offline-Sandbox geprüft. Anwendungsstart mit sichtbarem Warbond-Hinweis, Reparatur und Deinstallation wurden in einem separaten Lauf mit derselben unveränderten Datei geprüft. Alle 76 Dateien sowie synthetische Profile, Hangar und gespeicherte Sitzung wurden kontrolliert. Windows meldete bei Reparatur Neustartbedarf (3010); ein Neustart wurde nicht getestet. Der zusätzliche Standardbenutzer-Sandboxtest scheiterte bereits am alten Basispaket vor unserem Setup-Code und bleibt eine offene Prüfgrenze.
+
 ## 0.3.129 · Alpha
 
 Der FleetYards-Dateiexport ist im Exportdialog neben Excel und PDF verfügbar. Die Tabelle bietet Suche, Herstellerfilter, einzelne Exemplare, Auswahlansichten und gefilterte Sammelauswahl. Die kompakten Zeilen und Seitenwahl wurden mit 240 Schiffen geprüft.

@@ -40,6 +40,25 @@
 .fair-expired>small{margin-left:auto}
 .fair-news button{padding:6px 10px;margin:0;font-size:.8rem}
 .fair-news-status{margin:8px 0 0;color:#a9bec9;font-size:.84rem}
+.outgoing-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 12px;margin:0 0 9px}
+.outgoing-head h3{margin:0;font-size:1rem;font-weight:600}
+.outgoing-head small{font-size:.74rem}
+.outgoing-scroll{max-height:340px;overflow:auto;border:1px solid #45616b;border-radius:7px}
+.outgoing-table{table-layout:fixed;min-width:720px;font-size:.84rem;width:100%}
+.outgoing-table th{position:sticky;top:0;background:#172630;font-size:.72rem;white-space:normal;z-index:1}
+.outgoing-table th:first-child{width:30%}.outgoing-table th:nth-child(2){width:15%}.outgoing-table th:nth-child(3){width:15%}.outgoing-table th:nth-child(4){width:25%}
+.outgoing-table th,.outgoing-table td{padding:8px 10px;overflow-wrap:anywhere;vertical-align:middle}
+.outgoing-table td strong{font-weight:600}.outgoing-table td small{font-size:.73rem;margin-top:3px}
+.outgoing-table button{max-width:100%;white-space:normal}
+.outgoing-table .outgoing-purchase td{background:#302519;border-color:#725039;color:#ffe1b9}
+.outgoing-table .outgoing-owned td{background:#073c3c;border-color:#146e68;color:#d1fff5}
+.outgoing-table .outgoing-unknown td{background:#1c2b35;color:#c4d4df}
+.outgoing-table tr .outgoing-warbond-label{color:#52fff0;font-weight:600}
+.outgoing-table .outgoing-purchase .outgoing-stock{display:inline-block;background:#ffc77d;color:#302315;border-radius:4px;padding:3px 6px}
+.outgoing-table .outgoing-owned .outgoing-stock{color:#85fff1}
+.outgoing-status{font-size:.85rem;margin:8px 0;color:#c1d2dc}
+.outgoing-foot{margin-top:8px}.fair-global-notices{margin-top:10px;font-size:.8rem}.fair-global-notices>summary{color:#a9bec9;cursor:pointer}
+@media(prefers-contrast:more){.outgoing-table tr td{border-bottom-width:2px}}
 .ccu-advisor-context{scroll-margin-top:16px}
 @media(max-width:1100px){.fair-candidates th,.fair-candidates td{padding-inline:9px}}
 .market-target{background:var(--glass-card-fill);border-color:var(--glass-card-border);box-shadow:var(--glass-card-highlight)}

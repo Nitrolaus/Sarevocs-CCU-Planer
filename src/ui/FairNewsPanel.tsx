@@ -12,11 +12,12 @@ import { vatLabel } from './vat-label';
 
 export type FairOfferRequest = { offerKey: string };
 
-export function FairNewsPanel({ news, display, offers, values, advisors, pending, stale, onCheck, onSeen }: {
+export function FairNewsPanel({ news, display, offers, values, advisors, pending, stale, onCheck, onSeen, outgoing }: {
   news?: FairNews; display: PricingSnapshot; pending: boolean; stale: boolean;
   offers: readonly TargetOffer[]; values?: ShipValues | null;
   advisors: Pick<AdvisorContext, 'signature' | 'input' | 'ready'>;
   onCheck: (key: string) => void; onSeen: (id: string) => Promise<void>;
+  outgoing?: React.ReactNode;
 }) {
   const t = useText();
   const [marking, setMarking] = useState<string | null>(null);
@@ -90,6 +91,8 @@ export function FairNewsPanel({ news, display, offers, values, advisors, pending
       </div>
       {news?.sourceAt && <small>{t('Datenstand')}: {sourceTime.format(new Date(news.sourceAt))}</small>}
     </header>
+    {outgoing}
+    <details className="fair-global-notices" open={outgoing ? undefined : true}><summary>{t('Weitere Messe-Meldungen')} ({notifications.length})</summary>
     {notifications.map((notice, index) => {
       const previous = notifications[index - 1];
       const showDay = !previous || previous.day !== notice.day;
@@ -140,5 +143,6 @@ export function FairNewsPanel({ news, display, offers, values, advisors, pending
         : news?.status === 'waiting' ? t('Der Vergleich für die heutige Tagesrunde steht noch aus.')
         : t('Messe-Info wartet auf Kalender und einen vergleichbaren Angebotsstand.')}
     </p>}
+    </details>
   </section>;
 }

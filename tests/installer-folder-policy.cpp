@@ -21,6 +21,14 @@ void rejects(const std::function<void()>& operation,const char* label) {
     try {operation();} catch(const wstring&){failed=true;} catch(const UnsafeFolderPermissions&){failed=true;}
     check(failed,label);
 }
+int actionSequence(MSIHANDLE session,const wchar_t* action) {
+    PMSIHANDLE db=MsiGetActiveDatabase(session);MSIHANDLE raw=0;
+    require(MsiDatabaseOpenViewW(db,L"SELECT `Sequence` FROM `InstallExecuteSequence` WHERE `Action` = ?",&raw)==ERROR_SUCCESS,L"Cannot inspect action sequence");
+    PMSIHANDLE view=raw;PMSIHANDLE params=MsiCreateRecord(1);
+    require(MsiRecordSetStringW(params,1,action)==ERROR_SUCCESS && MsiViewExecute(view,params)==ERROR_SUCCESS,L"Cannot query action sequence");
+    raw=0;require(MsiViewFetch(view,&raw)==ERROR_SUCCESS,L"Missing MSI action");PMSIHANDLE row=raw;
+    return MsiRecordGetInteger(row,1);
+}
 void sharedDirectory(const fs::path& path) {
     fs::create_directories(path);
     PSECURITY_DESCRIPTOR raw=nullptr;
@@ -51,6 +59,15 @@ int wmain(int argc,wchar_t** argv) {
         const auto opened=MsiOpenPackageExW(msiPath.c_str(),MSIOPENPACKAGEFLAGS_IGNOREMACHINESTATE,&raw);
         require(opened==ERROR_SUCCESS,L"Cannot open read-only MSI fixture: "+std::to_wstring(opened));
         PMSIHANDLE session=raw;
+        check(property(session,L"ProductVersion")==currentMsiVersion,"MSI version matches the compiled ownership manifest");
+        check(!same(property(session,L"ProductCode"),previousProducts[3]),"new release uses a different ProductCode from the minor-update family");
+        check(actionSequence(session,L"InstallInitialize")<actionSequence(session,L"RemoveExistingProducts") &&
+              actionSequence(session,L"RemoveExistingProducts")<actionSequence(session,L"ProcessComponents"),
+              "previous-version removal is inside rollback and before new program writes");
+        check(installedFiles({previousProducts[3],L"0.3.121",L""}).data()==std::span<const KnownFile>(msi121).data() &&
+              installedFiles({previousProducts[3],L"0.3.129",L""}).data()==std::span<const KnownFile>(msi129).data(),
+              "old minor-upgrade family selects exact 121 and 129 file manifests");
+        rejects([&]{installedFiles({previousProducts[3],L"0.3.130",L""});},"an unrecognized legacy version cannot borrow an old ownership manifest");
         setProperty(session,L"REINSTALL",L"ALL");setProperty(session,L"REINSTALLMODE",L"vamus");
         check(wholeReinstall(session),"complete quiet reinstall is accepted");
         setProperty(session,L"REINSTALL",L"Planner");

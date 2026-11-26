@@ -10,6 +10,22 @@ import { creditBudgetLimit } from '../src/planner/credit-budget';
 import { SHOP_PRICE_MAX_AGE, shopPairKey, shopPriceReader, type ShopPrice } from '../src/market/shop-prices';
 
 const now = () => new Date().toISOString();
+test('selecting Schiff 1 refreshes public offers between daily rounds and coalesces rapid repeated selections', async t => {
+  let clock = Date.now(), reads = 0;
+  t.mock.method(Date, 'now', () => clock);
+  const service = new MarketService(directory(), async source => {
+    reads++;
+    return source === 'catalogue' ? catalogue() : feed();
+  });
+  try {
+    await Promise.all([service.refreshForSelection(), service.refreshForSelection()]);
+    assert.equal(reads, 3);
+    clock += 59_000; await service.refreshForSelection(); assert.equal(reads, 3);
+    clock += 2_000; await service.refreshForSelection(); assert.equal(reads, 6);
+    assert.equal(commandSchema.safeParse({ action: 'market.checkOffers' }).success, true);
+    assert.equal(commandSchema.safeParse({ action: 'market.checkOffers', url: 'https://example.invalid' }).success, false);
+  } finally { service.close(); }
+});
 const source = () => Date.now() - 60_000;
 const ship = (id = 62, name = 'Synthetic Explorer') => ({ id, name, chassis_id: 22, manufacturer: { name: 'Synthetic Manufacturer', code: 'SYN' }, production_status: 'flight-ready', focus: 'Exploration', length: '126.5', media: [{ images: { source: 'https://example.invalid/do-not-load.png' } }] });
 const catalogue = () => ({ success: 1, data: [ship(), ship(206, 'Synthetic Explorer Expedition')] });

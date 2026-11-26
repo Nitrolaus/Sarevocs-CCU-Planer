@@ -8,11 +8,11 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.129 Alpha** ist als kostenlose Testversion verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.130 Alpha** ist als kostenlose Testversion verfügbar.
 
-[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.129-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.130-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
-Bei der Neuinstallation wählst du den Programmordner selbst. Beim Update von MSI 0.3.121 bis 0.3.128 übernimmt Windows Installer den registrierten Ordner. Die Release-Anleitung zeigt den Update-Befehl und erklärt, wie du das ursprünglich verwendete MSI als Quelle bereithältst. Einen gemeinsam beschreibbaren Programmordner kannst du nach einer deutlichen Risikoabfrage freigeben. Windows muss dir den Schreibzugriff erlauben.
+**Update per Doppelklick:** Beende den Planer vollständig einschließlich Tray, lade die neue MSI herunter und öffne sie. Der bisherige Programmordner ist vorausgewählt. Die alte heruntergeladene MSI und ein Terminalbefehl sind beim regulären Versionsupdate nicht mehr nötig; der von Windows verwaltete Installer-Cache bleibt erforderlich. Bei einer Neuinstallation wählst du den Programmordner selbst. Einen gemeinsam beschreibbaren Programmordner kannst du nach einer deutlichen Risikoabfrage freigeben. Windows muss dir den Schreibzugriff erlauben. Dieselbe bereits installierte Version bietet Reparatur und Deinstallation.
 
 #### Bestand und Angebote
 
@@ -25,6 +25,8 @@ Im Bestand siehst du Store Credits am Profil, das RSI-Datum an den CCUs und den 
 Der Planer lädt die öffentlichen Angebotsdaten beim Start und täglich um **17:05 Uhr in der Zeitzone Europe/Berlin**. Die Oberfläche ist auf Deutsch und Englisch verfügbar. Du kannst zwischen Euro und US-Dollar wählen und deinen Mehrwertsteuersatz einstellen.
 
 #### CCU-Ketten planen
+
+**Passende Warbonds im Blick:** Sobald du Schiff 1 auswählst, prüft der Messe-Infobereich Upgrades ab diesem Schiff und danach alle fünf Minuten, solange der Bereich offen ist. Angezeigt werden nur aktuell bestätigte Warbond-CCUs mit belegtem Rabatt, die im vollständig eingelesenen Bestand fehlen. Du siehst Zielschiff, CCU-Preis und Rabatt direkt. Vorhandene CCUs bleiben ausgeblendet, auch wenn sie belegt oder gesperrt sind. Orangebraun kennzeichnet den offenen Kauf; der Warbond-Schriftzug leuchtet türkis. Du entscheidest selbst, ob du im offiziellen RSI-Shop kaufst.
 
 Für jede Kette wählst du selbst eine belegte LTI-Startbasis. Günstige Tokens bis etwa 50 Euro vor Steuer erscheinen zuerst. Höherwertige eigene LTI-Schiffe kannst du gezielt einblenden. Zielkarten und Kette stehen über den Angeboten. Die Karten und der Flottenplan verwenden neutrale Schiffssilhouetten.
 
@@ -72,11 +74,13 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.129 Alpha** is available as a free test release.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.130 Alpha** is available as a free test release.
 
-[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.129-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.130-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
-Choose the program folder when installing for the first time. When updating from MSI 0.3.121 through 0.3.128, Windows Installer reuses the registered folder. See the release instructions for the update command and how to make the original MSI available as a source. You can approve a shared writable program folder after an explicit risk warning. Windows must still grant you write access.
+**Double-click to update:** Fully exit the planner including its tray icon, download the new MSI and open it. Your previous program folder is preselected. A regular version upgrade no longer requires the old downloaded MSI or a terminal command; the Windows-managed Installer cache is still required. Choose your folder when installing for the first time. You can approve a shared writable program folder after an explicit risk warning. Windows must still grant you write access. Opening the same installed version offers repair and uninstall.
+
+**Matching Warbond offers:** Selecting Ship 1 checks outgoing upgrades from that ship; checks repeat every five minutes while the area is open. Only currently confirmed Warbond CCUs with a documented discount that are missing from the fully read inventory appear. The target ship, CCU price and discount are directly visible. Owned CCUs stay hidden, including reserved or locked copies. Orange-brown indicates an outstanding purchase and bright teal highlights the Warbond label. You make any purchase yourself in the official RSI store.
 
 #### Inventory and offers
 

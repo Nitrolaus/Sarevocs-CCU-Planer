@@ -304,8 +304,11 @@ function App() {
     if (addonShip && addonShip !== 'none' && !addons.some(item => item.relatedShips.includes(addonShip))) setAddonShip('');
   }, [addons, addonShip]);
   const plannerInventory = useMemo(() => observed ? { accountId, pledges: observed.document.pledges,
+    complete: observed.document.scope.kind === 'full-hangar' && observed.document.scope.exportComplete && !observed.document.pledges.some(unresolvedUpgrade),
     observation: { kind: 'rsi-hangar' as const, observedAt: observed.observedAt } }
     : acceptedInventory ? { accountId, pledges: acceptedInventory.items.filter(x => x.availability === 'present').map(x => x.pledge),
+      complete: !!acceptedInventory.account.lastComplete && !acceptedInventory.items.some(item =>
+        Date.parse(item.importedAt) > Date.parse(acceptedInventory.account.lastComplete!) || item.availability === 'present' && unresolvedUpgrade(item.pledge)),
       observation: { kind: 'rsi-imports' as const, observations: Object.fromEntries(acceptedInventory.items
         .filter(x => x.availability === 'present' && x.source === 'rsi-dom-probe/1').map(x => [x.pledge.pledgeId, x.importedAt])) } } : null,
     [observed, acceptedInventory, accountId]);

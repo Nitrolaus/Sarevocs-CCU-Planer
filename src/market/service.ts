@@ -28,6 +28,7 @@ export class MarketService {
   private controller: AbortController | null = null;
   private readonly schedule: DailyRefresh;
   private closed = false;
+  private lastRefreshStarted = -Infinity;
   private readonly shopController = new AbortController();
   private readonly shop = new Map<string, ShopEntry>();
   private readonly lastShopPrices = new Map<string, ShopPrice>();
@@ -159,9 +160,14 @@ export class MarketService {
   start(): void {
     if (!this.closed) this.schedule.start();
   }
+  /** Selecting a ship also checks offers between daily rounds; repeated selections share one bounded refresh. */
+  refreshForSelection(): Promise<void> {
+    return Date.now() - this.lastRefreshStarted < 60_000 ? this.inFlight ?? Promise.resolve() : this.refresh();
+  }
   refresh(): Promise<void> {
     if (this.closed) return Promise.resolve();
     if (this.inFlight) return this.inFlight;
+    this.lastRefreshStarted = Date.now();
     const controller = this.controller = new AbortController();
     const previousOffers = this.cache.offers;
     const run = async () => {

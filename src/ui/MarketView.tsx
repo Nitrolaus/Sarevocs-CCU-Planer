@@ -23,6 +23,7 @@ import {FairNewsPanel, type FairOfferRequest} from './FairNewsPanel';
 import { FinaleShoppingList } from './FinaleShoppingList';
 import { FleetView } from './FleetView';
 import { StartBasisComparison } from './StartBasisComparison';
+import { OutgoingWarbonds } from './OutgoingWarbonds';
 import type { Buyback, BuybackObservation } from '../domain/model';
 import './market.css';
 
@@ -106,8 +107,9 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
   const rows = offers.filter(o => (o.change === 'missing') === (filter === 'historical')).sort((a, b) => Number(b.warbond) - Number(a.warbond) || a.targetName.localeCompare(b.targetName, 'de'));
   const currentCount = offers.filter(o => o.change !== 'missing').length, historicalCount = offers.length - currentCount;
   const activeShip = ships.find(s => s.id === targets[selected]);
-  const pool = useMemo(() => withoutExcludedCcus(prepareChains(inventory?.accountId === accountId ? inventory?.pledges ?? [] : [], ships, offers,
-    !!snapshot && !offersAreStale(snapshot), inventory?.accountId === accountId ? inventory?.observation : undefined,snapshot?.values),exclusions.keys), [inventory, accountId, snapshot,exclusions.keys]);
+  const fullPool = useMemo(() => prepareChains(inventory?.accountId === accountId ? inventory?.pledges ?? [] : [], ships, offers,
+    !!snapshot && !offersAreStale(snapshot), inventory?.accountId === accountId ? inventory?.observation : undefined,snapshot?.values), [inventory, accountId, snapshot]);
+  const pool = useMemo(() => withoutExcludedCcus(fullPool, exclusions.keys), [fullPool, exclusions.keys]);
   const reservationsReady=exclusions.ready&&!exclusions.saving&&targets.every(id=>id===null||!!drafts.entries[id]?.ready&&!drafts.entries[id]?.error&&!drafts.entries[id]?.saving);
   const goals = useMemo(() => targets.flatMap((id, slot) => {
     const ship = ships.find(item => item.id === id);
@@ -209,6 +211,9 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
   return <div className="market-view">
     <div className="market-title"><div><div className="eyebrow">{t('Zielschiffe & Ketten')}</div><h1>{t('CCU-Planer')}</h1></div><span className="badge unknown">{t("CCU-Schritte ungeprüft")}</span>{onExport&&<button className="export-open" disabled={!accountId} onClick={onExport}>{t('Exportieren …')}</button>}</div>
     <FairNewsPanel news={snapshot?.fairNews} display={display} offers={offers} values={snapshot?.values} advisors={advisors} pending={!!snapshot?.pending} stale={!snapshot || offersAreStale(snapshot)}
+      outgoing={<OutgoingWarbonds key={accountId} from={targetsLoaded && !saving ? ships.find(ship => ship.id === targets[0]) : undefined}
+        accountId={accountId} inventory={inventory} ccus={fullPool.ccus} excluded={exclusions.keys}
+        reservations={reservations} reservationsReady={reservationsReady} market={snapshot} display={display} />}
       onCheck={offerKey => setFairOffer({ offerKey })}
       onSeen={async noticeId => { await request({ action: 'market.fairSeen', noticeId }); }} />
     <section className="market-targets" aria-label={t("Zielschiffkarten")}><p>{t(accountId ? 'Deine Auswahl bleibt lokal pro Profil. Es wird nichts gekauft oder angewendet.' : 'Lege ein lokales Profil an, um später eigene Ziele zu wählen.')} {t('Die Schiffskarte öffnet die offizielle RSI-Seite.')}</p>

@@ -343,6 +343,7 @@ async function start() {
           await shell.openExternal(target); data = { opened: true }; break;
         }
         case 'market.refresh': void market.refresh(); void pricing.refresh(); void loaners.refresh(); data = market.snapshot(); break;
+        case 'market.checkOffers': void market.refreshForSelection(); data = market.snapshot(); break;
         case 'market.shopPrices': void market.checkShopPrices(cmd.pairs); data = null; break;
         case 'market.ccuQuote': data = await market.quoteShopPrice(cmd.pair); break;
         case 'market.targets': {
