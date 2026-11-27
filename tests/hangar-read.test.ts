@@ -39,6 +39,7 @@ test('240 pages with a full final page continue beyond one minute and only retry
     .flatMap(number => number === slowPage ? [number, number] : [number]));
   assert.equal(result.pagesRead, lastPage);
   assert.equal(result.candidate.document.pledges.length, lastPage * 10);
+  assert.deepEqual(result.candidate.hangarRead, { kind: 'reached-end', pagesRead: lastPage, pledgesRead: lastPage * 10 });
 });
 test('Only explicitly transient failures retry the same page with bounded backoff',async()=>{
  const calls:number[]=[],waits:number[]=[];let failures=0;const result=await readHangarPages({accountId,initial:page(1),restartAtFirst:false,assertActive:()=>{},sleep:async ms=>{waits.push(ms);},loadPage:async n=>{calls.push(n);if(n===2&&failures++<2)return {ok:false,retryable:true,retryAfterMs:500};return n===1?page(1):page(11,2);}});

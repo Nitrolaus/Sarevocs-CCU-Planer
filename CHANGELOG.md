@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.131 · Alpha
+
+Ein erfolgreich bis zum Ende gelesener RSI-Hangar erhält einen eigenen, profilbezogenen Lesenachweis. Der Warbond-Hinweis bei Schiff 1 verwendet ihn für den Bestandsabgleich, statt auf die Vollständigkeit eines ausdrücklich bestätigten Imports zu warten. Der Import bleibt ergänzend: Fehlende ältere Einträge werden weiterhin nicht gelöscht. Der Nachweis wird mit dem beobachteten Stand gespeichert und bei einer neuen Beobachtung ohne Nachweis nicht übernommen.
+
+Abgebrochene, widersprüchliche oder nicht vollständig durchlaufene Seitenfolgen sowie ungeklärte CCUs berechtigen weiterhin nicht zur Anzeige fehlender Warbond-CCUs. Aktuelle RSI-Paarpreise, ein belegter Rabatt und der Ausschluss bereits vorhandener, reservierter oder gesperrter CCUs bleiben erforderlich. Das einzelne MSI unterstützt das Update von 0.3.130 im bisherigen Ordner.
+
 ## 0.3.130 · Alpha
 
 Der Messe-Infobereich prüft bei Auswahl von Schiff 1 automatisch ausgehende Warbond-CCUs und aktualisiert während der Anzeige alle fünf Minuten. Er zeigt nur frische, bei RSI bestätigte Paarpreise mit belegtem Rabatt und nachweislich fehlenden CCUs. Vorhandene, belegte oder gesperrte CCUs bleiben ausgeblendet. Offene Käufe erscheinen orangebraun mit leuchtend türkisem Warbond-Text. Der Nutzer kauft selbst im offiziellen Shop; die Prüfung nutzt keine RSI-Anmeldecookies.

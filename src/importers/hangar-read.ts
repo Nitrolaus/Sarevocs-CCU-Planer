@@ -50,7 +50,7 @@ export async function readHangarPages(input:Reader):Promise<{candidate:ImportCan
   return page;
  };
  input.assertActive();const first=validate(input.initial,1).page;
- if(input.restartAtFirst||first.pledges.length>=10){
+ if(input.restartAtFirst||first.pledges.length>=10||first.navigation==='next'||(first.totalPages??0)>1){
   let precedingPageHasNext=false;
   for(let page=1;page<=5000;page++){
    let result:unknown;for(let attempt=1;attempt<=3;attempt++){
@@ -76,5 +76,8 @@ export async function readHangarPages(input:Reader):Promise<{candidate:ImportCan
   }
  }else{add(first,1);progress(1);}
  input.assertActive();const candidate=parseImport(JSON.stringify({type:'hangarexport',version:2,handle:handle??`rsi-local:${input.accountId}`,pledges}));
- if(handle===null)candidate.document.account.identityKind='manual-reference';candidate.document.scope.pagesRead=pagesRead;return {candidate,pagesRead};
+ if(handle===null)candidate.document.account.identityKind='manual-reference';
+ candidate.document.scope.pagesRead=pagesRead;
+ if(!conflictingTotals)candidate.hangarRead={kind:'reached-end',pagesRead,pledgesRead:candidate.document.pledges.length};
+ return {candidate,pagesRead};
 }

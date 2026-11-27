@@ -55,10 +55,14 @@ export type Insurance = z.infer<typeof insuranceSchema>;
 export type Pledge = z.infer<typeof pledgeSchema>;
 export type InventoryDocument = z.infer<typeof documentSchema>;
 export type Scope = z.infer<typeof scopeSchema>;
+// A completed page traversal supports stock comparisons, never destructive import reconciliation.
+export const hangarReadSchema = z.object({ kind: z.literal('reached-end'),
+  pagesRead: z.number().int().positive().max(5000), pledgesRead: z.number().int().nonnegative().max(50000) }).strict();
+export type HangarRead = z.infer<typeof hangarReadSchema>;
 export type Account = { id: string; name: string; mode: 'demo' | 'real'; reference: string | null;
   identityKind: 'rsi-handle' | 'manual-reference' | null; identityStatus: 'unbound' | 'manual-confirmed'; lastComplete: string | null };
 export type ImportCandidate = { adapter: string; document: InventoryDocument; digest: string; warnings: string[];
-  completeness: 'complete' | 'partial'; evidence: 'file-declared' | 'scope-unverified' };
+  completeness: 'complete' | 'partial'; evidence: 'file-declared' | 'scope-unverified'; hangarRead?: HangarRead };
 export type InventoryItem = { pledge: Pledge; availability: 'present' | 'removed'; source: string; importedAt: string };
 export type AccountInventory = { account: Account; items: InventoryItem[]; buybacks: z.infer<typeof buybackSchema>[] };
 export type Preview = { token: string; accountId: string; adapter: string; dataMode: 'demo' | 'real'; reference: string;

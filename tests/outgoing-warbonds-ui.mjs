@@ -7,6 +7,8 @@ import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { reportFixture } from './fixtures/report-data.ts';
 import { basePledge } from './fixtures.ts';
+import { readHangarPages } from '../src/importers/hangar-read.ts';
+import { LastSeenStore } from '../src/storage/last-seen.ts';
 
 const folder = path.resolve('work/temp/warbond-ui', randomUUID()); fs.mkdirSync(folder, { recursive: true });
 await build({ entryPoints: ['src/ui/App.tsx'], outfile: path.join(folder, 'app.js'), bundle: true, platform: 'browser', target: 'chrome156' });
@@ -86,8 +88,36 @@ try {
     assert.equal(await page.locator('.outgoing-table tbody tr').count(),0,kind);
     hiddenCases.push(kind);
   }
+  // Exercise the actual RSI background path, rather than only a declared-complete demo import.
+  const readPage=n=>({ok:true,handle:'SYNTHETIC',activePage:n,pledges:Array.from({length:n===29?1:10},(_,i)=>({
+    pledgeId:`synthetic-${n}-${i}`,pledgeName:'Synthetic item',items:[],alsoContains:[],
+    ...(n===1&&i===0?{upgrade:{from:'Eclipse',to:'Galaxy'}}:{})}))});
+  const read=await readHangarPages({accountId:a,initial:readPage(1),restartAtFirst:false,assertActive:()=>{},sleep:async()=>{},loadPage:async n=>readPage(n)});
+  read.candidate.adapter='rsi-dom-probe/1';
+  const realAccount={...account,mode:'real',lastComplete:null};
+  const view=new LastSeenStore(path.join(folder,'synthetic-observation')).save(realAccount,read.candidate);
+  assert.equal(view.document.scope.kind,'partial');assert.equal(view.document.scope.exportComplete,false);
+  assert.equal(view.hangarRead.pagesRead,29);assert.equal(view.hangarRead.pledgesRead,281);
+  await app.evaluate((_electron,{a,view,account,quotes})=>{
+    const f=globalThis.fixture;f.state.accounts=[account];f.inventories[a].account=account;f.views[a]=view;
+    f.market.shopPrices=quotes.map(p=>({...p,checkedAt:Date.now()}));f.excludedCcus={[a]:[]};
+  },{a,view,account:realAccount,quotes});
+  async function planner(){await page.reload();await page.getByRole('heading',{name:'Bestand',exact:true}).waitFor();await page.getByRole('button',{name:/CCU-Planer/}).click();}
+  await planner();await page.locator('.outgoing-purchase').waitFor();
+  assert.equal(await page.locator('.outgoing-table tbody tr').count(),1);
+  assert.match(await page.locator('.outgoing-purchase').innerText(),/Eclipse → Endeavor/);
+  assert.doesNotMatch(await page.locator('.outgoing-table').innerText(),/Galaxy/);
+  await app.evaluate((_electron,{a})=>{delete globalThis.fixture.views[a].hangarRead},{a});
+  await planner();await page.locator('.outgoing-status').waitFor();
+  assert.equal(await page.locator('.outgoing-purchase').count(),0);
+  await app.evaluate((_electron,{a,view})=>{globalThis.fixture.views[a]=view;globalThis.fixture.views[a].document.pledges[0].sourceValues.upgradeState='unresolved'},{a,view});
+  await planner();await page.locator('.outgoing-status').waitFor();
+  assert.equal(await page.locator('.outgoing-purchase').count(),0);
+  const finalCommands=await app.evaluate(()=>globalThis.fixture.commands);
+  assert.ok(!finalCommands.some(c=>/^(rsi\.(connect|open|authorize)|cart|purchase|checkout)(\.|$)/.test(c.action)));
   await page.getByRole('combobox',{name:'Zielschiff 1',exact:true}).selectOption('207');
   await page.getByRole('heading',{name:'Warbond-Angebote ab Galaxy · Schiff 1',exact:true}).waitFor();
-  const report={status:'PASS',syntheticOnly:true,realSessionRead:false,newRsiLogin:false,screenshot:output,dimensions,automaticQuoteRequested:true,ownedHidden:true,hiddenCases,colors};
+  const report={status:'PASS',syntheticOnly:true,realSessionRead:false,newRsiLogin:false,screenshot:output,dimensions,automaticQuoteRequested:true,ownedHidden:true,hiddenCases,colors,
+    backgroundTraversal:{pages:29,pledges:281,partialImport:true,missingShown:true,ownedHidden:true,noProofHidden:true,unresolvedHidden:true}};
   fs.writeFileSync(path.join(folder,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{if(app)await app.close()}

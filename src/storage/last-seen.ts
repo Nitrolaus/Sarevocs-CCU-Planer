@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { documentSchema, rsiPurchaseSchema, UserError, type Account, type ImportCandidate, type Pledge, type RsiPurchase } from '../domain/model';
+import { documentSchema, hangarReadSchema, rsiPurchaseSchema, UserError, type Account, type ImportCandidate, type Pledge, type RsiPurchase } from '../domain/model';
 import { verifiedUpgradePurchasesSchema, type UpgradeHistoryResult } from '../domain/upgrade-history';
 
 const uuid = z.uuid();
 const lastSeenSchema = z.object({ schemaVersion: z.literal(1), accountId: uuid, revision: uuid,
-  observedAt: z.iso.datetime({ offset: true }), document: documentSchema }).strict();
+  observedAt: z.iso.datetime({ offset: true }), document: documentSchema, hangarRead: hangarReadSchema.optional() }).strict()
+  .refine(view => !view.hangarRead || view.hangarRead.pagesRead === view.document.scope.pagesRead
+    && view.hangarRead.pledgesRead === view.document.pledges.length);
 export type LastSeen = z.infer<typeof lastSeenSchema> & { appliedPurchaseHistories?: Record<string, UpgradeHistoryResult> };
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_APPLIED_PURCHASE_HISTORIES = 512;
@@ -166,7 +168,8 @@ export class LastSeenStore {
   }
   save(account: Account, candidate: ImportCandidate, previous?: LastSeen | null): LastSeen {
     const view = lastSeenSchema.parse({ schemaVersion: 1, accountId: account.id, revision: randomUUID(),
-      observedAt: new Date().toISOString(), document: candidate.document });
+      observedAt: new Date().toISOString(), document: candidate.document,
+      ...(candidate.adapter === 'rsi-dom-probe/1' && candidate.hangarRead ? { hangarRead: candidate.hangarRead } : {}) });
     const stored = this.stored(account.id);
     // Explicitly accepted account binding outranks an old, derived observation cache.
     this.checkIdentity(account, view, account.reference === null ? stored : null);

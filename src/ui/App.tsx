@@ -8,6 +8,7 @@ import type { BridgeResult, Command } from '../main/commands';
 import type { ReleaseUpdate } from '../main/release-updates';
 import type { AuthorizationSnapshot, BackgroundSnapshot } from '../main/background-inventory';
 import type { LastSeen } from '../storage/last-seen';
+import { observedCcuInventoryKnown } from '../planner/inventory-coverage';
 import { unavailableHistory, type PurchaseHistoryBatch, type UpgradeHistoryResult } from '../domain/upgrade-history';
 import { historicCcuPurchases } from '../domain/applied-ccu-price';
 import { ChainHistory } from './ChainHistory';
@@ -304,7 +305,7 @@ function App() {
     if (addonShip && addonShip !== 'none' && !addons.some(item => item.relatedShips.includes(addonShip))) setAddonShip('');
   }, [addons, addonShip]);
   const plannerInventory = useMemo(() => observed ? { accountId, pledges: observed.document.pledges,
-    complete: observed.document.scope.kind === 'full-hangar' && observed.document.scope.exportComplete && !observed.document.pledges.some(unresolvedUpgrade),
+    complete: observedCcuInventoryKnown(observed),
     observation: { kind: 'rsi-hangar' as const, observedAt: observed.observedAt } }
     : acceptedInventory ? { accountId, pledges: acceptedInventory.items.filter(x => x.availability === 'present').map(x => x.pledge),
       complete: !!acceptedInventory.account.lastComplete && !acceptedInventory.items.some(item =>
