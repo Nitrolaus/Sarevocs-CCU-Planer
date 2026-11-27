@@ -69,6 +69,8 @@ int wmain(int argc,wchar_t** argv) {
               "old minor-upgrade family selects exact 121 and 129 file manifests");
         check(installedFiles({previousProducts[6],L"0.3.132",L""}).data()==std::span<const KnownFile>(msi132).data(),
               "previous release selects its exact 132 ownership manifest");
+        check(installedFiles({previousProducts[7],L"0.3.133",L""}).data()==std::span<const KnownFile>(msi133).data(),
+              "previous release selects its exact 133 ownership manifest");
         rejects([&]{installedFiles({previousProducts[3],L"0.3.130",L""});},"an unrecognized legacy version cannot borrow an old ownership manifest");
         setProperty(session,L"REINSTALL",L"ALL");setProperty(session,L"REINSTALLMODE",L"vamus");
         check(wholeReinstall(session),"complete quiet reinstall is accepted");

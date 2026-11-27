@@ -29,9 +29,9 @@ function fixture() {
 }
 const pairs = (input: ReturnType<typeof fixture>) => incomingWarbondCandidates(input).candidates.map(c => [c.from.name, c.target.name]);
 
-test('Schiff 1 is the destination: direct and intermediate Warbonds fit missing links, never upgrades away from Eclipse', () => {
+test('Schiff 1 is the destination: planned purchase pairs stay consistent, never upgrades away from Eclipse', () => {
   const f = fixture(), before = structuredClone(f);
-  assert.deepEqual(pairs(f), [['Starter', 'A'], ['Meteor', 'Eclipse']]);
+  assert.deepEqual(pairs(f), [['Starter', 'A'], ['B', 'Eclipse']]);
   assert.deepEqual(f, before, 'advice must not change drafts, reservations, inventory or offers');
   assert.ok(!incomingWarbondCandidates(f).candidates.some(c => c.fromId === f.target.id || c.toId === 5));
 });
@@ -104,12 +104,64 @@ test('changing the approved start base removes purchases below that base from th
   f.pool.bases[0]!.model = f.pool.ccus[0]!.to;
   f.draft.anchors = [];
   f.plan = manualChain(f.pool, f.target, f.market.catalogue!.ships, f.market.offers!.items, true, f.draft);
-  assert.deepEqual(pairs(f), [['Meteor', 'Eclipse']]);
+  assert.deepEqual(pairs(f), [['B', 'Eclipse']]);
 });
 
 test('200 ships and 500 stock copies do not multiply requests into catalogue-wide pair combinations', () => {
   const f = fixture();
   f.pool.bases.push(...Array.from({ length: 199 }, (_, i) => ({ ...f.pool.bases[0]!, key: 'other-base:' + i })));
   f.pool.ccus.push(...Array.from({ length: 499 }, (_, i) => ({ ...f.pool.ccus[0]!, key: 'copy:' + i })));
-  assert.deepEqual(pairs(f), [['Starter', 'A'], ['Meteor', 'Eclipse']]);
+  assert.deepEqual(pairs(f), [['Starter', 'A'], ['B', 'Eclipse']]);
+});
+
+test('an existing Sentinel-type pair wins over an alphabetically earlier Blade-type tie in either catalogue order', () => {
+  for (const reverse of [false, true]) {
+    const f = fixture(), ships = f.market.catalogue!.ships;
+    ships.push({ ...ships[0]!, id: 7, name: 'Blade' });
+    f.market.values!.items.push({ id: 7, name: 'Blade', minor: 26000 });
+    if (reverse) { ships.reverse(); f.market.values!.items.reverse(); }
+    f.draft.anchors.push({ kind: 'purchase', fromKey: 'matrix:3', toKey: 'matrix:6', fromName: 'B', toName: 'Meteor' });
+    f.plan = manualChain(f.pool, f.target, ships, f.market.offers!.items, true, f.draft);
+    const before = structuredClone(f);
+    const candidates = incomingWarbondCandidates(f).candidates;
+    assert.deepEqual(candidates.map(c => [c.from.name, c.target.name]), [['Starter', 'A'], ['Meteor', 'Eclipse']]);
+    assert.equal(candidates[1]!.relation, 'planned-warbond');
+    assert.ok(!candidates.some(c => c.from.name === 'Blade'));
+    assert.deepEqual(f, before, 'advice must not replace a draft, its anchors or a stock copy');
+  }
+});
+
+test('the existing pair is retained even when a shorter CCU needs an extra purchase to reach its source', () => {
+  const f = fixture(), rows = incomingWarbondCandidates(f).candidates;
+  assert.equal(rows[1]!.from.name, 'B');
+  assert.equal(rows[1]!.relation, 'planned-link', 'a standard-priced planned link must not claim its discount is already counted');
+  assert.equal(rows[0]!.relation, 'planned-warbond');
+});
+
+test('a genuinely new intermediate remains a missing-link option without claiming a proven whole-chain saving', () => {
+  const f = fixture(), meteor = f.market.offers!.items.find(o => o.toShipId === 6)!;
+  meteor.warbond = true; meteor.warbondMinor = 25000;
+  const rows = incomingWarbondCandidates(f).candidates;
+  const intermediate = rows.find(c => c.toId === 6)!;
+  assert.ok(intermediate);
+  assert.equal(intermediate.from.name, 'B');
+  assert.equal(intermediate.relation, 'fits-gap');
+  assert.equal('additionalSaving' in intermediate, false, 'pair discount is never invented as an additional route benefit');
+});
+
+test('an equal-value different ship cannot bridge a gap whose starting model is already fixed', () => {
+  const f = fixture();
+  f.market.catalogue!.ships.push({ ...f.market.catalogue!.ships[2]!, id: 7, name: 'A Different B' });
+  f.market.values!.items.push({ id: 7, name: 'A Different B', minor: 20000 });
+  const meteor = f.market.offers!.items.find(o => o.toShipId === 6)!;
+  meteor.warbond = true; meteor.warbondMinor = 25000;
+  const rows = incomingWarbondCandidates(f).candidates;
+  assert.equal(rows.find(c => c.toId === 6)?.from.name, 'B');
+  assert.ok(!rows.some(c => c.fromId === 7));
+});
+
+test('stale pricing basis cannot label a pair discount as already included in the chain', () => {
+  const f = fixture();
+  f.market.values!.fetchedAt = new Date(Date.now() - 7 * 86400000).toISOString();
+  assert.ok(incomingWarbondCandidates(f).candidates.every(c => c.relation !== 'planned-warbond'));
 });

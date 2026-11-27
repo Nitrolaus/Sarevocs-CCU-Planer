@@ -2,6 +2,12 @@ import React, { createContext, useContext } from 'react';
 import {paintEnglish} from './paint-english';
 export const LanguageContext=createContext<'de'|'en'>('de');
 const english:Record<string,string>={
+  'Rabatt bereits eingeplant':'Discount already included',
+  'Verbindung eingeplant':'Link already planned',
+  'Für offene Verbindung':'For a missing link',
+  'Warbond-Rabatt bereits in deiner Kette eingeplant. Gegenüber dieser Planung entsteht keine zusätzliche Ersparnis.':'Warbond discount already included in your chain. This creates no additional saving over that plan.',
+  'Diese Verbindung ist bereits in deiner Kette geplant. Der angezeigte Rabatt vergleicht Warbond und Standard-CCU.':'This link is already planned in your chain. The displayed discount compares Warbond and standard CCUs.',
+  'Warbond-Option für eine offene Verbindung. Der Rabatt gilt gegenüber dem Standard-CCU; eine zusätzliche Ersparnis für die gesamte Kette ist damit noch nicht belegt.':'Warbond option for a missing link. The discount is relative to the standard CCU; an additional saving for the whole chain has not been established.',
   'Warbond-Kauftipps für die Kette zu':'Warbond purchase tips for the chain to',
   'Nur kaufbare Warbond-CCUs mit Rabatt für offene Verbindungen deiner Kette':'Only available discounted Warbond CCUs for missing links in your chain',
   'Wähle eine freie LTI-Startbasis für die Kette zu Schiff 1.':'Select a free LTI starting ship for the chain to Ship 1.',

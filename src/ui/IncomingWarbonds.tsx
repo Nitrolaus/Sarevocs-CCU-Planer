@@ -65,10 +65,16 @@ export function IncomingWarbonds({ target, draft, plan, pool, accountId, invento
       <thead><tr><th>{t('Upgrade')}</th><th>{t('CCU-Preis')}</th><th>{t('Warbond-Rabatt')}</th><th>{t('Bestandsstatus')}</th><th>{t('Aktion')}</th></tr></thead>
       <tbody>{quotes.map(({ candidate, stock, price, saving }) => {
         const tax = price.amount.taxMode === 'gross' ? `${t('inkl.')} ${price.amount.vatBasisPoints / 100} % ${t('MwSt.')}` : t('vor Steuer');
+        const relation = candidate.relation === 'planned-warbond'
+          ? ['Rabatt bereits eingeplant', 'Warbond-Rabatt bereits in deiner Kette eingeplant. Gegenüber dieser Planung entsteht keine zusätzliche Ersparnis.']
+          : candidate.relation === 'planned-link'
+          ? ['Verbindung eingeplant', 'Diese Verbindung ist bereits in deiner Kette geplant. Der angezeigte Rabatt vergleicht Warbond und Standard-CCU.']
+          : ['Für offene Verbindung', 'Warbond-Option für eine offene Verbindung. Der Rabatt gilt gegenüber dem Standard-CCU; eine zusätzliche Ersparnis für die gesamte Kette ist damit noch nicht belegt.'];
         return <tr key={candidate.fromId + ':' + candidate.toId} className="outgoing-purchase">
           <td><strong>{candidate.from.name} → {candidate.target.name}</strong><small className="outgoing-warbond-label">Warbond-CCU</small></td>
           <td><strong>{money(price.amount)}</strong><small title={t('Geprüfter RSI-Shoppreis')}>{tax}</small></td>
-          <td>{saving ? <strong>{money(saving)}</strong> : <small>{t('Rabatt nicht beziffert')}</small>}</td>
+          <td>{saving ? <strong>{money(saving)}</strong> : <small>{t('Rabatt nicht beziffert')}</small>}
+            <small className="outgoing-relation" title={t(relation[1]!)}>{t(relation[0]!)}</small></td>
           <td><strong className="outgoing-stock">{t('Noch nicht gekauft')}</strong>
             {stock.consumed > 0 && <small>{stock.consumed} {t('bereits verbraucht · nicht frei')}</small>}
           </td>

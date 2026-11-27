@@ -37,7 +37,7 @@ ships.push({ ...ships[0], id: 6, name: 'Meteor' });
 offers.push({ ...offers[0], key: 'test-meteor', toShipId: 6, targetName: 'Meteor', regularMinor: 26000 });
 market.values = { schemaVersion: 1, source: 'rsi-from-ships', currency: 'USD', taxBasis: 'net', fetchedAt: at,
   items: offers.map(o => ({ id: o.toShipId, name: o.targetName, minor: o.regularMinor })) };
-const quotes = [[1, 2, 3270, 4360], [6, 4, 2180, 4360], [4, 5, 27250, 29975]].flatMap(([fromId, toId, wb, std]) =>
+const quotes = [[1, 2, 3270, 4360], [3, 4, 2180, 4360], [4, 5, 27250, 29975]].flatMap(([fromId, toId, wb, std]) =>
   ['standard', 'warbond'].map(edition => ({ fromId, toId, edition, checkedAt: Date.now(),
     amount: { minor: edition === 'warbond' ? wb : std, currency: 'EUR', taxMode: 'gross', vatBasisPoints: 1900 } })));
 market.shopPrices = quotes;
@@ -66,10 +66,13 @@ try {
   await planner(); await page.locator('.outgoing-table').waitFor();
   assert.equal(await page.locator('.outgoing-table tbody tr').count(), 2);
   assert.match(await page.locator('.outgoing-table').innerText(), /Starter → A[\s\S]*32,70[\s\S]*10,90[\s\S]*Noch nicht gekauft/);
-  assert.match(await page.locator('.outgoing-table').innerText(), /Meteor → Eclipse[\s\S]*21,80[\s\S]*21,80[\s\S]*Noch nicht gekauft/);
+  assert.match(await page.locator('.outgoing-table').innerText(), /B → Eclipse[\s\S]*21,80[\s\S]*21,80[\s\S]*Noch nicht gekauft/);
+  assert.equal(await page.locator('.outgoing-relation').first().innerText(), 'Rabatt bereits eingeplant');
+  assert.equal(await page.locator('.outgoing-relation').last().innerText(), 'Verbindung eingeplant');
+  assert.match(await page.locator('.outgoing-relation').first().getAttribute('title'), /keine zusätzliche Ersparnis/);
   assert.doesNotMatch(await page.locator('.outgoing-table').innerText(), /Eclipse →|Liberator/);
   assert.deepEqual(await app.evaluate(() => globalThis.fixture.planDrafts), fixture.planDrafts);
-  checks.push('intermediate and final Warbond steps lead toward Eclipse; no outbound upgrades; draft unchanged');
+  checks.push('existing purchase pairs lead toward Eclipse; pair discount is distinguished from additional route saving; draft unchanged');
   const colors = await page.locator('.outgoing-table').evaluate(table => [...table.querySelectorAll('tbody tr')].map(row => ({
     fill: getComputedStyle(row.cells[0]).backgroundColor, warbond: getComputedStyle(row.querySelector('.outgoing-warbond-label')).color })));
   assert.ok(colors.every(c => c.fill === 'rgb(48, 37, 25)' && c.warbond === 'rgb(82, 255, 240)'));
@@ -85,7 +88,7 @@ try {
   await page.locator('.outgoing-purchase button').first().click();
   let commands = await app.evaluate(() => globalThis.fixture.commands);
   const pairs = commands.filter(c => c.action === 'market.shopPrices').flatMap(c => c.pairs);
-  assert.ok(pairs.some(p => p.fromId === 6 && p.toId === 4));
+  assert.ok(pairs.some(p => p.fromId === 3 && p.toId === 4));
   assert.ok(!pairs.some(p => p.fromId === 4), 'never request outgoing Eclipse offers');
   assert.ok(commands.some(c => c.action === 'market.openUpgrades'));
   await page.getByRole('article', { name: 'Zielschiff 2: Liberator', exact: true }).click();
@@ -99,7 +102,7 @@ try {
     if (kind === 'standard-only') prices = prices.filter(p => p.edition === 'standard');
     if (kind === 'zero-discount') prices.forEach(p => { if (p.edition === 'standard') p.amount.minor = quotes.find(q => q.fromId === p.fromId && q.toId === p.toId && q.edition === 'warbond').amount.minor; });
     if (kind === 'different-tax') prices.forEach(p => { if (p.edition === 'standard') p.amount.taxMode = 'net'; });
-    if (kind === 'already-owned' || kind === 'locked-owned') for (const [from, to] of [['Starter', 'A'], ['Meteor', 'Eclipse']]) {
+    if (kind === 'already-owned' || kind === 'locked-owned') for (const [from, to] of [['Starter', 'A'], ['B', 'Eclipse']]) {
       const extra = structuredClone(items[1]); extra.pledge.pledgeId = 'new-owned:' + to; extra.pledge.ccus[0] = { ...extra.pledge.ccus[0], instanceId: 'new-copy', from, to }; testItems.push(extra);
     }
     if (kind === 'expired') prices.forEach(p => p.checkedAt = Date.now() - 301000);
@@ -116,11 +119,72 @@ try {
     assert.equal(await page.locator('.outgoing-table tbody tr').count(), 0, kind); hiddenCases.push(kind);
     if (kind === 'base-unapproved') assert.match(await page.locator('.outgoing-status').innerText(), /LTI-Startbasis/);
   }
+  // Reproduce the user's equal-value Blade/Sentinel case with entirely synthetic records.
+  const demoShips = ['MTC', 'Vanguard Sentinel', 'Blade', 'M80'].map((name, i) => ({ ...ships[0], id: 101 + i, name }));
+  const demoOffers = demoShips.map((ship, i) => ({ ...offers[0], key: 'synthetic-m80:' + i, targetName: ship.name, toShipId: ship.id,
+    regularMinor: [5000, 27500, 27500, 30000][i], warbond: i === 3, warbondMinor: i === 3 ? 28000 : null }));
+  const demoValues = { ...market.values, items: demoOffers.map(o => ({ id: o.toShipId, name: o.targetName, minor: o.regularMinor })) };
+  const demoItem = structuredClone(items[0]); demoItem.pledge.ships[0].modelName = 'MTC';
+  const demoPool = prepareChains([demoItem.pledge], demoShips, demoOffers, true, undefined, demoValues);
+  const demoDraft = { ...approveStartBase(demoPool, emptyDraft(), demoPool.bases[0].key), mode: 'manual', initialized: true,
+    anchors: [{ kind: 'purchase', fromKey: 'matrix:101', toKey: 'matrix:102', fromName: 'MTC', toName: 'Vanguard Sentinel' }] };
+  const demoQuotes = [102, 103].flatMap(fromId => ['standard', 'warbond'].map(edition => ({ fromId, toId: 104, edition, checkedAt: Date.now(),
+    amount: { minor: edition === 'warbond' ? 500 : 2500, currency: 'USD', taxMode: 'net', vatBasisPoints: 0 } })));
+  await app.evaluate((_electron, { a, at, demoItem, demoShips, demoOffers, demoValues, demoDraft, demoQuotes }) => {
+    const f = globalThis.fixture; f.inventories[a].items = [demoItem]; f.inventories[a].account.lastComplete = at;
+    f.market.catalogue.ships = demoShips; f.market.offers.items = demoOffers; f.market.offers.sourceAt = at;
+    f.market.values = demoValues; f.market.shopPrices = demoQuotes; f.targets[a] = [104, null, null];
+    f.planDrafts = { [a + ':104']: demoDraft }; f.excludedCcus = { [a]: [] };
+    f.pricing.settings.currency = 'USD'; f.pricing.settings.taxMode = 'net';
+  }, { a, at, demoItem, demoShips, demoOffers, demoValues, demoDraft, demoQuotes });
+  await page.reload(); await page.getByRole('heading', { name: 'Bestand', exact: true }).waitFor();
+  await page.getByRole('button', { name: /CCU-Planer/ }).click();
+  await page.getByRole('heading', { name: 'Warbond-Kauftipps für die Kette zu M80 · Schiff 1', exact: true }).waitFor();
+  await page.locator('.outgoing-table').waitFor();
+  assert.equal(await page.locator('.outgoing-purchase').count(), 1);
+  assert.match(await page.locator('.outgoing-purchase').innerText(), /Vanguard Sentinel → M80/);
+  assert.doesNotMatch(await page.locator('.outgoing-purchase').innerText(), /Blade/);
+  assert.equal(await page.locator('.outgoing-relation').innerText(), 'Rabatt bereits eingeplant');
+  await app.evaluate((_electron, { a, demoShips, demoOffers, demoValues, demoDraft }) => {
+    const f = globalThis.fixture, ship = { ...demoShips[3], id: 105, name: 'Liberator' };
+    f.market.catalogue.ships = [...demoShips, ship];
+    f.market.offers.items = [...demoOffers, { ...demoOffers[0], key: 'synthetic-liberator', targetName: ship.name, toShipId: ship.id, regularMinor: 57500 }];
+    f.market.values.items = [...demoValues.items, { id: 105, name: ship.name, minor: 57500 }];
+    f.targets[a] = [105, null, null]; f.planDrafts = { [a + ':105']: demoDraft };
+  }, { a, demoShips, demoOffers, demoValues, demoDraft });
+  await page.reload(); await page.getByRole('heading', { name: 'Bestand', exact: true }).waitFor();
+  await page.getByRole('button', { name: /CCU-Planer/ }).click(); await page.locator('.outgoing-table').waitFor();
+  assert.equal(await page.locator('.outgoing-relation').innerText(), 'Für offene Verbindung');
+  assert.match(await page.locator('.outgoing-relation').getAttribute('title'), /zusätzliche Ersparnis.*noch nicht belegt/);
+  checks.push('a new intermediate Warbond is distinguished from a discount already counted in the chain');
+  await app.evaluate((_electron, { a, demoDraft }) => { const f = globalThis.fixture; f.targets[a] = [104, null, null]; f.planDrafts = { [a + ':104']: demoDraft }; }, { a, demoDraft });
+  await page.reload(); await page.getByRole('heading', { name: 'Bestand', exact: true }).waitFor();
+  await page.getByRole('button', { name: /CCU-Planer/ }).click(); await page.locator('.outgoing-table').waitFor();
+  assert.equal(await page.locator('.outgoing-relation').innerText(), 'Rabatt bereits eingeplant');
+  const rowHeights = [];
+  for (const [width, zoom] of [[1540, 1], [1024, 1], [1280, 1.25]]) {
+    await app.evaluate(({ BrowserWindow }, { width, zoom }) => { const w = BrowserWindow.getAllWindows()[0]; w.webContents.setZoomFactor(zoom); w.setContentSize(width, 1350); }, { width, zoom });
+    await page.waitForTimeout(100);
+    const heights = await page.locator('.outgoing-purchase').evaluate(row => {
+      const label = row.querySelector('.outgoing-relation'), shown = row.getBoundingClientRect().height;
+      label.style.display = 'none'; const hidden = row.getBoundingClientRect().height; label.style.display = '';
+      return { shown, hidden };
+    });
+    assert.equal(heights.shown, heights.hidden, 'the explanation must not increase row height'); rowHeights.push(heights);
+  }
+  await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.webContents.setZoomFactor(1); w.setContentSize(1540, 1350); });
+  await page.locator('.outgoing-warbonds').evaluate(node => {
+    const label = document.createElement('small'); label.textContent = 'VORSCHAU · TESTDATEN · keine Bestellung';
+    label.style.cssText = 'display:block;color:#a9bdc9;margin-bottom:8px'; node.prepend(label);
+  });
+  const plannedScreenshot = path.join(folder, 'm80-planned-warbond.png');
+  await page.locator('.outgoing-warbonds').screenshot({ path: plannedScreenshot });
+  checks.push('M80 prefers the planned Sentinel over equal-value Blade and marks the already included discount without increasing row height');
   commands = await app.evaluate(() => globalThis.fixture.commands);
   assert.ok(!commands.some(c => /^(rsi\.(connect|open|authorize)|cart|purchase|checkout)(\.|$)/.test(c.action)));
   assert.ok(!commands.some(c => c.action === 'planner.draft' && c.draft || c.action === 'planner.exclude' || c.action === 'planner.batch'));
   assert.deepEqual(errors, []); checks.push('owned/locked/partial/stale/unproven/invalid cases hidden; no login, draft changes or renderer errors');
-  const report = { status: 'PASS', syntheticOnly: true, realSessionRead: false, newRsiLogin: false, packagedRenderer: !!packaged, checks, hiddenCases, dimensions, colors, screenshot };
+  const report = { status: 'PASS', syntheticOnly: true, realSessionRead: false, newRsiLogin: false, packagedRenderer: !!packaged, checks, hiddenCases, dimensions, colors, rowHeights, screenshot, plannedScreenshot };
   fs.writeFileSync(path.join(folder, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report));
 } catch (error) {
   fs.writeFileSync(path.join(folder, 'report.json'), JSON.stringify({ status: 'FAIL', syntheticOnly: true, checks, errors, error: String(error.stack) }, null, 2)); throw error;

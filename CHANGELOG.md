@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.134 · Alpha
+
+Warbond-Kauftipps bevorzugen die bereits geplante Kaufverbindung vor gleichwertigen Ausgangsschiffen. Ein im Kettenpreis bereits berücksichtigter Warbond-Rabatt wird entsprechend gekennzeichnet und nicht als zusätzliche Ersparnis ausgegeben. Neue Zwischenoptionen bleiben davon unterscheidbar. Gleiche Schiffswerte erlauben keinen direkten Wechsel zwischen verschiedenen Modellen; eigene Schritte und manuelle Kaufanker bleiben erhalten.
+
 ## 0.3.133 · Alpha
 
 Warbond-Kauftipps bei Schiff 1 führen jetzt **zum ausgewählten Zielschiff**. Sie prüfen offene Verbindungen der gewählten Kette, einschließlich passender Zwischenschritte. Vorhandene Kettenschritte und manuell gesetzte Kaufverbindungen bleiben erhalten. Ausgehende Upgrades vom Zielschiff werden nicht mehr empfohlen. Nur nachweislich fehlende CCUs mit aktuellem RSI-Paarpreis und belegtem Warbond-Rabatt erscheinen; die Kette wird durch den Hinweis nicht verändert.

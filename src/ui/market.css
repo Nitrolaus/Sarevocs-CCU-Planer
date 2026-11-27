@@ -54,6 +54,7 @@
 .outgoing-table .outgoing-owned td{background:#073c3c;border-color:#146e68;color:#d1fff5}
 .outgoing-table .outgoing-unknown td{background:#1c2b35;color:#c4d4df}
 .outgoing-table tr .outgoing-warbond-label{color:#52fff0;font-weight:600}
+.outgoing-table .outgoing-relation{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .outgoing-table .outgoing-purchase .outgoing-stock{display:inline-block;background:#ffc77d;color:#302315;border-radius:4px;padding:3px 6px}
 .outgoing-table .outgoing-owned .outgoing-stock{color:#85fff1}
 .outgoing-status{font-size:.85rem;margin:8px 0;color:#c1d2dc}

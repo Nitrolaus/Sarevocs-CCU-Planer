@@ -7,8 +7,10 @@ import type { ChainModel, ChainPool } from './chain';
 import type { PlannerDraft } from './draft';
 import type { ReservablePlan } from './reservations';
 import { purchaseCandidates } from './warbond-tier';
+import { purchasePriceReader } from './shopping-list';
 
-export type IncomingCandidate = ShopPair & { from: CatalogueShip; target: CatalogueShip };
+export type IncomingCandidate = ShopPair & { from: CatalogueShip; target: CatalogueShip;
+  relation: 'planned-warbond' | 'planned-link' | 'fits-gap' };
 export type IncomingAdvice = { state: 'target-required' | 'base-required' | 'chain-unavailable' | 'market-unavailable' | 'ready';
   candidates: IncomingCandidate[] };
 
@@ -26,6 +28,7 @@ export function incomingWarbondCandidates(input: { target?: CatalogueShip; draft
   if (!plan || plan.base.key !== base.key) return { state: 'chain-unavailable', candidates: [] };
   if (!market?.catalogue || offersAreStale(market, now)) return { state: 'market-unavailable', candidates: [] };
   const ships = market.catalogue.ships, offers = market.offers!.items;
+  const plannedPrice = purchasePriceReader(offers, market.values, true, now, market.shopPrices);
   const resolve = (model: ChainModel) => {
     const ship = catalogueIdentity(model.name, ships);
     return ship && model.key === 'matrix:' + ship.id && model.nominalUsd !== null &&
@@ -42,18 +45,23 @@ export function incomingWarbondCandidates(input: { target?: CatalogueShip; draft
         offer.warbondMinor <= step.from.nominalUsd!) continue;
       const to = catalogueIdentity(offer.targetName, ships);
       if (!to || to.id !== offer.toShipId || nominalValue(to, offers, true, market.values) !== offer.regularMinor) continue;
-      // Prefer a short, lower-priced CCU that fits wholly inside this still-unbought gap.
-      // The existing gap source is the safe fallback when no fresh source tier is known.
+      // Keep an existing purchase pair instead of suggesting an equivalent different ship.
+      // For a new intermediate, use a short CCU wholly inside the still-unbought gap.
       const starts = [gapFrom, ...purchaseCandidates({ current: true, pool: { values: market.values } }, offer, now).rows
         .flatMap(row => { const ship = catalogueIdentity(row.ship.name, ships); return ship?.id === row.ship.id ? [ship] : []; })]
         .filter(ship => {
           const value = nominalValue(ship, offers, true, market.values);
-          return value !== null && value >= step.from.nominalUsd! && value < offer.warbondMinor! &&
+          return value !== null && (value > step.from.nominalUsd! || ship.id === gapFrom.id) && value < offer.warbondMinor! &&
             (draft!.mode !== 'manual' || step.anchorIndex === undefined || ship.id === gapFrom.id && to.id === gapTo.id);
-        }).sort((a, b) => nominalValue(b, offers, true, market.values)! - nominalValue(a, offers, true, market.values)!
+        }).sort((a, b) => Number(b.id === gapFrom.id && to.id === gapTo.id) - Number(a.id === gapFrom.id && to.id === gapTo.id)
+          || nominalValue(b, offers, true, market.values)! - nominalValue(a, offers, true, market.values)!
           || a.name.localeCompare(b.name) || a.id - b.id);
       const from = starts[0];
-      if (from) result.set(from.id + ':' + to.id, { fromId: from.id, toId: to.id, from, target: to });
+      if (from) {
+        const exact = from.id === gapFrom.id && to.id === gapTo.id;
+        const relation = exact ? plannedPrice(step).kind === 'warbond' ? 'planned-warbond' : 'planned-link' : 'fits-gap';
+        result.set(from.id + ':' + to.id, { fromId: from.id, toId: to.id, from, target: to, relation });
+      }
     }
   }
   return { state: 'ready', candidates: [...result.values()].sort((a, b) =>
