@@ -25,6 +25,8 @@ export type InventoryAddon = {
   source: string;
   originalKind: string;
   purchase: ReturnType<typeof purchaseValue>['value'];
+  sharedPurchase: boolean;
+  parentPurchase: ReturnType<typeof purchaseValue>['value'];
 };
 
 const normalized = (text: string) => text.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
@@ -117,13 +119,14 @@ export function inventoryAddons(rows: readonly AddonInventorySource[], catalogue
     const price = purchaseValue(pledge, source);
     const singleItem = standalone && primary !== null && supplementary !== null &&
       primary.length === 1 && items.length === 1;
-    const purchase = singleItem && price.kind === 'recorded' && price.value?.evidence !== RSI_LOG_PRICE
-      ? price.value : null;
+    const recorded = price.kind === 'recorded' && price.value?.evidence !== RSI_LOG_PRICE ? price.value : null;
+    const purchase = singleItem ? recorded : null;
+    const sharedPurchase = !standalone || items.length > 1 || (primary?.length ?? 0) > 1 || (supplementary?.length ?? 0) > 1;
     const armorSet = items.some(({item}) => category(item) === 'armor');
     return items.map(({item, key}): InventoryAddon => ({
       key: pledge.pledgeId + ':' + key, name: item.title, originalKind: item.kind,
       category: category(item, armorSet), relatedShips: relatedShips(item.title, names),
-      pledge, source, purchase,
+      pledge, source, purchase, sharedPurchase: !purchase && sharedPurchase, parentPurchase: purchase ? null : recorded,
     }));
   });
 }

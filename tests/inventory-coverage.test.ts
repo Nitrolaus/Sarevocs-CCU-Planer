@@ -7,7 +7,7 @@ import { readHangarPages } from '../src/importers/hangar-read';
 import { parseImport } from '../src/importers/files';
 import { LastSeenStore } from '../src/storage/last-seen';
 import { observedCcuInventoryKnown } from '../src/planner/inventory-coverage';
-import { outgoingWarbondStock } from '../src/planner/outgoing-warbonds';
+import { warbondStock } from '../src/planner/warbond-offers';
 import { analyseReservations } from '../src/planner/reservations';
 import type { Account } from '../src/domain/model';
 
@@ -29,7 +29,7 @@ test('29-page live traversal enables stock absence after persistence without dec
   assert.deepEqual(new LastSeenStore(cache.directory).load(account), view);
   assert.equal(observedCcuInventoryKnown(cache.load(account)!), true);
   assert.equal(account.lastComplete, null);
-  assert.equal(outgoingWarbondStock({ fromId: 1, toId: 2 }, { catalogue: [], pledges: view.document.pledges, ccus: [],
+  assert.equal(warbondStock({ fromId: 1, toId: 2 }, { catalogue: [], pledges: view.document.pledges, ccus: [],
     inventoryKnown: true, complete: observedCcuInventoryKnown(view), reservations: analyseReservations([]),
     reservationsReady: true, excluded: [] }).state, 'missing');
 });

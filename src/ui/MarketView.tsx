@@ -23,7 +23,7 @@ import {FairNewsPanel, type FairOfferRequest} from './FairNewsPanel';
 import { FinaleShoppingList } from './FinaleShoppingList';
 import { FleetView } from './FleetView';
 import { StartBasisComparison } from './StartBasisComparison';
-import { OutgoingWarbonds } from './OutgoingWarbonds';
+import { IncomingWarbonds } from './IncomingWarbonds';
 import type { Buyback, BuybackObservation } from '../domain/model';
 import './market.css';
 
@@ -211,7 +211,9 @@ export function MarketView({ accountId, display: settingsDisplay, inventory = nu
   return <div className="market-view">
     <div className="market-title"><div><div className="eyebrow">{t('Zielschiffe & Ketten')}</div><h1>{t('CCU-Planer')}</h1></div><span className="badge unknown">{t("CCU-Schritte ungeprüft")}</span>{onExport&&<button className="export-open" disabled={!accountId} onClick={onExport}>{t('Exportieren …')}</button>}</div>
     <FairNewsPanel news={snapshot?.fairNews} display={display} offers={offers} values={snapshot?.values} advisors={advisors} pending={!!snapshot?.pending} stale={!snapshot || offersAreStale(snapshot)}
-      outgoing={<OutgoingWarbonds key={accountId} from={targetsLoaded && !saving ? ships.find(ship => ship.id === targets[0]) : undefined}
+      outgoing={<IncomingWarbonds key={accountId} target={targetsLoaded && !saving ? ships.find(ship => ship.id === targets[0]) : undefined}
+        draft={targets[0] ? drafts.entries[targets[0]]?.value ?? undefined : undefined} pool={pool}
+        plan={planTargets.find(route => route.slot === 0)?.plan ?? null}
         accountId={accountId} inventory={inventory} ccus={fullPool.ccus} excluded={exclusions.keys}
         reservations={reservations} reservationsReady={reservationsReady} market={snapshot} display={display} />}
       onCheck={offerKey => setFairOffer({ offerKey })}

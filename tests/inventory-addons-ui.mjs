@@ -21,6 +21,7 @@ const account={id:a,name:'SYNTHETIC GEAR TEST',mode:'demo',reference:null,identi
 const items=Array.from({length:200},(_,i)=>{
  const pledge=basePledge('synthetic-'+i);pledge.name='Synthetic gear bundle '+i;pledge.ships=[];pledge.ccus=[];
  pledge.acquisitionCost=null;delete pledge.rsiPurchase;
+ if(i===0)pledge.rsiPurchase={status:'documented',source:'order',minor:4125,currency:'EUR'};
  pledge.sourceValues={items:JSON.stringify([
   {title:'Synthetic '+i+' Helmet',kind:'FPS Equipment'},
   {title:'Synthetic '+i+' Arms',kind:'FPS Equipment'},
@@ -64,9 +65,35 @@ try{
  await kind.selectOption('modules');await count(200);checks.push('named ship combines with module filter');
  await kind.selectOption('paints');await count(200);checks.push('named ship combines with paint filter');
  await kind.selectOption('armor');await ship.selectOption('none');await count(400);
+ const bundled=page.locator('.addons-table tr[data-pledge="synthetic-0"] .ship-price').first();
+ assert.equal(await bundled.innerText(),'Im Paket');assert.equal(await bundled.locator('strong').count(),0);
+ assert.match(await bundled.getAttribute('title'),/41,25[\s\S]*gesamten Kauf/);
+ const unpricedBundle=page.locator('.addons-table tr[data-pledge="synthetic-1"] .ship-price').first();
+ assert.equal(await unpricedBundle.innerText(),'Im Paket');assert.match(await unpricedBundle.getAttribute('title'),/kein Preisbeleg/);
+ assert.ok(await page.locator('.addon-price-info').evaluateAll(nodes=>nodes.every(node=>{
+   const style=getComputedStyle(node);return style.whiteSpace==='nowrap'&&node.getBoundingClientRect().height<=parseFloat(style.lineHeight)+2;
+ })));
+ checks.push('bundle hints show documented total only in hover and stay one line');
  const screenshot=path.join(folder,'armor-filter.png');
  await page.screenshot({path:screenshot});
  assert.equal(await app.evaluate(()=>JSON.stringify(globalThis.fixture.inventories)),before);
+ const singles=[structuredClone(items[0]),structuredClone(items[1])];
+ for(const [i,single] of singles.entries()){
+  single.pledge.pledgeId=i?'single-unknown':'single-known';single.pledge.name=i?'Synthetic unknown item':'Synthetic recorded item';
+  single.pledge.sourceValues={items:JSON.stringify([{title:'Synthetic Helmet',kind:'FPS Equipment'}]),alsoContains:'[]'};
+  if(i)single.pledge.rsiPurchase={status:'excluded'};
+ }
+ await app.evaluate((_electron,{a,singles})=>{globalThis.fixture.inventories[a].items=singles},{a,singles});
+ const singlesBefore=await app.evaluate(()=>JSON.stringify(globalThis.fixture.inventories));
+ await page.reload();await page.getByRole('heading',{name:'Bestand',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Add-ons & Gear',exact:true}).click();
+ const singlePrice=page.locator('.addons-table tr[data-pledge="single-known"] .ship-price');
+ await singlePrice.waitFor();assert.match(await singlePrice.innerText(),/41,25/);
+ const absentPrice=page.locator('.addons-table tr[data-pledge="single-unknown"] .ship-price');
+ assert.equal(await absentPrice.innerText(),'Nicht belegt');assert.doesNotMatch(await absentPrice.innerText(),/0,00/);
+ assert.match(await absentPrice.getAttribute('title'),/kein persönlicher Einzelpreis/);
+ assert.equal(await app.evaluate(()=>JSON.stringify(globalThis.fixture.inventories)),singlesBefore);
+ checks.push('single recorded price stays numeric and unknown price is explained without a zero-cost assumption');
  const actions=await app.evaluate(()=>globalThis.fixture.commands.map(c=>c.action));
  assert.ok(!actions.some(a=>/^(?:rsi\.(?:authorize|connect|open)|import\.commit|account\.create)$/.test(a)));
  assert.deepEqual(errors,[]);checks.push('no source mutations, new login or renderer errors');

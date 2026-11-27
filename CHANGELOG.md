@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.133 · Alpha
+
+Warbond-Kauftipps bei Schiff 1 führen jetzt **zum ausgewählten Zielschiff**. Sie prüfen offene Verbindungen der gewählten Kette, einschließlich passender Zwischenschritte. Vorhandene Kettenschritte und manuell gesetzte Kaufverbindungen bleiben erhalten. Ausgehende Upgrades vom Zielschiff werden nicht mehr empfohlen. Nur nachweislich fehlende CCUs mit aktuellem RSI-Paarpreis und belegtem Warbond-Rabatt erscheinen; die Kette wird durch den Hinweis nicht verändert.
+
+Fehlende Gear-Einzelpreise zeigen „Im Paket“ oder „Nicht belegt“ statt eines bloßen Strichs. Der Hover erklärt die Zuordnung und nennt einen belegten Preis der übergeordneten Kaufposition, soweit vorhanden. Paketpreise werden nicht auf Einzelteile verteilt; Protokoll- und Pledgewerte werden weiterhin nicht als persönliche Kaufpreise ausgegeben.
+
 ## 0.3.132 · Alpha
 
 „Add-ons & Gear“ erkennt bei der allgemeinen RSI-Angabe „FPS Equipment“ eindeutige Rüstungsteile, Waffen, Kleidung, Dekoration und Sammlerstücke anhand ihrer Gegenstandsbezeichnung. Ergänzende Paketbestandteile ohne eigene Typangabe werden ebenfalls berücksichtigt. Die Zuordnung gilt für die Bestandstabelle und ihre Exporte. Unklare Gegenstände bleiben als „Sonstiges“ sichtbar; ursprüngliche Titel, Paketbestandteile und Kaufpreisbelege werden nicht verändert.

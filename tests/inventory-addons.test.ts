@@ -111,6 +111,28 @@ test('the package total is never repeated on multiple items, duplicate names ret
   assert.equal(new Set(inventoryAddons([entry,second]).map(row => row.key)).size, 3);
 });
 
+test('missing individual prices retain documented parent purchase information without allocating it',()=>{
+ const entry=addon('priced-bundle',[{title:'Synthetic Helmet',kind:'FPS Equipment'},{title:'Synthetic Arms',kind:'FPS Equipment'}]);
+ const before=JSON.stringify(entry);
+ const rows=inventoryAddons([entry]);
+ assert.ok(rows.every(r=>r.purchase===null&&r.sharedPurchase&&r.parentPurchase?.minor===4125));
+ assert.equal(JSON.stringify(entry),before);
+ entry.pledge.rsiPurchase={status:'documented',source:'log',minor:9900,currency:'USD'};
+ assert.ok(inventoryAddons([entry]).every(r=>r.parentPurchase===null&&r.purchase===null&&r.sharedPurchase));
+ delete entry.pledge.rsiPurchase;
+ entry.pledge.sourceValues.pledgeValue='$99.00 USD';
+ assert.ok(inventoryAddons([entry]).every(r=>r.parentPurchase===null&&r.purchase===null&&r.sharedPurchase));
+});
+
+test('single documented items remain direct prices while unknown items never become zero-cost gifts',()=>{
+ const entry=addon('one',[{title:'Synthetic Helmet',kind:'FPS Equipment'}]);
+ const priced=inventoryAddons([entry])[0]!;
+ assert.equal(priced.purchase?.minor,4125);assert.equal(priced.sharedPurchase,false);assert.equal(priced.parentPurchase,null);
+ entry.pledge.rsiPurchase={status:'excluded'};
+ const unknown=inventoryAddons([entry])[0]!;
+ assert.equal(unknown.purchase,null);assert.equal(unknown.sharedPurchase,false);assert.equal(unknown.parentPurchase,null);
+});
+
 test('ship association uses the named model, never the arbitrary parent ship or a partial model match', () => {
   const entry = addon('related', [{title:'Galaxy - Cargo Module',kind:'Module'},
     {title:'MTC XL - Icefront Paint',kind:'Skin'}, {title:'Icefront Camo Paint',kind:'Skin'}]);

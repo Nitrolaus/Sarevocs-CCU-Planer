@@ -4,3 +4,4 @@
 .addon-inventory-search .inventory-search-count { margin-left:auto; }
 .inventory-table.addons-table td,.inventory-table.addons-table th { padding-top:8px; padding-bottom:8px; }
 .inventory-table.addons-table tr td { line-height:1.4; }
+.addons-table .addon-price-info { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:400; color:var(--muted,#a9bdc9); }

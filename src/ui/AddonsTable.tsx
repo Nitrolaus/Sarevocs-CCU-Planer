@@ -64,14 +64,21 @@ export function AddonsTable({items, query, category, ship, display, demo, onSear
       const converted = convertPurchaseValue(item.purchase, display);
       const price = item.purchase ? (converted.approximate && converted.minor !== null ? '≈ ' : '') +
         formatMinor(converted.minor ?? item.purchase.minor,
-          converted.minor === null ? item.purchase.currency : display.settings.currency, language) : '—';
+          converted.minor === null ? item.purchase.currency : display.settings.currency, language)
+        : t(item.sharedPurchase ? 'Im Paket' : 'Nicht belegt');
       const kind = addonCategories.find(([id]) => id === item.category)!;
       const origin = (demo ? 'DEMO · ' : '') + (item.source === 'rsi-dom-probe/1' ? 'RSI' : t('Import'));
       const priceTitle = item.purchase
         ? t('Belegter persönlicher Kaufpreis dieses Gegenstands.') + '\n' +
           formatMinor(item.purchase.minor, item.purchase.currency, language) +
           (converted.approximate && converted.minor !== null ? '\n' + t('Währungsumrechnung ist ein Richtwert.') : '')
-        : t('Ein Einzelpreis ist nicht belegt. Ein gemeinsamer Paketpreis wird beim Paket angezeigt.');
+        : [
+          t('Für diesen Gegenstand ist kein persönlicher Einzelpreis belegt.'),
+          item.parentPurchase
+            ? t('Belegter Preis der übergeordneten Kaufposition:') + ' ' + formatMinor(item.parentPurchase.minor, item.parentPurchase.currency, language)
+            : t('Für die übergeordnete Kaufposition liegt kein Preisbeleg vor.'),
+          item.parentPurchase ? t('Dieser Betrag gilt für den gesamten Kauf und wird nicht auf die enthaltenen Teile verteilt.') : '',
+        ].filter(Boolean).join('\n');
       return <tr key={item.key} data-pledge={item.pledge.pledgeId} data-addon={item.key} data-addon-category={item.category}>
         <td title={item.name}>{item.name}</td>
         <td title={item.originalKind || t(kind[1])}>{t(kind[1])}</td>
@@ -79,7 +86,8 @@ export function AddonsTable({items, query, category, ship, display, demo, onSear
           {item.relatedShips.join(', ') || '—'}
         </td>
         <td title={item.pledge.name}>{item.pledge.name}</td>
-        <td className="ship-price" title={priceTitle}><strong>{price}</strong></td>
+        <td className="ship-price" title={priceTitle}>{item.purchase ? <strong>{price}</strong>
+          : <span className="addon-price-info">{price}</span>}</td>
         <td className="ship-source" title={origin + '\n' + (pledgeDateLabel(item.pledge, language) || '')}>
           {origin}{date && ' · ' + date}
         </td>
