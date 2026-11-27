@@ -38,6 +38,7 @@ constexpr const wchar_t* previousProducts[] = {
     L"{142B7731-1211-4ED2-AE86-C572D7053120}",
     L"{142B7731-1211-4ED2-AE86-C572D7053121}",
     L"{D019CD75-81F5-5016-8002-08EA6DD086E2}",
+    L"{172C24CF-3C21-5D7D-8894-A0D968EDCE60}",
 };
 
 void require(bool test, const wstring& reason) { if (!test) throw reason; }
@@ -247,10 +248,11 @@ MsiInstall upgradeSource(MSIHANDLE s) {
         found=code;
     }
     require(same(found,property(s,L"WIX_UPGRADE_DETECTED")),L"Die gefundene MSI-Installation konnte nicht eindeutig geprüft werden.");
-    return found.empty()?MsiInstall{}:registeredMsi(found,(same(found,previousProducts[3])||same(found,previousProducts[4]))?markerGuid:legacyMarkerGuid);
+    return found.empty()?MsiInstall{}:registeredMsi(found,(same(found,previousProducts[3])||same(found,previousProducts[4])||same(found,previousProducts[5]))?markerGuid:legacyMarkerGuid);
 }
 
 std::span<const KnownFile> installedFiles(const MsiInstall& installation) {
+    if(same(installation.code,previousProducts[5]) && installation.version==L"0.3.131") return msi131;
     if(same(installation.code,previousProducts[4]) && installation.version==L"0.3.130") return msi130;
     if(same(installation.code,previousProducts[3])) {
         if(installation.version==L"0.3.121") return msi121;
@@ -298,7 +300,7 @@ void resolveRoot(MSIHANDLE s) {
     auto token=effectiveToken();
     bool installed=!property(s,L"Installed").empty();
     const auto msi=installed?registeredMsi(property(s,L"ProductCode"),markerGuid):upgradeSource(s);
-    const bool modernSource=!msi.root.empty() && (same(msi.code,previousProducts[3])||same(msi.code,previousProducts[4]));
+    const bool modernSource=!msi.root.empty() && (same(msi.code,previousProducts[3])||same(msi.code,previousProducts[4])||same(msi.code,previousProducts[5]));
     HKEY current=nullptr;
     require(RegOpenCurrentUser(KEY_READ,&current)==ERROR_SUCCESS,L"Cannot read user's registry.");
     Key user(current), product=openKey(current,(installed||modernSource)?registration:legacyRegistration), arp=openKey(current,legacyArp);

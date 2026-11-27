@@ -5,6 +5,54 @@ import {parseImport} from '../src/importers/files';
 import {basePledge} from './fixtures';
 
 const source = 'rsi-dom-probe/1';
+
+test('RSI generic FPS Equipment is classified by explicit object names, including translated punctuation',()=>{
+ const definitions = [
+  ['Hedeby Arlington Everglade Rifle','weapons'], ['Gemini R97 Runic Shotgun','weapons'],
+  ['Behring P8-SC Echo SMG','weapons'], ['Eyaja Knife','weapons'], ['VCK-1 Payback Blade','weapons'],
+  ['Overlord Supernova Helmet','armor'], ['Overlord Supernova Core','armor'],
+  ['Overlord Supernova Arms','armor'], ['Overlord Supernova Legs','armor'],
+  ['RSI Zeus Echo Exploration Suit','armor'], ['Wastelander Undersuit','armor'],
+  ['Bobcat Varsity Jacket','clothing'], ['Wally Retro T-Shirt','clothing'], ['Retro T\u2011Shirt','clothing'],
+  ['Foundation Festival Beanie Black','clothing'], ['Yaeger Aviator Glasses','clothing'],
+  ['Carmilla Nightstand','decorations'], ['Zeus Best in Show Poster','decorations'],
+  ['CitizenCon Trophy','collectibles'], ['Banu Lockbox Replica','collectibles'],
+  ['Greycat Multi-Tool','other'], ['Unlisted Model Code','other'],
+ ] as const;
+ const entry=addon('fps',definitions.map(([title])=>({title,kind:'FPS\n Equipment'})));
+ const before=JSON.stringify(entry);
+ assert.deepEqual(inventoryAddons([entry]).map(r=>r.category),definitions.map(d=>d[1]));
+ assert.equal(JSON.stringify(entry),before);
+});
+
+test('supplementary gear without a source kind inherits clear armor-set context and keeps each copy',()=>{
+ const entry=addon('bundle',[{title:'Synthetic Helmet',kind:'FPS Equipment'}]);
+ entry.pledge.sourceValues.alsoContains=JSON.stringify([{title:'Synthetic Core'},{title:'Synthetic Arms'},
+  {title:'Synthetic Legs'},{title:'Synthetic Pistol'},{title:'Synthetic Jacket'}]);
+ const rows=inventoryAddons([entry]);
+ assert.deepEqual(rows.map(r=>r.category),['armor','armor','armor','armor','weapons','clothing']);
+ assert.ok(rows.every(r=>r.purchase===null));
+ const single=addon('ambiguous-core',[{title:'Apple Core'}]);
+ assert.equal(inventoryAddons([single])[0]!.category,'other');
+});
+
+test('decorative gear names, explicit source kinds and unknown equipment cannot be confused',()=>{
+ const rows=inventoryAddons([addon('precedence',[
+  {title:'Rifle Poster',kind:'FPS Equipment'}, {title:'Helmet Replica',kind:'FPS Equipment'},
+  {title:'Pistol Paint',kind:'Skin'}, {title:'Flight Blade',kind:'Component'},
+  {title:'Rifle Jacket',kind:'Clothing'}, {title:'Unknown Relic',kind:'Hangar decoration'},
+  {title:'Unknown Relic',kind:'Unlisted source kind'}, {title:'Equipment collection',kind:'Equipment'},
+ ])]);
+ assert.deepEqual(rows.map(r=>r.category),['decorations','collectibles','paints','modules','clothing','decorations','other','other']);
+});
+
+test('known CCU titles and currency do not leak into the gear projection',()=>{
+ const entry=addon('upgrade',[{title:'Upgrade - Alpha to Beta'},{title:'Starting Money: 5,000 UEC',kind:'Credits'},
+  {title:'Upgrade Workshop Poster',kind:'FPS Equipment'}]);
+ entry.pledge.name='Upgrade - Alpha to Beta';
+ entry.pledge.ccus=[{instanceId:'one',from:'Alpha',to:'Beta',status:'unused',applicability:'unverified',insurance:entry.pledge.insurance}];
+ assert.deepEqual(inventoryAddons([entry]).map(r=>r.name),['Upgrade Workshop Poster']);
+});
 test('game access and insurance with whitespace variants never become add-ons and source titles remain untouched',()=>{
  for(const space of [' ','  ','\n','\u00a0']){
   const imported=parseImport(JSON.stringify({type:'hangarexport',version:2,handle:'SYNTHETIC',pledges:[{pledgeId:'whitespace',pledgeName:'Synthetic package',

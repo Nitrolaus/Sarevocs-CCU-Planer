@@ -46,13 +46,13 @@ function contents(raw: string | undefined): Content[] | null {
 
 function entitlement(item: Content): boolean {
   const kind=normalized(item.kind),title=normalized(item.title);
-  return /^(ship|vehicle|insurance|upgrade|game|game access|currency)$/i.test(kind) ||
+  return /^(ship|vehicle|insurance|upgrade|game|game access|currency|credits)$/i.test(kind) ||
     /^(?:Star Citizen|Squadron\s*42) (?:Digital Download|Game Access)$/i.test(title) ||
     /^(?:Lifetime|\d+\s+Months?) Insurance$/i.test(title) ||
     /^(?:\d[\d,.]*\s+(?:UEC|REC)|(?:UEC|REC)\s+\d[\d,.]*)$/i.test(title);
 }
 
-function category(item: Content): AddonCategory {
+function category(item: Content, armorSet = false): AddonCategory {
   const kind = normalized(item.kind);
   if (/^(?:skin|paint|livery|lackierung)$/.test(kind)) return 'paints';
   if (/^(?:(?:ship|vehicle) )?(?:module|component|accessory)$/.test(kind) ||
@@ -62,9 +62,21 @@ function category(item: Content): AddonCategory {
   if (/^(?:clothing|apparel|clothes)$/.test(kind)) return 'clothing';
   if (/^(?:decoration|decorations|hangar flair|poster)$/.test(kind)) return 'decorations';
   if (/^(?:collectible|collectibles|collectable|model)$/.test(kind)) return 'collectibles';
-  // Preserve unresolved source kinds. Titles identify only explicit content types.
-  if (/\b(?:paint|livery)\b/i.test(item.title)) return 'paints';
-  if (/\b(?:module|schiffsmodul)\b/i.test(item.title)) return 'modules';
+  const title = normalized(item.title).replace(/[\u2010-\u2015]/g, '-');
+  // RSI commonly supplies only "FPS Equipment"; supplementary items may have no kind at all.
+  // Use explicit object names, retaining unrecognized equipment rather than guessing from brand/model codes.
+  if (/\b(?:paint|livery)\b/.test(title)) return 'paints';
+  if (/\b(?:module|schiffsmodul)\b/.test(title)) return 'modules';
+  if (kind && !/^(?:fps equipment|equipment|subscriber flair|hangar decoration)$/.test(kind)) return 'other';
+  // Decorative replicas of weapons or armor must not become usable gear in the filters.
+  if (/\b(?:poster|pennant|flag|lamp|neon light|hologram display|nightstand|planter|throne|locker|(?:weapon|gun|rifle) rack)\b/.test(title)) return 'decorations';
+  if (/\b(?:miniature|figurine|replica|trophy|statue|coin|plushie|envelope)\b|\bmodel$/.test(title)) return 'collectibles';
+  if (/\b(?:rifle|pistol|shotgun|smg|lmg|knife|dagger|sword|grenade launcher)\b/.test(title) ||
+      kind === 'fps equipment' && /\bblade$/.test(title)) return 'weapons';
+  if (/\b(?:helmet|armor|armour|undersuit|(?:exploration|flight|hazard|combat|space) suit|(?:hazard|purifier|respirator) mask|backpack)\b/.test(title) ||
+      (kind === 'fps equipment' || armorSet) && /\b(?:core|arms|legs)$/.test(title)) return 'armor';
+  if (/\b(?:jacket|t-?shirt|shirt|glasses|beanie|hat|cap|sweater|hoodie|pants|trousers|boots|shoes|gloves|jumpsuit|overalls)\b/.test(title)) return 'clothing';
+  if (kind === 'hangar decoration') return 'decorations';
   return 'other';
 }
 
@@ -93,7 +105,8 @@ export function inventoryAddons(rows: readonly AddonInventorySource[], catalogue
       ...(primary ?? []).map((item, index) => ({item, key: 'item:' + index})),
       ...(supplementary ?? []).flatMap((item, index) => primaryNames.has(normalized(item.title))
         ? [] : [{item, key: 'extra:' + index}]),
-    ].filter(({item}) => !entitlement(item) && !shipNames.has(normalized(item.title)));
+    ].filter(({item}) => !entitlement(item) && !shipNames.has(normalized(item.title)) &&
+      !(pledge.ccus.length > 0 && normalized(item.title) === normalized(pledge.name)));
     const access = gameAccessEvidence(pledge);
     const standalone = !pledge.ships.length && !pledge.ccus.length &&
       pledge.sourceValues.upgradeState !== 'unresolved' && !access.starCitizen && !access.squadron42;
@@ -106,9 +119,10 @@ export function inventoryAddons(rows: readonly AddonInventorySource[], catalogue
       primary.length === 1 && items.length === 1;
     const purchase = singleItem && price.kind === 'recorded' && price.value?.evidence !== RSI_LOG_PRICE
       ? price.value : null;
+    const armorSet = items.some(({item}) => category(item) === 'armor');
     return items.map(({item, key}): InventoryAddon => ({
       key: pledge.pledgeId + ':' + key, name: item.title, originalKind: item.kind,
-      category: category(item), relatedShips: relatedShips(item.title, names),
+      category: category(item, armorSet), relatedShips: relatedShips(item.title, names),
       pledge, source, purchase,
     }));
   });

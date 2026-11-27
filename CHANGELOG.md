@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.132 · Alpha
+
+„Add-ons & Gear“ erkennt bei der allgemeinen RSI-Angabe „FPS Equipment“ eindeutige Rüstungsteile, Waffen, Kleidung, Dekoration und Sammlerstücke anhand ihrer Gegenstandsbezeichnung. Ergänzende Paketbestandteile ohne eigene Typangabe werden ebenfalls berücksichtigt. Die Zuordnung gilt für die Bestandstabelle und ihre Exporte. Unklare Gegenstände bleiben als „Sonstiges“ sichtbar; ursprüngliche Titel, Paketbestandteile und Kaufpreisbelege werden nicht verändert.
+
 ## 0.3.131 · Alpha
 
 Ein erfolgreich bis zum Ende gelesener RSI-Hangar erhält einen eigenen, profilbezogenen Lesenachweis. Der Warbond-Hinweis bei Schiff 1 verwendet ihn für den Bestandsabgleich, statt auf die Vollständigkeit eines ausdrücklich bestätigten Imports zu warten. Der Import bleibt ergänzend: Fehlende ältere Einträge werden weiterhin nicht gelöscht. Der Nachweis wird mit dem beobachteten Stand gespeichert und bei einer neuen Beobachtung ohne Nachweis nicht übernommen.

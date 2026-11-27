@@ -4,6 +4,23 @@ import {createReport,createReports} from '../src/export/document';
 import {commandSchema} from '../src/main/commands';
 import {reportAccountId,reportFixture} from './fixtures/report-data';
 
+test('generic RSI FPS gear also follows armor, weapon and clothing filters in file exports',async()=>{
+ const input=reportFixture(),entry=structuredClone(input.inventory.items[0]!);
+ entry.pledge.pledgeId='synthetic-fps-export';entry.pledge.name='Synthetic gear bundle';
+ entry.pledge.ships=[];entry.pledge.ccus=[];
+ entry.pledge.sourceValues={items:JSON.stringify([
+  {title:'Synthetic Helmet',kind:'FPS Equipment'}, {title:'Synthetic Pistol',kind:'FPS Equipment'},
+  {title:'Synthetic Jacket',kind:'FPS Equipment'},
+ ]),alsoContains:'[]'};
+ input.inventory.items=[entry];
+ const before=JSON.stringify(input.inventory);
+ for(const [category,name] of [['armor','Synthetic Helmet'],['weapons','Synthetic Pistol'],['clothing','Synthetic Jacket']] as const){
+  const result=await createReports(input,['addons'],undefined,{addons:[category]});
+  assert.deepEqual(result.sections![0]!.rows.map(row=>row.cells[0]),[name]);
+ }
+ assert.equal(JSON.stringify(input.inventory),before);
+});
+
 test('add-on reports preserve individual package contents and only documented singleton costs', async()=>{
  const input=reportFixture(),template=input.inventory.items[0]!;
  const module={...template,pledge:structuredClone(template.pledge)};
