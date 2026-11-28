@@ -8,9 +8,9 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.135 Alpha** ist als kostenlose Testversion verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.136 Alpha** ist als kostenlose Testversion verfügbar.
 
-[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.135-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.136-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
 **Update per Doppelklick:** Beende den Planer vollständig einschließlich Tray, lade die neue MSI herunter und öffne sie. Der bisherige Programmordner ist vorausgewählt. Die alte heruntergeladene MSI und ein Terminalbefehl sind beim regulären Versionsupdate nicht mehr nötig; der von Windows verwaltete Installer-Cache bleibt erforderlich. Bei einer Neuinstallation wählst du den Programmordner selbst. Einen gemeinsam beschreibbaren Programmordner kannst du nach einer deutlichen Risikoabfrage freigeben. Windows muss dir den Schreibzugriff erlauben. Dieselbe bereits installierte Version bietet Reparatur und Deinstallation.
 
@@ -74,9 +74,9 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.135 Alpha** is available as a free test release.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.136 Alpha** is available as a free test release.
 
-[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.135-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.136-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
 **Double-click to update:** Fully exit the planner including its tray icon, download the new MSI and open it. Your previous program folder is preselected. A regular version upgrade no longer requires the old downloaded MSI or a terminal command; the Windows-managed Installer cache is still required. Choose your folder when installing for the first time. You can approve a shared writable program folder after an explicit risk warning. Windows must still grant you write access. Opening the same installed version offers repair and uninstall.
 

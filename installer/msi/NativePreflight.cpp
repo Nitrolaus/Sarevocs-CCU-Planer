@@ -42,6 +42,7 @@ constexpr const wchar_t* previousProducts[] = {
     L"{C200E909-F87F-58E3-843C-765B3CE794F2}",
     L"{3987765A-5A82-5752-8164-AAFC39DCEB2E}",
     L"{862794E1-F3FB-53AC-8CFD-685AEB3CA96F}",
+    L"{40A93E45-D2E9-52E1-8641-164925513C9A}",
 };
 
 void require(bool test, const wstring& reason) { if (!test) throw reason; }
@@ -251,10 +252,11 @@ MsiInstall upgradeSource(MSIHANDLE s) {
         found=code;
     }
     require(same(found,property(s,L"WIX_UPGRADE_DETECTED")),L"Die gefundene MSI-Installation konnte nicht eindeutig geprüft werden.");
-    return found.empty()?MsiInstall{}:registeredMsi(found,(same(found,previousProducts[3])||same(found,previousProducts[4])||same(found,previousProducts[5])||same(found,previousProducts[6])||same(found,previousProducts[7])||same(found,previousProducts[8]))?markerGuid:legacyMarkerGuid);
+    return found.empty()?MsiInstall{}:registeredMsi(found,(same(found,previousProducts[3])||same(found,previousProducts[4])||same(found,previousProducts[5])||same(found,previousProducts[6])||same(found,previousProducts[7])||same(found,previousProducts[8])||same(found,previousProducts[9]))?markerGuid:legacyMarkerGuid);
 }
 
 std::span<const KnownFile> installedFiles(const MsiInstall& installation) {
+    if(same(installation.code,previousProducts[9]) && installation.version==L"0.3.135") return msi135;
     if(same(installation.code,previousProducts[8]) && installation.version==L"0.3.134") return msi134;
     if(same(installation.code,previousProducts[7]) && installation.version==L"0.3.133") return msi133;
     if(same(installation.code,previousProducts[6]) && installation.version==L"0.3.132") return msi132;
@@ -306,7 +308,7 @@ void resolveRoot(MSIHANDLE s) {
     auto token=effectiveToken();
     bool installed=!property(s,L"Installed").empty();
     const auto msi=installed?registeredMsi(property(s,L"ProductCode"),markerGuid):upgradeSource(s);
-    const bool modernSource=!msi.root.empty() && (same(msi.code,previousProducts[3])||same(msi.code,previousProducts[4])||same(msi.code,previousProducts[5])||same(msi.code,previousProducts[6])||same(msi.code,previousProducts[7])||same(msi.code,previousProducts[8]));
+    const bool modernSource=!msi.root.empty() && (same(msi.code,previousProducts[3])||same(msi.code,previousProducts[4])||same(msi.code,previousProducts[5])||same(msi.code,previousProducts[6])||same(msi.code,previousProducts[7])||same(msi.code,previousProducts[8])||same(msi.code,previousProducts[9]));
     HKEY current=nullptr;
     require(RegOpenCurrentUser(KEY_READ,&current)==ERROR_SUCCESS,L"Cannot read user's registry.");
     Key user(current), product=openKey(current,(installed||modernSource)?registration:legacyRegistration), arp=openKey(current,legacyArp);

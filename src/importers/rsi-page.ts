@@ -1,5 +1,13 @@
 import { isPledgesPage, RSI_ORIGIN } from '../main/policy';
 
+// Responsive account layouts may repeat the same handle in desktop/mobile markup.
+// Count distinct nonempty identities, not DOM nodes; conflicting identities stay untrusted.
+const readHandle = String.raw`root => {
+  const handles = new Set([...root.querySelectorAll('.c-account-sidebar__profile-info-handle')]
+    .map(node => (node.textContent || '').trim()).filter(Boolean));
+  return handles.size === 1 ? [...handles][0] : null;
+}`;
+
 // Fixed browser-side reader. Remote HTML remains inert; scripts and arbitrary selectors never execute.
 const extractPage = String.raw`(root, live, pageUrl) => {
   if (live) {
@@ -17,7 +25,7 @@ const extractPage = String.raw`(root, live, pageUrl) => {
   const value = (n, selector) => n.querySelector(selector)?.value?.trim() ?? '';
   const txt = (n, selector) => n.querySelector(selector)?.textContent?.trim() ?? '';
   const empty = rows.length === 1 && !!rows[0].querySelector('.empty-list') && !rows[0].querySelector('.js-pledge-id');
-  const handle = root.querySelector('.c-account-sidebar__profile-info-handle')?.textContent?.trim() || null;
+  const handle = (${readHandle})(root);
   const totals = new Set(), activePages = new Set();
   const current = new URL(pageUrl);
   const pageNumber = Number(current.searchParams.get('page') || 1);
@@ -153,10 +161,7 @@ const extractPage = String.raw`(root, live, pageUrl) => {
 }`;
 
 export const RSI_PAGE_PROBE = `(() => { const extract = ${extractPage}; return extract(document, true, location.href); })()`;
-export const RSI_HANDLE_PROBE = `(() => {
-  const handles = document.querySelectorAll('.c-account-sidebar__profile-info-handle');
-  return handles.length === 1 ? handles[0].textContent.trim() : null;
-})()`;
+export const RSI_HANDLE_PROBE = `(() => (${readHandle})(document))()`;
 export const RSI_CONNECTION_PROBE = `(() => {
   const result = (${RSI_PAGE_PROBE});
   if (result.ok) return 'ready';

@@ -1,9 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
-import { rsiFetchPageProbe } from '../src/importers/rsi-page';
+import { rsiFetchPageProbe, RSI_PAGE_PROBE, RSI_HANDLE_PROBE } from '../src/importers/rsi-page';
 
 const origin = 'https://robertsspaceindustries.com';
+
+test('gleicher Kontoname in mehreren Layouts zählt als eine Identität, unterschiedliche bleiben unklar',()=>{
+ for(const [labels,expected] of [
+  [[],null],[[''],null],[['   '],null],[['OWNER'],'OWNER'],[['OWNER','OWNER'],'OWNER'],
+  [[' OWNER ','','OWNER'],'OWNER'],[['OWNER','OTHER'],null],[['','OWNER','OTHER'],null],
+ ] as const){
+  const nodes=labels.map(textContent=>({textContent}));
+  const list={children:[{tagName:'LI',querySelector:(selector:string)=>selector==='.empty-list'?{}:null}]};
+  const document={querySelectorAll:(selector:string)=>selector==='.c-account-sidebar__profile-info-handle'?nodes:selector==='.list-items'?[list]:[],
+   querySelector:(selector:string)=>selector==='.c-account-sidebar__profile-info-handle'?nodes[0]??null:null};
+  const context={document,location:{href:origin+'/account/pledges'},URL};
+  assert.equal(runInNewContext(RSI_HANDLE_PROBE,context),expected,JSON.stringify(labels));
+  const page=runInNewContext(RSI_PAGE_PROBE,context);
+  assert.equal(page.ok,true);assert.equal(page.handle,expected,JSON.stringify(labels));
+ }
+});
 
 test('Folgeseiten überschreiten Leselimit nicht und geben den Stream frei', async () => {
   const chunk = new Uint8Array(4 * 1024 * 1024 + 1);

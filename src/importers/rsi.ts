@@ -552,16 +552,26 @@ export class RsiLogin {
     checkWindow();
     // The account sidebar can finish rendering while the hangar pages are being read.
     if (candidate.document.account.identityKind === 'manual-reference' && hasAuthenticationCookie(snapshot)) {
-      const handle: unknown = await win.webContents.executeJavaScriptInIsolatedWorld(1, [{code: RSI_HANDLE_PROBE}]).catch(() => null);
-      checkWindow();
-      const read = referenceSchema.safeParse(handle);
-      if (read.success && !read.data.startsWith('rsi-local:')) {
-        const observed: RsiIdentity = { reference: read.data, identityKind: 'rsi-handle' };
-        const latest = await this.cookies(active.session).catch(() => []);
+      // A remembered interactive login must not miss an asynchronously rendered identity.
+      // This observes the existing DOM only; it never reloads or submits authentication.
+      const handleDeadline = Date.now() + (active.remember ? 3000 : 0);
+      while (true) {
+        const handle: unknown = await win.webContents.executeJavaScriptInIsolatedWorld(1, [{code: RSI_HANDLE_PROBE}]).catch(() => null);
         checkWindow();
-        if (isDeepStrictEqual(auth(snapshot), auth(latest)) && this.canRemember(accountId, observed)) {
-          candidate.document.account = observed;
+        const read = referenceSchema.safeParse(handle);
+        if (read.success && !read.data.startsWith('rsi-local:')) {
+          const observed: RsiIdentity = { reference: read.data, identityKind: 'rsi-handle' };
+          const latest = await this.cookies(active.session).catch(() => []);
+          checkWindow();
+          if (isDeepStrictEqual(auth(snapshot), auth(latest)) && this.canRemember(accountId, observed)) {
+            candidate.document.account = observed;
+          }
+          break;
         }
+        const remaining = handleDeadline - Date.now();
+        if (remaining <= 0) break;
+        await new Promise(resolve => setTimeout(resolve, Math.min(150, remaining)));
+        checkWindow();
       }
     }
     const identity = candidate.document.account;

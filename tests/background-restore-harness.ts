@@ -18,7 +18,7 @@ const hangar = 'https://robertsspaceindustries.com/account/pledges', loginUrl = 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 const cookie = (value = 'SYNTHETIC_AUTH_ONLY'): StoredCookie => ({ name: 'Rsi-Token', value, domain: 'robertsspaceindustries.com', path: '/', secure: true, httpOnly: true, hostOnly: true, session: false, expirationDate: Date.now() / 1000 + 3600, sameSite: 'lax' });
 const ready = `<ul class="list-items"><li><input class="js-pledge-id" value="synthetic-ccu"><input class="js-pledge-name" value="SYNTHETIC CCU"><input class="js-upgrade-data" value='{&quot;match_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC FROM&quot;}],&quot;target_items&quot;:[{&quot;name&quot;:&quot;SYNTHETIC TO&quot;}]}'><div class="items-col">SYNTHETIC ONLY</div></li></ul>`;
-type Scenario = 'ready' | 'redirect' | 'login' | 'consent' | 'challenge' | 'missing-handle' | 'different-handle' | 'rotation-during-probe'
+type Scenario = 'ready' | 'redirect' | 'login' | 'consent' | 'challenge' | 'missing-handle' | 'different-handle' | 'rotation-during-probe' | 'duplicate-delayed-handle' | 'async-delayed-handle'
   | 'delayed-handle' | 'conflicting-delayed-handles' | 'delayed-handle-after-navigation';
 let scenario: Scenario = 'ready', phase = 'INIT', rotate = false;
 const requests: string[] = [], readFlags: boolean[] = [], saves: StoredCookie[][] = [], values: RsiLogin[] = [], results: string[] = [];
@@ -27,6 +27,7 @@ let loginPageGate: ReturnType<typeof gate> | undefined;
 let failLoginPage = false;
 let signInInterruptsHangar = false;
 let cookieReadGate: ReturnType<typeof gate> | undefined, probeFinished = false;
+let waitingForHandle = false;
 function gate() { let release = () => {}; const promise = new Promise<void>(resolve => { release = resolve; }); return { entered: false, release, promise }; }
 async function until(test: () => boolean | Promise<boolean>, code: string) { for (let i = 0; i < 300; i++) { if (await test()) return; await wait(20); } throw new Error(code); }
 function fakeVault(cookies: StoredCookie[] = [cookie()]): SessionVault {
@@ -38,7 +39,7 @@ function outcome<T>(task: Promise<T>) { return task.then(result => ({ result, er
 function failure(error: unknown, code: string) { assert.ok(error instanceof BackgroundRestoreError); assert.equal(error.code, code); }
 function noPresentation() { assert.equal(native.created.every(x => x.show === false && (x.win.isDestroyed() || !x.win.isVisible())), true); assert.equal(native.actions.some(x => ['show', 'focus', 'restore'].includes(x.action)), false); }
 async function check(name: string, run: () => Promise<void>) {
-  phase = name; scenario = 'ready'; rotate = false; native.created.length = 0; native.actions.length = 0; requests.length = 0; readFlags.length = 0; saves.length = 0;
+  phase = name; scenario = 'ready'; rotate = false; waitingForHandle = false; native.created.length = 0; native.actions.length = 0; requests.length = 0; readFlags.length = 0; saves.length = 0;
   await run(); results.push(name); console.log('PASS: ' + name);
 }
 
@@ -78,11 +79,14 @@ app.whenReady().then(async () => {
     if (rotate) await rotateCookie();
     if (scenario.includes('delayed-handle') && url === hangar) {
       const execute = this.webContents.executeJavaScriptInIsolatedWorld.bind(this.webContents);
+      let handleRequested = false;
       this.webContents.executeJavaScriptInIsolatedWorld = async (world, scripts) => {
         if (scripts[0]?.code === RSI_HANDLE_PROBE) {
-          const handles = scenario === 'conflicting-delayed-handles' ? ['SYNTHETIC_OWNER', 'SYNTHETIC_OTHER'] : ['SYNTHETIC_OWNER'];
+          const handles = scenario === 'conflicting-delayed-handles' ? ['SYNTHETIC_OWNER', 'SYNTHETIC_OTHER'] : scenario === 'duplicate-delayed-handle' ? ['SYNTHETIC_OWNER', 'SYNTHETIC_OWNER'] : ['SYNTHETIC_OWNER'];
           const markup = handles.map(handle => '<span class="c-account-sidebar__profile-info-handle">' + handle + '</span>').join('');
-          await this.webContents.executeJavaScript('document.body.insertAdjacentHTML("afterbegin", ' + JSON.stringify(markup) + ')');
+          if(scenario === 'async-delayed-handle'){
+            if(!handleRequested){handleRequested=true;waitingForHandle=true;setTimeout(()=>{if(!this.isDestroyed())void this.webContents.executeJavaScript('document.body.insertAdjacentHTML("afterbegin", '+JSON.stringify(markup)+')').catch(()=>{});},350);}
+          }else await this.webContents.executeJavaScript('document.body.insertAdjacentHTML("afterbegin", ' + JSON.stringify(markup) + ')');
           if (scenario === 'delayed-handle-after-navigation') this.webContents.emit('did-start-navigation', {
             url: hangar, isMainFrame: true, isSameDocument: false,
           });
@@ -265,8 +269,8 @@ app.whenReady().then(async () => {
       native.actions.length = 0; await login.connect(id, parent, true, { hideHangar: true });
       assert.equal(native.created.length, 1); noPresentation(); assert.equal(await login.close(id), 'saved');
     });
-    await check('DELAYED_HANDLE_SAVES_NEW_SESSION_AND_RESTORES_WITHOUT_SIGN_IN', async () => {
-      scenario = 'delayed-handle';
+    for(const layout of ['delayed-handle','duplicate-delayed-handle','async-delayed-handle'] as const) await check(layout==='delayed-handle'?'DELAYED_HANDLE_SAVES_NEW_SESSION_AND_RESTORES_WITHOUT_SIGN_IN':layout==='duplicate-delayed-handle'?'DUPLICATE_DELAYED_HANDLE_SAVES_NEW_SESSION_AND_RESTORES_WITHOUT_SIGN_IN':'ASYNC_HANDLE_SAVES_NEW_SESSION_AND_RESTORES_WITHOUT_SIGN_IN', async () => {
+      scenario = layout;
       const login = value(vault), id = randomUUID();
       const task = outcome(login.connect(id, parent, true, { hideHangar: true }));
       try {
@@ -285,6 +289,13 @@ app.whenReady().then(async () => {
         assert.equal((await value(vault).resume(id, parent))?.document.account.reference, 'SYNTHETIC_OWNER');
         assert.deepEqual(requests, [hangar]);
       } finally { await login.close(id); await task; }
+    });
+    await check('CANCEL_WHILE_WAITING_FOR_LATE_HANDLE_NEVER_SAVES', async () => {
+      scenario='async-delayed-handle';const login=value(),id=randomUUID(),controller=new AbortController();
+      const task=outcome(login.connect(id,parent,true,{hideHangar:true,signal:controller.signal}));
+      await until(()=>waitingForHandle,'DELAYED_HANDLE_WAIT_NOT_REACHED');controller.abort();
+      const result=await task;assert.equal(result.result,undefined);assert.match(result.error?.message??'',/Verbindung beendet/);
+      assert.equal(saves.length,0);assert.ok(native.created.every(row=>row.win.isDestroyed()));
     });
     await check('AMBIGUOUS_IDENTITY_OR_AUTH_CHANGE_RETURNS_REASON_AND_NEVER_SAVES', async () => {
       for (const [fixture, expected] of [

@@ -8,6 +8,7 @@ const root = path.resolve(argument('--test-root')!);
 const phase = argument('--phase');
 const runtime = argument('--runtime') ?? 'runtime';
 const mixed = argument('--case') === 'nonsecure-auth';
+const duplicateHandle = argument('--case') === 'duplicate-handle';
 const account = 'b5a061d3-28ca-4c8b-bb89-3f79106e6e5d';
 if (!root.startsWith(path.resolve('work/temp/session-roundtrip') + path.sep) || !['runtime', 'other-runtime'].includes(runtime) || !['write', 'read'].includes(phase ?? '')) throw new Error('Synthetic test arguments required');
 fs.mkdirSync(root, { recursive: true });
@@ -23,7 +24,7 @@ app.whenReady().then(async () => {
   const vault = new SessionVault(path.join(root, 'Anmeldung'), safeStorage, app.getPath('sessionData'));
   const login = new RsiLogin(vault, undefined, undefined, (id, identity) => id === account && identity.reference === 'SYNTHETIC_HANDLE');
   const parent = new BrowserWindow({ show: false, webPreferences: { sandbox: true, nodeIntegration: false } });
-  const fixture = path.join(root, 'offline.html'); fs.writeFileSync(fixture, `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><span class="c-account-sidebar__profile-info-handle">SYNTHETIC_HANDLE</span><ul class="list-items"><li><div class="empty-list"></div></li></ul>`);
+  const fixture = path.join(root, 'offline.html'); fs.writeFileSync(fixture, `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><span class="c-account-sidebar__profile-info-handle">SYNTHETIC_HANDLE</span>${duplicateHandle?'<span class="c-account-sidebar__profile-info-handle">SYNTHETIC_HANDLE</span>':''}<ul class="list-items"><li><div class="empty-list"></div></li></ul>`);
   let navigations = 0;
   BrowserWindow.prototype.loadURL = async function () {
     navigations++;
@@ -49,7 +50,7 @@ app.whenReady().then(async () => {
     await login.close(account);
     const stored = await vault.load(account);
     const settings = await vault.status(account);
-    const result = { status: phase === 'write' || allFieldsMatch ? 'PASS' : 'FAIL', phase, case: mixed ? 'nonsecure-auth' : 'secure-only',
+    const result = { status: phase === 'write' || allFieldsMatch ? 'PASS' : 'FAIL', phase, case: duplicateHandle ? 'duplicate-handle' : mixed ? 'nonsecure-auth' : 'secure-only',
       data: 'synthetic-only', beforeClose, storedCount: stored.length, storedAuthPresent: stored.some(c => c.name === 'Rsi-Token'),
       filePresent: settings.saved, navigations, actualRsiRequests: 0 };
     fs.writeFileSync(path.join(root, phase + '.json'), JSON.stringify(result, null, 2));

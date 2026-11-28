@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.136 · Alpha
+
+Zwei Fehler bei der Speicherung der RSI-Sitzung behoben: identische, mehrfach angezeigte Kontonamen werden als eine Identität erkannt. Bei verzögertem Seitenaufbau wartet der Planer bei gewünschter Sitzungsspeicherung kurz auf den Kontonamen. Unterschiedliche Identitäten und geänderte Anmeldecookies bleiben ausgeschlossen. Verschlüsselung und Kontoschutz bleiben erhalten.
+
+Offline mit künstlichen Sitzungen einschließlich vollständigem Prozessneustart geprüft. Die Bestätigung auf den betroffenen Rechnern steht noch aus; eine zuvor nicht gespeicherte Sitzung kann das Update nicht nachträglich herstellen. Das einzelne MSI aktualisiert 0.3.135 im bisherigen Ordner.
+
 ## 0.3.135 · Alpha
 
 Der FleetYards-Dateiexport folgt jetzt genau der offiziellen Hangar-XPLOR-Vorlage mit acht Feldern. Preis und Datum bleiben zunächst leer. Nutzer können bekannte Werte oder eigene Ersatzangaben wählen, allgemein und pro Schiff. Echte RSI-Kennungen, Konto- und Bestelldaten bleiben außerhalb der Datei. Der lokale Bestand wird nicht verändert. Der externe Kontoimport steht weiterhin zur Nutzerprüfung aus.

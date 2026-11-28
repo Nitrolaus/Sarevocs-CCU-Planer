@@ -29,7 +29,7 @@ try {
     console.log('OTHER-PROFILE:', read.status); console.log('REPORT:', path.join(folder, 'results.json'));
     process.exit(0);
   }
-  for (const testCase of ['secure-only', 'nonsecure-auth']) {
+  for (const testCase of ['secure-only', 'nonsecure-auth', 'duplicate-handle']) {
     const write = await run(testCase, 'write');
     const read = await run(testCase, 'read');
     results.push({ case: testCase, write, read });
