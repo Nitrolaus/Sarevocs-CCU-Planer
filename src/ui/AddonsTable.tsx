@@ -8,6 +8,7 @@ import {formatMinor} from '../pricing/money';
 import {ResizableTable} from './ResizableTable';
 import {useText} from './i18n';
 import './addons.css';
+import {InventoryItemDetails,useInventoryMenu,type InventoryDetail} from './InventoryItemDetails';
 
 export function AddonFilters({items, category, ship, onCategory, onShip}: {
   items: readonly InventoryAddon[];
@@ -32,7 +33,7 @@ export function AddonFilters({items, category, ship, onCategory, onShip}: {
   </>;
 }
 
-export function AddonsTable({items, query, category, ship, display, demo, onSearchCount}: {
+export function AddonsTable({items, query, category, ship, display, demo, onSearchCount, accountId}: {
   items: readonly InventoryAddon[];
   query: string;
   category: AddonCategory | '';
@@ -40,9 +41,12 @@ export function AddonsTable({items, query, category, ship, display, demo, onSear
   display: PricingSnapshot;
   demo: boolean;
   onSearchCount: (shown: number, total: number) => void;
+  accountId:string;
 }) {
   const t = useText();
   const language = display.settings.language;
+  const detailMenu=useInventoryMenu(JSON.stringify([accountId,query,category,ship]));
+  const detailItems=new Map<string,InventoryDetail>();
   const visible = useMemo(() => {
     const match = inventorySearch(query);
     return items.filter(item => (!category || item.category === category) &&
@@ -57,7 +61,7 @@ export function AddonsTable({items, query, category, ship, display, demo, onSear
     preferred: [250,140,140,240,145,145][index]!,
     autoLimit: [700,260,450,700,300,400][index]!,
   }));
-  return <ResizableTable columns={columns} storageKey="addons"
+  return <><ResizableTable columns={columns} storageKey="addons"
     className="inventory-table ship-value-table addons-table" label={t('Add-ons & Gear')}>
     <tbody>{visible.map(item => {
       const date = pledgeDateLabel(item.pledge, language, true);
@@ -79,8 +83,12 @@ export function AddonsTable({items, query, category, ship, display, demo, onSear
             : t('Für die übergeordnete Kaufposition liegt kein Preisbeleg vor.'),
           item.parentPurchase ? t('Dieser Betrag gilt für den gesamten Kauf und wird nicht auf die enthaltenen Teile verteilt.') : '',
         ].filter(Boolean).join('\n');
-      return <tr key={item.key} data-pledge={item.pledge.pledgeId} data-addon={item.key} data-addon-category={item.category}>
-        <td title={item.name}>{item.name}</td>
+      if(detailMenu.selection?.key===item.key)detailItems.set(item.key,{key:item.key,title:item.name,price:item.purchase?price:null,priceDetails:priceTitle,facts:[
+        {label:t('Art'),value:t(kind[1])},{label:t('Zuordnung'),value:item.relatedShips.join(', ')||'—'},
+        {label:t('Enthalten in'),value:item.pledge.name},{label:t('Herkunft / Datum'),value:origin+'\n'+(pledgeDateLabel(item.pledge,language)||'')},
+      ]});
+      return <tr key={item.key} data-pledge={item.pledge.pledgeId} data-addon={item.key} data-addon-category={item.category} onContextMenu={event=>detailMenu.open(event,item.key)} onKeyDown={event=>detailMenu.open(event,item.key)}>
+        <td tabIndex={0} title={item.name}>{item.name}</td>
         <td title={item.originalKind || t(kind[1])}>{t(kind[1])}</td>
         <td title={item.relatedShips.length ? item.relatedShips.join(', ') : t('Keine eindeutige Schiffszuordnung in den Quelldaten.')}>
           {item.relatedShips.join(', ') || '—'}
@@ -97,5 +105,5 @@ export function AddonsTable({items, query, category, ship, display, demo, onSear
       {t(items.length ? 'Keine passenden Einträge gefunden.' : 'Keine Add-ons oder Gear im gespeicherten Bestand erkannt.')}
     </td></tr>}
     </tbody>
-  </ResizableTable>;
+  </ResizableTable><InventoryItemDetails menu={detailMenu} items={detailItems} accountId={accountId} settings={display.settings}/></>;
 }

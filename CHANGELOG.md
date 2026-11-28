@@ -1,5 +1,13 @@
 # Änderungen
 
+## 0.3.135 · Alpha
+
+Der FleetYards-Dateiexport folgt jetzt genau der offiziellen Hangar-XPLOR-Vorlage mit acht Feldern. Preis und Datum bleiben zunächst leer. Nutzer können bekannte Werte oder eigene Ersatzangaben wählen, allgemein und pro Schiff. Echte RSI-Kennungen, Konto- und Bestelldaten bleiben außerhalb der Datei. Der lokale Bestand wird nicht verändert. Der externe Kontoimport steht weiterhin zur Nutzerprüfung aus.
+
+Das einheitliche dunkle Bestandsmenü zeigt Kaufpreisaufbau, Herkunft und belegbare Paketanteile per Rechtsklick. Sechs eigene Concierge-Abzeichen ergänzen bekannte Ränge. Warbond-Hinweise erklären genauer, warum gerade kein Kauftipp verfügbar ist. Große Hangars und gespeicherte künstliche Sitzungen wurden isoliert geprüft.
+
+Das einzelne MSI aktualisiert auch 0.3.134 im bisherigen Ordner. Profil, Hangar und gespeicherte Sitzung bleiben unabhängig vom Programmordner erhalten.
+
 ## 0.3.134 · Alpha
 
 Warbond-Kauftipps bevorzugen die bereits geplante Kaufverbindung vor gleichwertigen Ausgangsschiffen. Ein im Kettenpreis bereits berücksichtigter Warbond-Rabatt wird entsprechend gekennzeichnet und nicht als zusätzliche Ersparnis ausgegeben. Neue Zwischenoptionen bleiben davon unterscheidbar. Gleiche Schiffswerte erlauben keinen direkten Wechsel zwischen verschiedenen Modellen; eigene Schritte und manuelle Kaufanker bleiben erhalten.

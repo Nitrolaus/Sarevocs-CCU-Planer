@@ -2,6 +2,18 @@ import React, { createContext, useContext } from 'react';
 import {paintEnglish} from './paint-english';
 export const LanguageContext=createContext<'de'|'en'>('de');
 const english:Record<string,string>={
+  'Gemeinsamer Kaufpreis':'Shared purchase price',
+  'Gemeinsamer Kaufpreis mehrerer CCUs, kein belegter Einzelpreis je CCU.':'Shared purchase price for several CCUs, not a documented individual price per CCU.',
+  'Bestandsdetails':'Inventory details',
+  'Details & Herkunft':'Details & provenance',
+  'Herkunft & Inhalt':'Provenance & contents',
+  'Kaufpreis aufschlüsseln':'Purchase cost breakdown',
+  'Für diesen Gegenstand ist kein zusätzlicher Hangar-Log-Abruf verfügbar.':'No additional hangar-log lookup is available for this item.',
+  'Alle Verbindungen deiner Kette sind im Bestand abgedeckt. Kein zusätzlicher CCU-Kauf nötig.':'All links in your chain are covered by your inventory. No additional CCU purchase is needed.',
+  'Für die offenen Verbindungen ist aktuell kein passendes Warbond-Angebot bekannt.':'No matching Warbond offer is currently known for the missing links.',
+  'Passende Warbond-CCUs sind bereits im Bestand, gegebenenfalls belegt oder gesperrt. Kein zusätzlicher Kauf wird empfohlen.':'Matching Warbond CCUs are already owned, possibly reserved or locked. No additional purchase is recommended.',
+  'Der Bestand passender CCUs ist noch nicht eindeutig bestätigt. Es wird kein zusätzlicher Kauf empfohlen.':'Ownership of matching CCUs has not been confirmed unambiguously. No additional purchase is recommended.',
+  'Kaufbarkeit und Rabatt passender CCUs sind noch nicht bestätigt. Der Planer prüft automatisch weiter.':'Availability and discount of matching CCUs are not yet confirmed. The planner keeps checking automatically.',
   'Rabatt bereits eingeplant':'Discount already included',
   'Verbindung eingeplant':'Link already planned',
   'Für offene Verbindung':'For a missing link',

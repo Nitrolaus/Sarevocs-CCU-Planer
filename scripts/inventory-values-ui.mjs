@@ -179,10 +179,10 @@ await check('UPGRADED_SHIP_SHOWS_ONLY_A_PROVEN_TOTAL',async()=>{
   await action.press('Escape');
   await action.waitFor({state:'hidden'});
   await row('1005').locator('.ship-purchase').click({button:'right'});
-  assert.equal(await action.count(),0);
+  assert.equal(await action.isDisabled(),true);
   await cost.click({button:'right'});
   await action.waitFor();
-  const menu=page.getByRole('menu',{name:'Mein Kaufpreis',exact:true});
+  const menu=page.getByRole('menu',{name:'Bestandsdetails',exact:true});
   const geometry=await action.evaluate(button=>{
     const item=button.getBoundingClientRect(), outer=button.parentElement.getBoundingClientRect(),style=getComputedStyle(button);
     return {inside:item.left>=outer.left&&item.right<=outer.right, border:style.borderLeftWidth,margin:style.marginLeft,body:button.parentElement.parentElement===document.body};
@@ -289,8 +289,9 @@ await check('ADDONS_FILTER_PACKAGE_CONTENTS_AND_RESET_WITH_THE_PROFILE',async()=
   await search.fill('icefront camo');
   assert.equal(await gear.locator('tbody tr[data-addon]').count(),1);
   const paint=gear.locator('tbody tr[data-addon]');
-  assert.equal(await paint.locator('.ship-price').innerText(),'—');
-  assert.match(await paint.locator('.ship-price').getAttribute('title'),/Ein Einzelpreis ist nicht belegt/);
+  assert.equal(await paint.locator('.ship-price').innerText(),'Im Paket');
+  assert.match(await paint.locator('.ship-price').getAttribute('title'),/kein persönlicher Einzelpreis belegt/);
+  assert.doesNotMatch(await paint.locator('.ship-price').innerText(),/73,10/);
   assert.equal(await paint.locator('td').nth(3).innerText(),'Synthetic MTC Pack plus Paints');
   await search.fill('');
   await ship.selectOption('Galaxy');

@@ -118,7 +118,16 @@ try {
     await planner(); await page.locator('.outgoing-status').waitFor();
     assert.equal(await page.locator('.outgoing-table tbody tr').count(), 0, kind); hiddenCases.push(kind);
     if (kind === 'base-unapproved') assert.match(await page.locator('.outgoing-status').innerText(), /LTI-Startbasis/);
+    if (kind === 'already-owned' || kind === 'locked-owned') assert.match(await page.locator('.outgoing-status').innerText(), /bereits im Bestand|im Bestand abgedeckt/);
+    if (['no-discount-proof','standard-only','zero-discount','different-tax','expired'].includes(kind))
+      assert.match(await page.locator('.outgoing-status').innerText(), /noch nicht bestätigt/);
   }
+  await app.evaluate((_electron,{a,items,draft,market,at})=>{
+    const f=globalThis.fixture;f.inventories[a].items=items;f.inventories[a].account.lastComplete=at;
+    f.market=market;f.market.offers.items.forEach(o=>{o.warbond=false;o.warbondMinor=null;});
+    f.planDrafts={ [a+':4']:draft };f.excludedCcus={ [a]:[] };
+  },{a,items,draft,market,at});
+  await planner();assert.match(await page.locator('.outgoing-status').innerText(),/kein passendes Warbond-Angebot bekannt/);
   // Reproduce the user's equal-value Blade/Sentinel case with entirely synthetic records.
   const demoShips = ['MTC', 'Vanguard Sentinel', 'Blade', 'M80'].map((name, i) => ({ ...ships[0], id: 101 + i, name }));
   const demoOffers = demoShips.map((ship, i) => ({ ...offers[0], key: 'synthetic-m80:' + i, targetName: ship.name, toShipId: ship.id,

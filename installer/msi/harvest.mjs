@@ -31,7 +31,7 @@ function guid(name) {
 }
 const identity=productIdentity(JSON.parse(fs.readFileSync(path.join(source,'../../package.json'),'utf8')).version);
 fs.writeFileSync(path.join(buildDir,'PackageIdentity.json'),JSON.stringify(identity,null,2)+'\n');
-const manifest = readManifest('msi134.tsv');
+const manifest = readManifest('msi135.tsv');
 const previous = readManifest('msi129.tsv','015cf909ce4fa65f8d83c8c89cc50ae83307bef9d5891cc3957f2acf16d73764');
 if (manifest.size !== previous.size || [...previous.keys()].some(name => !manifest.has(name))) {
   throw Error('The in-place MSI update must keep the existing file components.');
@@ -48,6 +48,7 @@ const header = [
   `constexpr wchar_t currentMsiVersion[] = L"${identity.version}";`,
 ];
 for(const [id,entries] of [['currentMsiFiles',manifest], ['msi129',previous],
+  ['msi134',readManifest('msi134.tsv','dd17ca3456bce0654c770bbeac4b929f91887e708270d0ba8f5d411f239e1241')],
   ['msi133',readManifest('msi133.tsv','6bed5dc514079def2a6ef3104a4086fbb256f32964f82f8c965ec2ed6b35d456')],
   ['msi132',readManifest('msi132.tsv','b71ffe65f1a1cdaa67f55c824ba394444635df7b7ba84d08710c168a14bbcddb')],
   ['msi131',readManifest('msi131.tsv','71598bb0a2d8e8b5fcc6f67b85a6185f6777b1f07a6347c4824caefaab6c1190')],

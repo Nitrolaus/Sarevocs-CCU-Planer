@@ -71,6 +71,8 @@ int wmain(int argc,wchar_t** argv) {
               "previous release selects its exact 132 ownership manifest");
         check(installedFiles({previousProducts[7],L"0.3.133",L""}).data()==std::span<const KnownFile>(msi133).data(),
               "previous release selects its exact 133 ownership manifest");
+        check(installedFiles({previousProducts[8],L"0.3.134",L""}).data()==std::span<const KnownFile>(msi134).data(),
+              "previous release selects its exact 134 ownership manifest");
         rejects([&]{installedFiles({previousProducts[3],L"0.3.130",L""});},"an unrecognized legacy version cannot borrow an old ownership manifest");
         setProperty(session,L"REINSTALL",L"ALL");setProperty(session,L"REINSTALLMODE",L"vamus");
         check(wholeReinstall(session),"complete quiet reinstall is accepted");

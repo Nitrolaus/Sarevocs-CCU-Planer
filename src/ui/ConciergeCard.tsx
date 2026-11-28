@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import type { ConciergeRank, PledgeTotal } from '../domain/concierge';
+import { ConciergeBadge, hasConciergeBadge } from './ConciergeBadge';
 import type { Command } from '../main/commands';
 import { translate } from './i18n';
 
@@ -71,14 +72,14 @@ export function ConciergeCard({ accountId, revision, connected, busy=false, lang
     style: 'currency', currency: total.currency, currencyDisplay: 'code',
   }).format(total.amountMinor / 100) : null;
   return <section className="panel concierge-card" aria-labelledby={id}>
-    <svg className="concierge-insignia" viewBox="0 0 68 68" fill="none" aria-hidden="true">
+    {rank?.status === 'loaded' && hasConciergeBadge(rank.rank) ? <ConciergeBadge rank={rank.rank}/> : <svg className="concierge-insignia" viewBox="0 0 68 68" fill="none" aria-hidden="true">
       <circle cx="34" cy="34" r="28" stroke="currentColor" strokeOpacity=".22" />
       <path d="M8 41a27 27 0 0 1 32-33m20 19a27 27 0 0 1-32 33" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path d="M34 15l4.5 13.5L52 34l-13.5 4.5L34 53l-4.5-14.5L16 34l13.5-5.5L34 15Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       <circle cx="34" cy="34" r="3" fill="currentColor" />
       <circle cx="55" cy="15" r="2" fill="currentColor" />
       <circle cx="13" cy="53" r="2" fill="currentColor" />
-    </svg>
+    </svg>}
     <div>
       <p className="concierge-eyebrow">RSI Concierge</p>
       <h2 id={id}>{rank?.status === 'loaded' ? rank.rank :

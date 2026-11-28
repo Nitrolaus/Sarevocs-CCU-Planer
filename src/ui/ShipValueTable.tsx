@@ -1,5 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {createPortal} from 'react-dom';
+import React, {useEffect, useMemo, useState} from 'react';
 import type {Pledge} from '../domain/model';
 import {pricedUpgradeSteps} from '../domain/applied-ccu-price';
 import type {HistoryTooltipState} from './upgrade-history';
@@ -27,52 +26,28 @@ import {GiveawayOriginDialog} from './GiveawayOriginDialog';
 import {giveawayShip} from '../domain/giveaway';
 import { CcuShopPrice, ccuShopPair, type DisplayShopPrice } from './CcuShopPrice';
 import { useShopPricePairs } from './useShopPrices';
+import { InventoryItemDetails, useInventoryMenu, type InventoryDetail } from './InventoryItemDetails';
+import { packageBasis } from '../planner/package-shares';
+import type { ChainObservation } from '../planner/observation';
 
 type Row = {pledge:Pledge; source:string};
 const ccuModelKey = (from:string,to:string) => JSON.stringify([from,to]);
 type DisplayRow = CurrentShipValue & {ccu?:Pledge['ccus'][number]; ship:boolean};
-type PurchaseMenu = { pledgeId: string; left: number; top: number };
 type Props = {
   accountId:string; rows:readonly Row[]; display:PricingSnapshot; demo:boolean; view?:'ships'|'all'|'ccus'|'packages'|'access';emptyText?:string;
   query?:string; onSearchCount?:(shown:number,total:number)=>void;
   titleFor:(p:Pledge,catalogue?:readonly CatalogueShip[])=>string; crownFor:(p:Pledge)=>React.ReactNode; statusFor:(p:Pledge)=>string|null;
   sourceLabel:(source:string)=>string; onHistory:(p:Pledge)=>void;
   lookupPurchases:(p:Pledge)=>void; canLookUpPurchases:(p:Pledge)=>boolean;
-  historyFor:(p:Pledge)=>HistoryTooltipState|undefined; historyPurchases:ReadonlyMap<string,Pledge>;
+  historyFor:(p:Pledge)=>HistoryTooltipState|undefined; historyPurchases:ReadonlyMap<string,Pledge>; observation?:ChainObservation;
 };
 
 export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyText,query='',onSearchCount,titleFor,crownFor,
-  statusFor,sourceLabel,onHistory,lookupPurchases,canLookUpPurchases,historyFor,historyPurchases}:Props) {
+  statusFor,sourceLabel,onHistory,lookupPurchases,canLookUpPurchases,historyFor,historyPurchases,observation}:Props) {
   const t=useText(), [market,setMarket]=useState<MarketSnapshot>();
   const [origins,setOrigins]=useState<GiveawayOriginsSnapshot>();
   const [editing,setEditing]=useState<string>();
-  const [purchaseMenu,setPurchaseMenu]=useState<PurchaseMenu|null>(null);
-  const purchaseAction=useRef<HTMLButtonElement>(null);
-  const purchaseAnchor=useRef<HTMLElement|null>(null);
-  useEffect(()=>setPurchaseMenu(null),[view,query]);
-  useEffect(()=>{
-    if(!purchaseMenu)return;
-    purchaseAction.current?.focus({preventScroll:true});
-    const outside=(event:PointerEvent)=>{
-      if(!purchaseAction.current?.contains(event.target as Node))setPurchaseMenu(null);
-    };
-    const escape=(event:KeyboardEvent)=>{
-      if(event.key!=='Escape')return;
-      event.preventDefault();setPurchaseMenu(null);
-      if(purchaseAnchor.current?.isConnected)purchaseAnchor.current.focus({preventScroll:true});
-    };
-    window.addEventListener('pointerdown',outside);window.addEventListener('keydown',escape);
-    return()=>{window.removeEventListener('pointerdown',outside);window.removeEventListener('keydown',escape);};
-  },[purchaseMenu]);
-  function openPurchaseMenu(event:React.MouseEvent<HTMLTableRowElement>|React.KeyboardEvent<HTMLTableRowElement>,pledge:Pledge){
-    event.preventDefault();
-    const price=event.currentTarget.querySelector<HTMLElement>('.ship-purchase');
-    purchaseAnchor.current=price;
-    const rect=(price??event.currentTarget).getBoundingClientRect();
-    const x='clientX' in event?event.clientX:rect.left+12,y='clientY' in event?event.clientY:rect.bottom;
-    setPurchaseMenu({pledgeId:pledge.pledgeId,left:Math.max(8,Math.min(x,window.innerWidth-208)),
-      top:Math.max(8,Math.min(y,window.innerHeight-48))});
-  }
+  const detailMenu=useInventoryMenu(JSON.stringify([accountId,view,query]));
   const organizerByPledge=useMemo(()=>new Map(origins?.entries.map(entry=>[entry.pledgeId,entry.organizer])),[origins]);
   useEffect(()=>{
     if(!accountId)return;
@@ -150,7 +125,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
   },[rows,market,view,query]);
   useEffect(()=>onSearchCount?.(shown,total),[shown,total,onSearchCount]);
 
-  const menuPledge=purchaseMenu&&groups.find(group=>group.pledge.pledgeId===purchaseMenu.pledgeId)?.pledge;
+  const detailItems=new Map<string,InventoryDetail>();
   const labels=[t(view==='ships'?'Schiff / Fahrzeug':isGameView?'Paket / Zugang':'Gegenstand / Upgrade'),t('Hersteller'),t('Versicherung'),t('Art / Hinweise'),t('Mein Kaufpreis'),t('RSI-Shoppreis'),t('Herkunft / Datum')];
   const columns=labels.map((label,i)=>({label,min:[160,90,70,90,135,125,90][i]!,preferred:[310,160,100,170,150,145,135][i]!,autoLimit:[920,680,240,680,420,480,420][i]!}));
   return <><div className="ship-value-section">
@@ -217,9 +192,21 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
           :value.ccu||unresolved?ccuType:value.ship?t('Schiff / Fahrzeug'):t('Gegenstand');
         const typeTitle=type+'\n'+(gameKind?npcEvidenceNote(p,access)+'\n':'')+(protectedLabel?t('RSI-Hangar: geschützter Spielzugang. Nicht einschmelzbar oder verschenkbar.')+'\n'+protectedLabel:assignment.state==='unknown'?t('RSI-Zugangsmarkierungen noch nicht eingelesen.'):t('Keine geschützte RSI-Zugangsmarkierung gelesen.'))+
           (issue?'\n'+t('Lese- oder Zuordnungsproblem erkannt.'): '');
+        const detailKey=JSON.stringify([p.pledgeId,value.childId]);
+        if(detailMenu.selection?.key===detailKey)detailItems.set(detailKey,{key:detailKey,title:name,price:visiblePurchase,
+          priceLabel:values.length>1?t('Gemeinsamer Kaufpreis'):undefined,
+          priceDetails:purchaseTitle+(p.ccus.length>1?'\n'+t('Gemeinsamer Kaufpreis mehrerer CCUs, kein belegter Einzelpreis je CCU.') : ''),
+          packageBasis:value.ship?packageBasis(p,value.childId,observation):null,
+          ...(mayCheckPurchase?{lookup:()=>lookupPurchases(p)}:{}),facts:[
+            {label:t('Art / Hinweise'),value:typeTitle},{label:t('Herkunft / Datum'),value:originTitle},
+            {label:t('Enthalten in'),value:p.name},{label:t('Versicherung'),value:p.insurance.kind==='lti'?'LTI':p.insurance.kind==='months'?p.insurance.months+' '+t('Monate'):t('Unbekannt')},
+            {label:t('Schiffe & Fahrzeuge'),value:p.ships.map(ship=>ship.modelName).join('\n')},
+            {label:'CCUs',value:p.ccus.map(ccu=>ccu.from+' → '+ccu.to+' · '+t(ccu.status==='applied'?'angewendet':ccu.status==='unused'?'unbenutzt':'Unbekannt')).join('\n')},
+            {label:t('Angewendete CCUs'),value:history?.status==='loaded'?history.steps.map(step=>step.from+' → '+step.to+' · '+step.appliedAt).join('\n'):t('Nicht belegt')},
+          ]});
         return <tr key={p.pledgeId+':'+value.childId} data-pledge={p.pledgeId} data-child={value.childId} data-read-issue={issue||undefined}
-          onContextMenu={mayCheckPurchase?event=>openPurchaseMenu(event,p):undefined}
-          onKeyDown={mayCheckPurchase?event=>{if(event.key==='ContextMenu'||event.key==='F10'&&event.shiftKey)openPurchaseMenu(event,p);}:undefined}>
+          onContextMenu={event=>detailMenu.open(event,detailKey)}
+          onKeyDown={event=>detailMenu.open(event,detailKey)}>
           <td tabIndex={0} title={name+'\n'+titleFor(p,market?.catalogue?.ships)+'\nPledge: '+p.pledgeId+(value.ccu?'\n'+t('Exemplar')+': '+value.ccu.instanceId:'')}
             onMouseEnter={()=>onHistory(p)} onFocus={()=>onHistory(p)}><span className="ship-current-model">{crownFor(p)}<span>{name}</span></span></td>
           <td className="ship-manufacturer" title={value.ccu?maker(value.ccu.from)+' → '+maker(value.ccu.to):value.ship?catalogueIdentity(value.name,market?.catalogue?.ships??[])?.manufacturer:undefined}>
@@ -256,12 +243,7 @@ export function ShipValueTable({accountId,rows,display,demo,view='ships',emptyTe
     })}
     {!shown&&<tr><td colSpan={7} className="empty">{total&&query.trim()?t('Keine passenden Einträge gefunden.'):emptyText??t('Keine Gegenstände für diesen Filter.')}</td></tr>}
   </tbody></ResizableTable>
-  {purchaseMenu&&menuPledge&&canLookUpPurchases(menuPledge)&&createPortal(<div className="ship-purchase-menu" role="menu"
-    aria-label={t('Mein Kaufpreis')} style={{left:purchaseMenu.left,top:purchaseMenu.top}}>
-    <button ref={purchaseAction} type="button" role="menuitem" onClick={()=>{
-      setPurchaseMenu(null);lookupPurchases(menuPledge);
-    }}>{t('Hangar-Log prüfen')}</button>
-  </div>,document.body)}
+  <InventoryItemDetails menu={detailMenu} items={detailItems} accountId={accountId} settings={display.settings}/>
   </div>
   {editing&&<GiveawayOriginDialog key={editing} initial={organizerByPledge.get(editing)??''}
     onSave={name=>saveOrigin(editing,name)} onClose={()=>setEditing(undefined)}/>}

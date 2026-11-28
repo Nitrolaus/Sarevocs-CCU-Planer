@@ -31,8 +31,34 @@ try{
   await dialog.getByRole('checkbox',{name:'Eclipse, Exemplar 2 in Export aufnehmen',exact:true}).uncheck();
   await dialog.getByText('38 von 240 im Export',{exact:true}).waitFor();
   await dialog.getByRole('button',{name:/Dateivorschau/}).click();const rows=JSON.parse(await dialog.locator('pre').innerText());assert.equal(rows.length,38);
-  assert.ok(rows.every(s=>s.name==='Eclipse'&&!s.public&&!s.nameVisible&&Object.keys(s).length===3));
-  assert.equal(await dialog.getByRole('checkbox',{name:/Eigene Schiffsnamen/}).isDisabled(),true);assert.equal(await dialog.getByRole('checkbox',{name:/Lackierungen/}).isDisabled(),true);
+  assert.ok(rows.every(s=>s.name==='Eclipse'&&s.cost===''&&s.pledge_date===''&&Object.keys(s).join(',')==='manufacturer,name,lti,warbond,package_id,pledge,pledge_date,cost'));
+  assert.equal(await dialog.getByRole('combobox',{name:'Alle Schiffe: Preis',exact:true}).inputValue(),'hidden');
+  assert.equal(await dialog.getByRole('combobox',{name:'Alle Schiffe: Datum',exact:true}).inputValue(),'hidden');
+ });
+ await check('CUSTOM_VALUES_AND_PER_SHIP_OVERRIDES_MATCH_THE_FILE_AND_SURVIVE_PAGING',async()=>{
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Preis',exact:true}).selectOption('custom');
+  assert.equal(await dialog.getByRole('button',{name:'JSON-Datei speichern …'}).isDisabled(),true);
+  await dialog.getByRole('textbox',{name:'Alle Schiffe: Preis · Ersatzwert',exact:true}).fill('12,34');
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Preis · Währung',exact:true}).selectOption('GBP');
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Datum',exact:true}).selectOption('custom');
+  await dialog.locator('input[aria-label="Alle Schiffe: Datum · Ersatzdatum"]').fill('2030-05-04');
+  await dialog.getByRole('button',{name:'Eclipse · Exportpreis bearbeiten',exact:true}).first().click();
+  await dialog.getByRole('combobox',{name:'Schiff: Preis',exact:true}).selectOption('hidden');
+  await dialog.getByRole('combobox',{name:'Schiff: Datum',exact:true}).selectOption('hidden');
+  let rows=JSON.parse(await dialog.locator('pre').innerText());
+  assert.equal(rows.filter(s=>s.cost===''&&s.pledge_date==='').length,1);
+  assert.equal(rows.filter(s=>s.cost==='£12.34 GBP'&&s.pledge_date==='May 4, 2030').length,37);
+  await dialog.getByRole('button',{name:'Nächste Seite'}).click();await dialog.getByRole('button',{name:'Vorherige Seite'}).click();
+  assert.deepEqual(JSON.parse(await dialog.locator('pre').innerText()),rows);
+  await dialog.getByRole('combobox',{name:'Schiff: Preis',exact:true}).selectOption('custom');
+  await dialog.getByRole('textbox',{name:'Schiff: Preis · Ersatzwert',exact:true}).fill('1,234');
+  assert.equal(await dialog.getByRole('button',{name:'JSON-Datei speichern …'}).isDisabled(),true);
+  await dialog.getByRole('textbox',{name:'Schiff: Preis · Ersatzwert',exact:true}).fill('0');
+  rows=JSON.parse(await dialog.locator('pre').innerText());assert.equal(rows[0].cost,'$0.00 USD');
+  await dialog.getByRole('button',{name:'Zurücksetzen',exact:true}).click();
+  rows=JSON.parse(await dialog.locator('pre').innerText());assert.ok(rows.every(s=>s.cost==='£12.34 GBP'));
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Preis',exact:true}).selectOption('hidden');
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Datum',exact:true}).selectOption('hidden');
  });
  await check('CANCEL_AND_INVALID_EXTENSION_KEEP_SELECTION_AND_WRITE_NOTHING',async()=>{
   await dialog.getByRole('button',{name:'JSON-Datei speichern …'}).click();await dialog.getByRole('button',{name:'JSON-Datei speichern …'}).waitFor({state:'visible'});
@@ -42,7 +68,8 @@ try{
  await check('SAVED_JSON_MATCHES_VISIBLE_PREVIEW_WITHOUT_PROFILE_SECRETS',async()=>{
   const file=path.join(folder,'fleet.json');await app.evaluate(({},target)=>globalThis.fleetTest.target=target,file);
   await dialog.getByRole('button',{name:'JSON-Datei speichern …'}).click();await dialog.waitFor({state:'hidden'});
-  const text=fs.readFileSync(file,'utf8'),rows=JSON.parse(text);assert.equal(rows.length,38);assert.doesNotMatch(text,/SECRET|SYNTHETIC|account|pledge|profile|serial|price|token|reference/i);
+  const text=fs.readFileSync(file,'utf8'),rows=JSON.parse(text);assert.equal(rows.length,38);assert.doesNotMatch(text,/SECRET|SYNTHETIC|account|profile|serial|token|reference/i);
+  assert.ok(rows.every(s=>s.cost===''&&s.pledge_date===''));assert.equal(new Set(rows.map(s=>s.package_id)).size,38);
  });
  await check('COMPACT_TABLE_LAYOUT_AT_1440_1024_AND_125_PERCENT',async()=>{
   await open();await dialog.getByRole('button',{name:'Treffer übernehmen',exact:true}).click();
@@ -54,6 +81,35 @@ try{
    assert.ok(shape.checkboxWidth>=37&&shape.checkboxWidth<=45,JSON.stringify(shape));assert.ok(shape.rows.every(n=>n>=34&&n<=38),JSON.stringify(shape.rows));await page.screenshot({path:path.join(folder,'fleet-'+width+'-'+zoom+'.png')});
   }
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/index.html')).webContents.setZoomFactor(1));await page.setViewportSize({width:1440,height:1000});
+  await app.evaluate(()=>globalThis.fleetTest.hideWindow());
+ });
+ await check('CUSTOM_DISCLOSURES_SAVE_THROUGH_REAL_IPC_AND_DEFAULTS_RESET_ON_REOPEN',async()=>{
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Preis',exact:true}).selectOption('custom');
+  await dialog.getByRole('textbox',{name:'Alle Schiffe: Preis · Ersatzwert',exact:true}).fill('10,00');
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Preis · Währung',exact:true}).selectOption('EUR');
+  await dialog.getByRole('combobox',{name:'Alle Schiffe: Datum',exact:true}).selectOption('custom');
+  await dialog.locator('input[aria-label="Alle Schiffe: Datum · Ersatzdatum"]').fill('2020-01-01');
+  await dialog.getByRole('button',{name:'Starter · Exportpreis bearbeiten',exact:true}).first().click();
+  await dialog.getByRole('combobox',{name:'Schiff: Preis',exact:true}).selectOption('hidden');
+  const target=path.join(folder,'custom-export.json');await app.evaluate(({},target)=>globalThis.fleetTest.target=target,target);
+  await dialog.getByRole('button',{name:'JSON-Datei speichern …'}).click();await dialog.waitFor({state:'hidden'});
+  const saved=JSON.parse(fs.readFileSync(target,'utf8'));assert.equal(saved.length,239);
+  assert.equal(saved.filter(s=>s.cost==='').length,1);assert.equal(saved.filter(s=>s.cost==='€10.00 EUR').length,238);
+  assert.ok(saved.every(s=>s.pledge_date==='January 1, 2020'));
+  await open();await dialog.getByText('0 von 240 im Export',{exact:true}).waitFor();
+  assert.equal(await dialog.getByRole('combobox',{name:'Alle Schiffe: Preis',exact:true}).inputValue(),'hidden');
+  assert.equal(await dialog.getByRole('combobox',{name:'Alle Schiffe: Datum',exact:true}).inputValue(),'hidden');
+ });
+ await check('APPROVED_BORDERLESS_CELLS_AND_CUSTOM_EDITOR_VISIBLE',async()=>{
+  await dialog.getByRole('checkbox',{name:'Schiffe dieser Seite auswählen',exact:true}).check();
+  await dialog.getByRole('button',{name:'Eclipse · Exportpreis bearbeiten',exact:true}).first().click();
+  await dialog.getByRole('combobox',{name:'Schiff: Preis',exact:true}).selectOption('custom');
+  await dialog.getByRole('textbox',{name:'Schiff: Preis · Ersatzwert',exact:true}).fill('10,00');
+  await dialog.getByRole('combobox',{name:'Schiff: Datum',exact:true}).selectOption('custom');
+  await dialog.locator('input[aria-label="Schiff: Datum · Ersatzdatum"]').fill('2020-01-01');
+  await app.evaluate(()=>globalThis.fleetTest.showWindow());
+  assert.equal(await dialog.locator('.fy-export-value button').first().evaluate(el=>getComputedStyle(el,'::after').display),'none');
+  await page.screenshot({path:path.join(folder,'implemented-custom.png')});
   await app.evaluate(()=>globalThis.fleetTest.hideWindow());
  });
  await check('FOREIGN_RECEIPT_AND_PROFILE_SWITCH_DURING_SAVE_ARE_REJECTED',async()=>{
@@ -71,5 +127,5 @@ try{
  await check('NO_RSI_LOGIN_NETWORK_MUTATION_OR_LEFTOVER_WINDOWS',async()=>{
   assert.deepEqual(errors,[]);const observed=await app.evaluate(({BrowserWindow})=>({windows:BrowserWindow.getAllWindows().length,urls:globalThis.fleetTest.urls}));assert.equal(observed.windows,1);assert.deepEqual(observed.urls,[]);
  });
- fs.writeFileSync(path.join(folder,'results.json'),JSON.stringify({status:'PASS',checks,errors,packaged:true,actualMain:true,realUserData:false,newRsiLogin:false,externalUpload:false},null,2));
+ fs.writeFileSync(path.join(folder,'results.json'),JSON.stringify({status:'PASS',checks,errors,packaged:asar.endsWith('.asar'),actualMain:true,realUserData:false,newRsiLogin:false,externalUpload:false},null,2));
 }catch(error){fs.writeFileSync(path.join(folder,'results.json'),JSON.stringify({status:'FAIL',checks,errors,error:String(error)},null,2));throw error}finally{if(app)await app.close();console.log('REPORT: '+path.join(folder,'results.json'));}

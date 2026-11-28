@@ -9,6 +9,7 @@ import type { ImportCandidate } from '../src/domain/model';
 const root = path.resolve(process.argv.find(value => value.startsWith('--test-root='))!.slice(12));
 const baseline = process.argv.includes('--baseline');
 const ccuBaseline = process.argv.includes('--ccu-baseline');
+const largeHangar = process.argv.includes('--large-hangar');
 fs.mkdirSync(root, { recursive: true });
 app.setPath('userData', path.join(root, 'runtime'));
 app.setPath('sessionData', path.join(root, 'memory'));
@@ -22,14 +23,14 @@ let baselineEvidence: Record<string, unknown> | undefined;
 class CheckFailure extends Error { constructor(readonly fixedCode: string) { super(fixedCode); } }
 function expect(value: unknown, code: string): void { if (!value) throw new CheckFailure(code); }
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-async function bounded<T>(task: Promise<T>, code: string): Promise<T> {
+async function bounded<T>(task: Promise<T>, code: string, timeout = 7000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  try { return await Promise.race([task, new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new CheckFailure(code)), 7000); })]); }
+  try { return await Promise.race([task, new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new CheckFailure(code)), timeout); })]); }
   finally { if (timer) clearTimeout(timer); }
 }
 type RawPledge = { pledgeId: string; pledgeName: string; upgrade?: { from: string; to: string }; upgradeIssue?: 'ambiguous' | 'unreadable'; alsoContains?: { title: string }[] };
 type RawProbe = { ok?: boolean; reason?: string; handle?: string | null; pledges?: RawPledge[] };
-type PagePlan = { html: string; status?: number; redirected?: boolean; contentType?: string };
+type PagePlan = { html: string; status?: number; failures?: number; redirected?: boolean; contentType?: string };
 type FetchRecord = { page: number; method: string; credentials: string; redirect: string; cache: string };
 const attr = (value: string) => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 function pledge(id: string, name = 'SYNTHETIC PLEDGE', extra = '') {
@@ -73,7 +74,7 @@ app.whenReady().then(async () => {
         }
         const response = pages[String(page)];
         if (!response) { window.__invalidFetch++; throw new Error('SYNTHETIC_UNPLANNED_PAGE'); }
-        const status = response.status || 200;
+        const status = response.failures > 0 ? (response.failures--, 503) : response.status || 200;
         return {ok:status >= 200 && status < 300,status,url:url.href,redirected:response.redirected || false,
           headers:{get: name => name.toLowerCase() === 'content-type' ? (response.contentType === undefined ? 'text/html; charset=utf-8' : response.contentType || null) : null},
           body:new Response(response.html).body,text:async () => response.html};
@@ -352,6 +353,25 @@ app.whenReady().then(async () => {
       }
     });
 
+    if (largeHangar) await check('LARGE_HANGAR_240_PAGES_RETRIES_183_AND_STOPS_AT_VERIFIED_END', async () => {
+      const last = 240;
+      const pages = Object.fromEntries(Array.from({ length: last + 1 }, (_, i) => {
+        const n = Math.min(i + 1, last);
+        const pager = '<div class="options-selector pager-wrapper"><div class="pager js-pager">' +
+          [n - 1, n, n + 1].filter(page => page >= 1 && page <= last).map(page =>
+            `<a class="${page === n ? 'active' : ''}" href="/en/account/pledges?page=${page}&amp;pagesize=10">${page}</a>`).join('') + '</div></div>';
+        return [String(i + 1), { html: batch((n - 1) * 10 + 1, 10) + pager, ...(n === 183 ? { failures: 1 } : {}) }];
+      }));
+      await withPage(batch(1, 10), async (value, id, win) => {
+        const candidate = await bounded(value.probe(id), 'LARGE_HANGAR_READ_DID_NOT_SETTLE', 120_000);
+        expect(candidate.document.pledges.length === 2400 && candidate.document.scope.pagesRead === last, 'LARGE_HANGAR_TRUNCATED');
+        expect(new Set(candidate.document.pledges.map(p => p.pledgeId)).size === 2400, 'LARGE_HANGAR_DUPLICATED_ITEMS');
+        const expected = Array.from({ length: last }, (_, i) => i + 1).flatMap(n => n === 183 ? [n, n] : [n]);
+        expect(JSON.stringify((await calls(win)).map(call => call.page)) === JSON.stringify(expected), 'LARGE_HANGAR_WRONG_RETRY_OR_END');
+        expect(candidate.hangarRead?.kind === 'reached-end', 'LARGE_HANGAR_END_NOT_VERIFIED');
+        await noNetworkViolation(win);
+      }, pages);
+    });
     await check('RSI_ACTIVE_PAGER_STOPS_BEFORE_OUT_OF_RANGE_PAGE_REPEATS_LAST_PAGE', async () => {
       const pager = (shown: number, last: number) => '<div class="options-selector pager-wrapper"><div class="pager js-pager">' +
         [shown - 1, shown, shown + 1].filter(number => number >= 1 && number <= last)
@@ -400,6 +420,7 @@ app.whenReady().then(async () => {
     failureCode === 'LEGACY_HANDLE_REQUIREMENT_RETURNS_WAITING' && baselineEvidence?.legacyControlReady === true) ||
     (ccuBaseline && phase === 'MULTICOMPONENT_CCU_BASELINE' && failureCode === 'MULTICOMPONENT_CCU_REJECTED_AS_UPGRADE_FIELDS' && baselineEvidence?.validPledge === true);
   fs.writeFileSync(path.join(root, 'results.json'), JSON.stringify({ status: 'FAIL', phase, failureCode, expectedBaselineFailure,
+    diagnostic: error instanceof Error ? { name: error.name, message: error.message.slice(0, 600) } : null,
     ...(baselineEvidence ? { evidence: baselineEvidence } : {}), results }, null, 2));
   console.error('FAIL: ' + failureCode); console.log('REPORT: ' + path.join(root, 'results.json')); app.exit(1);
 });

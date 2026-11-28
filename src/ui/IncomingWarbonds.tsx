@@ -5,6 +5,7 @@ import type { ChainPool, OwnedCcu } from '../planner/chain';
 import { availableForTarget, blockedForTarget, type ReservablePlan, type Reservations } from '../planner/reservations';
 import type { PlannerDraft } from '../planner/draft';
 import { incomingWarbondCandidates } from '../planner/incoming-warbonds';
+import { incomingWarbondStatus } from '../planner/incoming-warbond-status';
 import { warbondQuote, warbondStock } from '../planner/warbond-offers';
 import type { PricingSnapshot } from '../pricing/model';
 import { displayShopMinor, euroRateIsStale, formatMinor } from '../pricing/money';
@@ -34,20 +35,22 @@ export function IncomingWarbonds({ target, draft, plan, pool, accountId, invento
   const advice = useMemo(() => incomingWarbondCandidates({ target, draft, plan, pool: free, market }, now), [target, draft, plan, free, market, now]);
   const candidates = advice.candidates;
   const known = !!accountId && inventory?.accountId === accountId && inventory.complete === true && reservationsReady;
-  const missing = candidates.flatMap(candidate => {
+  const stockRows = candidates.flatMap(candidate => {
     if (!known) return [];
     const stock = warbondStock(candidate, { catalogue: market?.catalogue?.ships ?? [],
       pledges: inventory?.accountId === accountId ? inventory.pledges : [], ccus,
       inventoryKnown: !!inventory && inventory.accountId === accountId, complete: inventory?.complete === true,
       reservations, reservationsReady, excluded });
     // Ownership includes copies reserved for another target or explicitly locked by the user.
-    return stock.state === 'missing' ? [{ candidate, stock }] : [];
+    return [{ candidate, stock }];
   });
+  const missing = stockRows.filter(row => row.stock.state === 'missing');
   useShopPricePairs(missing.map(({ candidate: { fromId, toId } }) => ({ fromId, toId })), true);
   const quotes = missing.flatMap(row => {
     const quote = warbondQuote(row.candidate, market?.shopPrices ?? [], display.settings.currency, now);
     return quote?.saving && quote.saving.minor > 0 ? [{ ...row, ...quote }] : [];
   });
+  const emptyReason = incomingWarbondStatus(advice, stockRows.map(row => row.stock.state), quotes.length);
   const freshRate = display.rate && !euroRateIsStale(display.rate, now) ? display.rate : null;
   function money(amount: ShopAmount) {
     const minor = displayShopMinor(amount, display.settings, freshRate);
@@ -87,7 +90,11 @@ export function IncomingWarbonds({ target, draft, plan, pool, accountId, invento
       : !inventory || inventory.accountId !== accountId || !inventory.complete || !reservationsReady ? 'Zuerst den Bestand vollständig einlesen. Bereits vorhandene CCUs werden nicht angeboten.'
       : advice.state === 'base-required' ? 'Wähle eine freie LTI-Startbasis für die Kette zu Schiff 1.'
       : advice.state === 'chain-unavailable' ? 'Prüfe zuerst die Kette zu Schiff 1. Passende offene Verbindungen sind noch nicht bestätigt.'
-      : 'Aktuell keine bestätigten Warbond-CCUs mit Rabatt für offene Verbindungen deiner Kette gefunden.')}</p>}
+      : emptyReason === 'covered' ? 'Alle Verbindungen deiner Kette sind im Bestand abgedeckt. Kein zusätzlicher CCU-Kauf nötig.'
+      : emptyReason === 'no-offers' ? 'Für die offenen Verbindungen ist aktuell kein passendes Warbond-Angebot bekannt.'
+      : emptyReason === 'already-owned' ? 'Passende Warbond-CCUs sind bereits im Bestand, gegebenenfalls belegt oder gesperrt. Kein zusätzlicher Kauf wird empfohlen.'
+      : emptyReason === 'stock-unknown' ? 'Der Bestand passender CCUs ist noch nicht eindeutig bestätigt. Es wird kein zusätzlicher Kauf empfohlen.'
+      : 'Kaufbarkeit und Rabatt passender CCUs sind noch nicht bestätigt. Der Planer prüft automatisch weiter.')}</p>}
     {error && <p role="alert">{t('RSI-Seite konnte nicht geöffnet werden.')}</p>}
     {quotes.length > 0 && <small className="outgoing-foot">{t('Passt zwischen Startbasis und Zielschiff in eine offene Verbindung. Vorhandene CCUs bleiben ausgeblendet, auch belegte. Deine Kette bleibt unverändert. Du kaufst selbst.')}</small>}
   </div>;

@@ -8,15 +8,15 @@
 
 ### Beschreibung
 
-Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.134 Alpha** ist als kostenlose Testversion verfügbar.
+Sarevoc´s CCU Planer ist ein unabhängiges Fanprogramm für Star Citizen auf Windows 11. Du kannst deinen Hangarbestand mit Schiffen, Fahrzeugen, CCUs, Spielzugängen und Add-ons einsehen und Upgrade-Ketten planen. **0.3.135 Alpha** ist als kostenlose Testversion verfügbar.
 
-[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.134-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
+[Installer und Anleitung](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.135-alpha) | [Fehler melden](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=fehler.yml)
 
 **Update per Doppelklick:** Beende den Planer vollständig einschließlich Tray, lade die neue MSI herunter und öffne sie. Der bisherige Programmordner ist vorausgewählt. Die alte heruntergeladene MSI und ein Terminalbefehl sind beim regulären Versionsupdate nicht mehr nötig; der von Windows verwaltete Installer-Cache bleibt erforderlich. Bei einer Neuinstallation wählst du den Programmordner selbst. Einen gemeinsam beschreibbaren Programmordner kannst du nach einer deutlichen Risikoabfrage freigeben. Windows muss dir den Schreibzugriff erlauben. Dieselbe bereits installierte Version bietet Reparatur und Deinstallation.
 
 #### Bestand und Angebote
 
-**FleetYards-Dateiexport:** Unter „Exportieren …“ wählst du einzelne Schiffexemplare in einer kompakten Tabelle mit Suche, Herstellerfilter und Seitenwahl aus. Die JSON-Vorschau zeigt, was du weitergibst. Kontodaten, Preise und Seriennummern bleiben draußen; gespeichert wird ausschließlich lokal. [Anleitung und Schutzgrenzen](docs/public/FLEETYARDS.md)
+**FleetYards-Dateiexport:** Unter „Exportieren …“ wählst du einzelne Schiffexemplare in einer kompakten Tabelle mit Suche, Herstellerfilter und Seitenwahl aus. Das JSON folgt der Hangar-XPLOR-Vorlage mit acht Feldern. Preis und Datum bleiben zunächst leer; du entscheidest über bekannte Werte oder eigene Ersatzangaben, auch für einzelne Schiffe. Kontodaten, echte RSI-IDs und Seriennummern bleiben draußen; gespeichert wird ausschließlich lokal. [Anleitung und Schutzgrenzen](docs/public/FLEETYARDS.md)
 
 Der Reiter **Add-ons & Gear** zeigt vorhandene Paketbestandteile mit Suche sowie Filtern nach Gegenstandsart und zugehörigem Schiff. Auch Excel- und PDF-Exporte können diesen Bereich aufnehmen. Unter **Mein Kaufpreis** steht der belegte Gesamtbetrag für das aktuelle Schiff. Die Zusammensetzung aus Startbasis und angewendeten CCUs findest du beim Darüberfahren.
 
@@ -26,7 +26,7 @@ Der Planer lädt die öffentlichen Angebotsdaten beim Start und täglich um **17
 
 #### CCU-Ketten planen
 
-**Passende Warbonds im Blick:** Sobald du Schiff 1 auswählst, prüft der Messe-Infobereich Upgrades ab diesem Schiff und danach alle fünf Minuten, solange der Bereich offen ist. Angezeigt werden nur aktuell bestätigte Warbond-CCUs mit belegtem Rabatt, die im vollständig eingelesenen Bestand fehlen. Du siehst Zielschiff, CCU-Preis und Rabatt direkt. Vorhandene CCUs bleiben ausgeblendet, auch wenn sie belegt oder gesperrt sind. Orangebraun kennzeichnet den offenen Kauf; der Warbond-Schriftzug leuchtet türkis. Du entscheidest selbst, ob du im offiziellen RSI-Shop kaufst.
+**Passende Warbonds im Blick:** Sobald du Schiff 1 auswählst, prüft der Messe-Infobereich Warbond-CCUs für offene Verbindungen in der Kette zu diesem Schiff und danach alle fünf Minuten, solange der Bereich offen ist. Angezeigt werden nur aktuell bestätigte Warbond-CCUs mit belegtem Rabatt, die im vollständig eingelesenen Bestand fehlen. Du siehst Zielschiff, CCU-Preis und Rabatt direkt. Vorhandene CCUs bleiben ausgeblendet, auch wenn sie belegt oder gesperrt sind. Orangebraun kennzeichnet den offenen Kauf; der Warbond-Schriftzug leuchtet türkis. Du entscheidest selbst, ob du im offiziellen RSI-Shop kaufst.
 
 Für jede Kette wählst du selbst eine belegte LTI-Startbasis. Günstige Tokens bis etwa 50 Euro vor Steuer erscheinen zuerst. Höherwertige eigene LTI-Schiffe kannst du gezielt einblenden. Zielkarten und Kette stehen über den Angeboten. Die Karten und der Flottenplan verwenden neutrale Schiffssilhouetten.
 
@@ -74,17 +74,17 @@ Für den Quellcode gilt eine [eigene Source-available-Lizenz mit Namenspflicht](
 
 ### Description
 
-Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.134 Alpha** is available as a free test release.
+Sarevoc´s CCU Planer is an independent Star Citizen fan project for Windows 11. Use it to review the ships, vehicles, CCUs, game access, and add-ons in your hangar and plan ship upgrade chains. **0.3.135 Alpha** is available as a free test release.
 
-[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.134-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
+[Installer and instructions](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/releases/tag/v0.3.135-alpha) | [Report a bug](https://github.com/Nitrolaus/Sarevocs-CCU-Planer/issues/new?template=bug-report.yml)
 
 **Double-click to update:** Fully exit the planner including its tray icon, download the new MSI and open it. Your previous program folder is preselected. A regular version upgrade no longer requires the old downloaded MSI or a terminal command; the Windows-managed Installer cache is still required. Choose your folder when installing for the first time. You can approve a shared writable program folder after an explicit risk warning. Windows must still grant you write access. Opening the same installed version offers repair and uninstall.
 
-**Matching Warbond offers:** Selecting Ship 1 checks outgoing upgrades from that ship; checks repeat every five minutes while the area is open. Only currently confirmed Warbond CCUs with a documented discount that are missing from the fully read inventory appear. The target ship, CCU price and discount are directly visible. Owned CCUs stay hidden, including reserved or locked copies. Orange-brown indicates an outstanding purchase and bright teal highlights the Warbond label. You make any purchase yourself in the official RSI store.
+**Matching Warbond offers:** Selecting Ship 1 checks Warbond CCUs for missing links in the chain to that ship; checks repeat every five minutes while the area is open. Only currently confirmed Warbond CCUs with a documented discount that are missing from the fully read inventory appear. The target ship, CCU price and discount are directly visible. Owned CCUs stay hidden, including reserved or locked copies. Orange-brown indicates an outstanding purchase and bright teal highlights the Warbond label. You make any purchase yourself in the official RSI store.
 
 #### Inventory and offers
 
-**FleetYards file export:** Use “Export …” to select individual ship copies in a compact table with search, manufacturer filters, and pagination. Review the JSON before sharing. Account details, prices, and serial numbers are excluded; saving is local only. [Instructions and privacy boundaries](docs/public/FLEETYARDS.md#english)
+**FleetYards file export:** Select individual ship copies using search, manufacturer filters and pagination. The JSON follows the eight-field Hangar XPLOR example. Price and date start empty; choose known values or your own replacements globally or per ship. Account details, real RSI IDs and serial numbers are excluded. Saving is local only. [Instructions and privacy boundaries](docs/public/FLEETYARDS.md#english)
 
 The **Add-ons & Gear** tab lists retained package contents with search and filters for item type and related ship. Excel and PDF exports can include this area. **My purchase price** shows the documented total for the current ship. Hover over it to see the starting ship and applied CCU costs.
 

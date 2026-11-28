@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 
 const require = createRequire(import.meta.url), root = process.cwd(), baseline = process.argv.includes('--baseline'), ccuBaseline = process.argv.includes('--ccu-baseline');
+const largeHangar = process.argv.includes('--large-hangar');
 if (baseline && ccuBaseline) throw new Error('BASELINE_MODES_EXCLUSIVE');
 const folder = path.resolve('work/temp/hangar-reader', randomUUID());
 fs.mkdirSync(folder, { recursive: true }); fs.mkdirSync(path.resolve('work/temp/tooling'), { recursive: true });
@@ -27,7 +28,7 @@ await build({ entryPoints: ['tests/hangar-reader-harness.ts'], outfile: harness,
   external: ['electron'], nodePaths: [path.resolve('node_modules')], plugins });
 const env = { ...process.env, TEMP: path.resolve('work/temp/tooling'), TMP: path.resolve('work/temp/tooling') };
 delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS;
-const child = spawn(require('electron'), [harness, '--test-root=' + folder, ...(baseline ? ['--baseline'] : []), ...(ccuBaseline ? ['--ccu-baseline'] : []), '--disable-gpu'],
+const child = spawn(require('electron'), [harness, '--test-root=' + folder, ...(baseline ? ['--baseline'] : []), ...(ccuBaseline ? ['--ccu-baseline'] : []), ...(largeHangar ? ['--large-hangar'] : []), '--disable-gpu'],
   { cwd: root, env, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
 let stdout = '', timedOut = false;
 child.stdout.on('data', bytes => { stdout += bytes.toString(); });
@@ -35,7 +36,7 @@ const timer = setTimeout(() => {
   timedOut = true;
   if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
   else child.kill('SIGKILL');
-}, 75000);
+}, largeHangar ? 180000 : 75000);
 child.once('error', () => { clearTimeout(timer); console.error('FAIL: ELECTRON_START_FAILED'); process.exitCode = 1; });
 child.once('exit', code => {
   clearTimeout(timer);

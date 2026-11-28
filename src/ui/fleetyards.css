@@ -3,3 +3,31 @@
 @media(max-width:1120px){.fy-workspace{grid-template-columns:minmax(0,1fr) 250px;gap:18px;padding:19px}.fy-dialog .fy-file-panel{padding-left:18px}.fy-dialog>.export-header{padding:20px}.fy-dialog>.export-header h2{font-size:22px}.fy-bulk>span{display:none}.fy-dialog .fy-search-row>select{max-width:135px}.fy-table-scroll{height:340px}.fy-toolbar{align-items:flex-start;flex-wrap:wrap}}
 @media(max-height:850px) and (min-width:851px){.fy-dialog>.export-header{padding-block:15px}.fy-workspace{padding-block:16px}.fy-table-scroll{height:max(180px,calc(100vh - 420px))}.fy-manifest{max-height:92px}.fy-local-only{margin-block:11px}.fy-file-summary{margin-top:10px;padding-bottom:10px}.fy-file-panel fieldset label{padding-block:4px}.fy-privacy-note{line-height:1.5;margin-top:8px}.fy-dialog .fy-file-panel fieldset{margin-top:12px}.fy-footer{padding-block:13px}.fy-file-details pre{max-height:100px}}
 @media(max-width:850px){.fy-workspace{grid-template-columns:minmax(0,1fr)}.fy-dialog .fy-file-panel{padding:18px 0 0;border-left:0;border-top:1px solid #37535f}.fy-table-scroll{height:300px}.fy-footer{flex-wrap:wrap;padding:15px 19px}.fy-footer>div:last-child{margin-left:auto}.fy-footer p span{max-width:230px;line-height:1.6}}
+.fy-table-scroll table{min-width:720px}
+.fy-table-scroll .fy-export-value{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fy-dialog .fy-export-value>button{display:block;border:0;border-radius:3px;background:transparent;color:#a5bdc9;padding:2px 0;min-height:22px;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:11px;line-height:1.2;text-align:left;white-space:nowrap}
+.fy-dialog .fy-export-value>button:focus-visible{outline:2px solid #a1e7d7;outline-offset:2px}
+.fy-dialog .fy-overridden>button{color:#95e6d4}
+.fy-table-scroll tbody tr.fy-editing{box-shadow:inset 3px 0 #8fdbc9;background:#244149}
+.fy-dialog .fy-file-panel .fy-policy>label{display:block;padding:0;font-size:11px}
+.fy-dialog .fy-policy select{display:block;width:100%;min-width:0;padding:7px 8px;margin:5px 0 10px;background:#101d26;border:1px solid #425e6b;border-radius:6px;font-size:11px}
+.fy-dialog .fy-policy input{display:block;width:100%;min-width:0;background:#101d26;border:1px solid #425e6b;border-radius:6px;padding:7px 9px;font-size:12px}
+.fy-policy input[type=date]{color-scheme:dark}
+.fy-custom-value{display:flex;gap:8px;margin-bottom:10px}
+.fy-dialog .fy-custom-value input{flex:1;min-width:0}
+.fy-dialog .fy-custom-value select{width:78px;flex:none;margin:0}
+.fy-dialog .fy-file-panel .fy-disclose{font-size:11px;gap:9px;padding-block:7px;line-height:1.4}
+.fy-dialog .fy-file-panel .fy-defaults{margin-top:16px}
+.fy-editor{border-top:1px solid #3c5761;margin-top:14px;padding-top:14px}
+.fy-editor-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fy-editor-title h4{margin:0;font-size:13px;font-weight:550}
+.fy-editor>p{font-size:10px;line-height:1.5;color:#9bb5c3;margin:5px 0 10px}
+.fy-edit-hint{font-size:11px;line-height:1.5;color:#a4c5d2;margin:13px 0 0}
+.fy-file-panel>.fy-file-details{border-top:1px solid #3c5761;padding-top:8px;margin-top:14px}
+.fy-input-error{font-size:11px;line-height:1.5;color:#f2bb86}
+.fy-section-title .fy-private{white-space:nowrap}
+#root .fy-dialog :is(.fy-export-value>button,.fy-text-button,.fy-file-details>button){background:none;box-shadow:none;border:0;--control-fill:none;--control-inset:none}
+#root .fy-dialog :is(.fy-export-value>button,.fy-text-button,.fy-file-details>button)::after{display:none}
+#root .fy-dialog .fy-export-value>button{width:100%;font-weight:450;color:#a5bdc9}
+#root .fy-dialog .fy-overridden>button{color:#95e6d4}
+#root .fy-dialog .fy-export-value>button:hover:not(:disabled){background:#29464e}

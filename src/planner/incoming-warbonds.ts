@@ -12,7 +12,7 @@ import { purchasePriceReader } from './shopping-list';
 export type IncomingCandidate = ShopPair & { from: CatalogueShip; target: CatalogueShip;
   relation: 'planned-warbond' | 'planned-link' | 'fits-gap' };
 export type IncomingAdvice = { state: 'target-required' | 'base-required' | 'chain-unavailable' | 'market-unavailable' | 'ready';
-  candidates: IncomingCandidate[] };
+  candidates: IncomingCandidate[]; purchaseGaps?: number };
 
 /** Discover Warbonds inside missing links of the selected route TO Schiff 1.
  * Owned steps and manual purchase anchors stay intact. Only a fresh exact pair quote
@@ -64,7 +64,8 @@ export function incomingWarbondCandidates(input: { target?: CatalogueShip; draft
       }
     }
   }
-  return { state: 'ready', candidates: [...result.values()].sort((a, b) =>
+  return { state: 'ready', purchaseGaps: plan.steps.filter(step => step.kind === 'purchase').length,
+    candidates: [...result.values()].sort((a, b) =>
     nominalValue(a.target, offers, true, market.values)! - nominalValue(b.target, offers, true, market.values)!
     || a.target.name.localeCompare(b.target.name) || a.from.name.localeCompare(b.from.name)) };
 }

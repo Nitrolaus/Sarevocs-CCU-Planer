@@ -203,7 +203,7 @@ async function start() {
       switch (cmd.action) {
         case 'fleetyards.preview':{
           if(selectedAccountId!==cmd.accountId)throw new UserError('Exportprofil ist nicht mehr ausgewählt.');
-          data=fleetYards.preview(store.inventory(cmd.accountId),background.snapshot(cmd.accountId).view??null,market.snapshot().catalogue?.ships??[]);break;
+          data=fleetYards.preview(store.inventory(cmd.accountId),background.snapshot(cmd.accountId).view??null,market.snapshot().catalogue?.ships??[],market.packageShares(cmd.accountId));break;
         }
         case 'fleetyards.save':{
           if(reportSaving)throw new UserError('Ein Export wird bereits gespeichert.');
